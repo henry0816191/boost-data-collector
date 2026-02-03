@@ -131,21 +131,25 @@ def get_or_create_github_account(
     If account exists, updates username, display_name, avatar_url, account_type if provided.
     identity is only set on creation; to update identity use a separate service function.
     """
+    # API/user data can be None; store as empty string for NOT NULL columns.
+    username_val = username or ""
+    display_name_val = display_name or ""
+    avatar_url_val = avatar_url or ""
     account, created = GitHubAccount.objects.get_or_create(
         github_account_id=github_account_id,
         defaults={
-            "username": username,
-            "display_name": display_name,
-            "avatar_url": avatar_url,
+            "username": username_val,
+            "display_name": display_name_val,
+            "avatar_url": avatar_url_val,
             "account_type": account_type,
             "identity": identity,
         },
     )
     if not created:
         # Update fields if not newly created
-        account.username = username or account.username
-        account.display_name = display_name or account.display_name
-        account.avatar_url = avatar_url or account.avatar_url
+        account.username = username_val or account.username
+        account.display_name = display_name_val or account.display_name
+        account.avatar_url = avatar_url_val or account.avatar_url
         account.account_type = account_type
         account.save()
     return account, created
@@ -176,9 +180,9 @@ def get_or_create_owner_account(client: GitHubClientProtocol, owner: str) -> Git
     account_type = account_type_map.get(api_type, GitHubAccountType.USER)
     account = get_or_create_github_account(
         github_account_id=data["id"],
-        username=data.get("login", owner),
-        display_name=data.get("name", ""),
-        avatar_url=data.get("avatar_url", ""),
+        username=data.get("login") or owner,
+        display_name=data.get("name") or "",
+        avatar_url=data.get("avatar_url") or "",
         account_type=account_type,
     )[0]
     email_str = (data.get("email") or "").strip()

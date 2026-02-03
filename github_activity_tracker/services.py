@@ -165,19 +165,20 @@ def create_or_update_commit(
 
     if not commit_at:
         commit_at = datetime.now(timezone.utc)
+    comment_val = comment or ""
 
     commit_obj, created = GitCommit.objects.get_or_create(
         repo=repo,
         commit_hash=commit_hash,
         defaults={
             "account": account,
-            "comment": comment,
+            "comment": comment_val,
             "commit_at": commit_at,
         },
     )
     if not created:
         commit_obj.account = account
-        commit_obj.comment = comment
+        commit_obj.comment = comment_val
         commit_obj.commit_at = commit_at
         commit_obj.save()
     return commit_obj, created
@@ -209,6 +210,7 @@ def add_commit_file_change(
     patch: str = "",
 ) -> tuple[GitCommitFileChange, bool]:
     """Add or update a file change for a commit. If exists, updates status, additions, deletions, patch. Returns (file_change, created)."""
+    patch_val = patch or ""
     obj, created = GitCommitFileChange.objects.get_or_create(
         commit=commit,
         github_file=github_file,
@@ -216,14 +218,14 @@ def add_commit_file_change(
             "status": status,
             "additions": additions,
             "deletions": deletions,
-            "patch": patch,
+            "patch": patch_val,
         },
     )
     if not created:
         obj.status = status
         obj.additions = additions
         obj.deletions = deletions
-        obj.patch = patch
+        obj.patch = patch_val
         obj.save(update_fields=["status", "additions", "deletions", "patch"])
     return obj, created
 
@@ -242,9 +244,10 @@ def remove_issue_assignee(issue: Issue, account: GitHubAccount) -> None:
 # --- IssueLabel ---
 def add_issue_label(issue: Issue, label_name: str) -> tuple[IssueLabel, bool]:
     """Add a label to an issue. Returns (IssueLabel, created)."""
+    label_name_val = label_name or ""
     return IssueLabel.objects.get_or_create(
         issue=issue,
-        label_name=label_name,
+        label_name=label_name_val,
     )
 
 
@@ -269,9 +272,10 @@ def add_pull_request_label(
     pr: PullRequest, label_name: str
 ) -> tuple[PullRequestLabel, bool]:
     """Add a label to a pull request. Returns (PullRequestLabel, created)."""
+    label_name_val = label_name or ""
     return PullRequestLabel.objects.get_or_create(
         pr=pr,
-        label_name=label_name,
+        label_name=label_name_val,
     )
 
 
@@ -295,16 +299,20 @@ def create_or_update_issue(
     issue_closed_at: Optional[datetime] = None,
 ) -> tuple[Issue, bool]:
     """Create or update an Issue by issue_id. Returns (issue, created)."""
+    # GitHub API can return null for title/body/state_reason; store as empty string.
+    title_val = title or ""
+    body_val = body or ""
+    state_reason_val = state_reason or ""
     issue_obj, created = Issue.objects.get_or_create(
         issue_id=issue_id,
         defaults={
             "repo": repo,
             "account": account,
             "issue_number": issue_number,
-            "title": title,
-            "body": body,
+            "title": title_val,
+            "body": body_val,
             "state": state,
-            "state_reason": state_reason,
+            "state_reason": state_reason_val,
             "issue_created_at": issue_created_at,
             "issue_updated_at": issue_updated_at,
             "issue_closed_at": issue_closed_at,
@@ -314,10 +322,10 @@ def create_or_update_issue(
         issue_obj.repo = repo
         issue_obj.account = account
         issue_obj.issue_number = issue_number
-        issue_obj.title = title
-        issue_obj.body = body
+        issue_obj.title = title_val
+        issue_obj.body = body_val
         issue_obj.state = state
-        issue_obj.state_reason = state_reason
+        issue_obj.state_reason = state_reason_val
         issue_obj.issue_created_at = issue_created_at
         issue_obj.issue_updated_at = issue_updated_at
         issue_obj.issue_closed_at = issue_closed_at
@@ -335,12 +343,13 @@ def create_or_update_issue_comment(
     issue_comment_updated_at: Optional[datetime] = None,
 ) -> tuple[IssueComment, bool]:
     """Create or update an IssueComment by issue_comment_id. Returns (comment, created)."""
+    body_val = body or ""
     comment_obj, created = IssueComment.objects.get_or_create(
         issue_comment_id=issue_comment_id,
         defaults={
             "issue": issue,
             "account": account,
-            "body": body,
+            "body": body_val,
             "issue_comment_created_at": issue_comment_created_at,
             "issue_comment_updated_at": issue_comment_updated_at,
         },
@@ -348,7 +357,7 @@ def create_or_update_issue_comment(
     if not created:
         comment_obj.issue = issue
         comment_obj.account = account
-        comment_obj.body = body
+        comment_obj.body = body_val
         comment_obj.issue_comment_created_at = issue_comment_created_at
         comment_obj.issue_comment_updated_at = issue_comment_updated_at
         comment_obj.save()
@@ -372,17 +381,22 @@ def create_or_update_pull_request(
     pr_closed_at: Optional[datetime] = None,
 ) -> tuple[PullRequest, bool]:
     """Create or update a PullRequest by pr_id. Returns (pr, created)."""
+    # GitHub API can return null for title/body/head/base; store as empty string.
+    title_val = title or ""
+    body_val = body or ""
+    head_hash_val = head_hash or ""
+    base_hash_val = base_hash or ""
     pr_obj, created = PullRequest.objects.get_or_create(
         pr_id=pr_id,
         defaults={
             "repo": repo,
             "account": account,
             "pr_number": pr_number,
-            "title": title,
-            "body": body,
+            "title": title_val,
+            "body": body_val,
             "state": state,
-            "head_hash": head_hash,
-            "base_hash": base_hash,
+            "head_hash": head_hash_val,
+            "base_hash": base_hash_val,
             "pr_created_at": pr_created_at,
             "pr_updated_at": pr_updated_at,
             "pr_merged_at": pr_merged_at,
@@ -393,11 +407,11 @@ def create_or_update_pull_request(
         pr_obj.repo = repo
         pr_obj.account = account
         pr_obj.pr_number = pr_number
-        pr_obj.title = title
-        pr_obj.body = body
+        pr_obj.title = title_val
+        pr_obj.body = body_val
         pr_obj.state = state
-        pr_obj.head_hash = head_hash
-        pr_obj.base_hash = base_hash
+        pr_obj.head_hash = head_hash_val
+        pr_obj.base_hash = base_hash_val
         pr_obj.pr_created_at = pr_created_at
         pr_obj.pr_updated_at = pr_updated_at
         pr_obj.pr_merged_at = pr_merged_at
@@ -416,12 +430,13 @@ def create_or_update_pr_comment(
     pr_comment_updated_at: Optional[datetime] = None,
 ) -> tuple[PullRequestComment, bool]:
     """Create or update a PullRequestComment by pr_comment_id. Returns (comment, created)."""
+    body_val = body or ""
     comment_obj, created = PullRequestComment.objects.get_or_create(
         pr_comment_id=pr_comment_id,
         defaults={
             "pr": pr,
             "account": account,
-            "body": body,
+            "body": body_val,
             "pr_comment_created_at": pr_comment_created_at,
             "pr_comment_updated_at": pr_comment_updated_at,
         },
@@ -429,7 +444,7 @@ def create_or_update_pr_comment(
     if not created:
         comment_obj.pr = pr
         comment_obj.account = account
-        comment_obj.body = body
+        comment_obj.body = body_val
         comment_obj.pr_comment_created_at = pr_comment_created_at
         comment_obj.pr_comment_updated_at = pr_comment_updated_at
         comment_obj.save()
@@ -447,12 +462,13 @@ def create_or_update_pr_review(
     pr_review_updated_at: Optional[datetime] = None,
 ) -> tuple[PullRequestReview, bool]:
     """Create or update a PullRequestReview by pr_review_id. Returns (review, created)."""
+    body_val = body or ""
     review_obj, created = PullRequestReview.objects.get_or_create(
         pr_review_id=pr_review_id,
         defaults={
             "pr": pr,
             "account": account,
-            "body": body,
+            "body": body_val,
             "in_reply_to_id": in_reply_to_id,
             "pr_review_created_at": pr_review_created_at,
             "pr_review_updated_at": pr_review_updated_at,
@@ -461,7 +477,7 @@ def create_or_update_pr_review(
     if not created:
         review_obj.pr = pr
         review_obj.account = account
-        review_obj.body = body
+        review_obj.body = body_val
         review_obj.in_reply_to_id = in_reply_to_id
         review_obj.pr_review_created_at = pr_review_created_at
         review_obj.pr_review_updated_at = pr_review_updated_at
