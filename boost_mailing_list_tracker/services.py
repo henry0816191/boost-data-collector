@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Optional
 
-from .models import MailingListMessage
+from .models import MailingListMessage, MailingListName
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -37,10 +37,14 @@ def get_or_create_mailing_list_message(
     Returns (message, created).
 
     Raises:
-        ValueError: If msg_id is empty or whitespace-only.
+        ValueError: If msg_id is empty or whitespace-only, or list_name is not a valid MailingListName.
     """
     if not (msg_id and msg_id.strip()):
         raise ValueError("msg_id must not be empty.")
+    list_value = (list_name or "").strip()
+    valid_values = [m.value for m in MailingListName]
+    if list_value not in valid_values:
+        raise ValueError(f"list_name must be one of {valid_values}, got {list_value!r}.")
     return MailingListMessage.objects.get_or_create(
         msg_id=msg_id.strip(),
         defaults={
@@ -49,7 +53,7 @@ def get_or_create_mailing_list_message(
             "thread_id": thread_id,
             "subject": subject,
             "content": content,
-            "list_name": list_name,
+            "list_name": list_value,
             "sent_at": sent_at,
         },
     )

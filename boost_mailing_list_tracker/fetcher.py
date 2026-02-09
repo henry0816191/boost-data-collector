@@ -3,6 +3,9 @@ Fetch Boost mailing list emails from the Mailman API.
 
 Ported from old_project_files/fetch_boost_emails.py and adapted for Django
 (logging, service layer, restart/resume logic via DB checks).
+
+- If start_date is empty, uses the day after the latest sent_at in the database.
+- Raw API responses are saved to workspace/.../raw/ and are not removed.
 """
 
 import json
@@ -12,13 +15,14 @@ from typing import Any, Optional
 
 import requests
 
+from boost_mailing_list_tracker.models import MailingListName
+
 logger = logging.getLogger(__name__)
 
-# Default Boost mailing list API endpoints.
+# Boost mailing list API endpoints; derived from MailingListName enum (single source of truth).
 BOOST_LIST_URLS = [
-    "https://lists.boost.org/archives/api/list/boost-announce@lists.boost.org/emails/",
-    "https://lists.boost.org/archives/api/list/boost-users@lists.boost.org/emails/",
-    "https://lists.boost.org/archives/api/list/boost@lists.boost.org/emails/",
+    f"https://lists.boost.org/archives/api/list/{m.value}/emails/"
+    for m in MailingListName
 ]
 
 # API pagination
@@ -51,7 +55,7 @@ def _filter_by_date(
     return filtered, stop
 
 
-def _fetch_page(url: str, page: int) -> Optional[dict[str, Any]]:
+def _fetch_page(url: str, page: int = 1) -> Optional[dict[str, Any]]:
     """Fetch a single paginated API page with retry on HTTP 429."""
     url_with_params = f"{url}?limit={PAGE_SIZE}&offset={(page - 1) * PAGE_SIZE}"
 
@@ -82,7 +86,7 @@ def _fetch_page(url: str, page: int) -> Optional[dict[str, Any]]:
                         MAX_RETRIES,
                     )
                     return None
-                logger.info(
+                logger.debug(
                     "Rate limited on page %d, waiting %ds (retry %d/%d)",
                     page,
                     retry_after,
@@ -125,10 +129,6 @@ def fetch_email_list(
         if data is None:
             return None
 
-        if "results" not in data:
-            # Single result (not paginated)
-            return [data]
-
         filtered, stop = _filter_by_date(
             data.get("results", []),
             start_date,
@@ -144,11 +144,6 @@ def fetch_email_list(
             page += 1
 
     return results if results else None
-
-
-def fetch_email_content(url: str) -> Optional[list[dict[str, Any]]]:
-    """Fetch the full email content from a detail URL."""
-    return fetch_email_list(url)
 
 
 def format_email(item: dict[str, Any], source_url: str) -> dict[str, Any]:
@@ -176,6 +171,30 @@ def format_email(item: dict[str, Any], source_url: str) -> dict[str, Any]:
     }
 
 
+def _get_start_date_from_db() -> str:
+    """Return start_date as YYYY-MM-DD: the day after the latest sent_at in the DB. Empty if no messages."""
+    from django.db.models import Max
+    from django.utils import timezone
+
+    from boost_mailing_list_tracker.models import MailingListMessage
+
+    result = MailingListMessage.objects.aggregate(Max("sent_at"))
+    max_sent = result.get("sent_at__max")
+    if max_sent is None:
+        return ""
+    next_day = max_sent + timezone.timedelta(days=1)
+    return next_day.strftime("%Y-%m-%d")
+
+
+def _save_raw_email(list_name: str, raw_item: dict[str, Any], msg_id: str) -> None:
+    """Save raw API response to workspace/.../raw/<msg_id>.json. These files are not removed."""
+    from boost_mailing_list_tracker.workspace import get_raw_json_path
+
+    path = get_raw_json_path(list_name, msg_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(raw_item, indent=2, default=str), encoding="utf-8")
+
+
 def fetch_all_emails(
     start_date: str = "",
     end_date: str = "",
@@ -183,17 +202,29 @@ def fetch_all_emails(
 ) -> list[dict[str, Any]]:
     """Fetch and format emails from all configured Boost mailing lists.
 
+    - If start_date is null or empty, uses the day after the latest sent_at in the database.
+    - Raw scraped data is saved to workspace/boost_mailing_list_tracker/<list_name>/raw/
+      before formatting; raw files are kept (not removed).
+
     Returns a list of formatted email dicts (may be empty on total failure).
     """
     urls = list_urls or BOOST_LIST_URLS
     all_emails: list[dict[str, Any]] = []
+
+    # Use last date from DB when start_date not provided
+    if not (start_date and start_date.strip()):
+        start_date = _get_start_date_from_db()
+        if start_date:
+            logger.info("Using start_date from DB (day after latest sent_at): %s", start_date)
+        else:
+            start_date = ""
 
     for api_url in urls:
         list_name = api_url.split("/")[-3]
         logger.info("Fetching email index for %s ...", list_name)
 
         url_list = fetch_email_list(api_url, start_date, end_date)
-        if not url_list or not isinstance(url_list, list):
+        if not url_list:
             logger.warning("No email index data for %s", list_name)
             continue
 
@@ -203,15 +234,24 @@ def fetch_all_emails(
             url = item.get("url")
             if not url:
                 continue
-            content_list = fetch_email_content(url)
-            if content_list:
-                for content_item in content_list:
-                    formatted = format_email(content_item, api_url)
-                    if formatted.get("msg_id"):
-                        all_emails.append(formatted)
+            content_item = _fetch_page(url)
+            if content_item:
+                msg_id = content_item.get("message_id_hash") or ""
+                raw_id = msg_id or url.rstrip("/").split("/")[-1] or "unknown"
+                # _save_raw_email(list_name, content_item, raw_id)
+                formatted = format_email(content_item, api_url)
+                if formatted.get("msg_id"):
+                    all_emails.append(formatted)
             else:
                 logger.debug("No content for %s", url)
 
         logger.info("  Fetched %d emails total so far", len(all_emails))
 
     return all_emails
+
+def main():
+    emails = fetch_all_emails(start_date="2025-12-21", end_date="2026-01-17")
+    print(emails)
+
+if __name__ == "__main__":
+    main()

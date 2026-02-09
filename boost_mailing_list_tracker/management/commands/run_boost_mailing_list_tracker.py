@@ -21,13 +21,19 @@ from boost_mailing_list_tracker.workspace import (
     get_message_json_path,
     iter_existing_message_jsons,
 )
-from cppa_user_tracker.services import add_email, get_or_create_mailing_list_profile
+from cppa_user_tracker.services import (
+    add_email,
+    get_or_create_mailing_list_profile_by_email,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def _persist_email(email_data: dict) -> tuple[bool, bool]:
-    """Persist one formatted email dict to DB. Returns (message_created, skipped)."""
+    """Persist one formatted email dict to DB. Returns (message_created, skipped).
+
+    Sender is identified by email (sender_address); display_name is used only when creating.
+    """
     msg_id = email_data.get("msg_id", "")
     if not msg_id:
         return False, True
@@ -37,10 +43,10 @@ def _persist_email(email_data: dict) -> tuple[bool, bool]:
 
     sender_name = email_data.get("sender_name", "") or ""
     sender_address = email_data.get("sender_address", "") or ""
-    profile, _ = get_or_create_mailing_list_profile(display_name=sender_name)
-
-    if sender_address and not profile.emails.filter(email=sender_address).exists():
-        add_email(profile, sender_address)
+    profile, _ = get_or_create_mailing_list_profile_by_email(
+        email_address=sender_address,
+        display_name=sender_name,
+    )
 
     sent_at_str = email_data.get("sent_at")
     sent_at = parse_datetime(sent_at_str) if sent_at_str else None
@@ -65,7 +71,7 @@ def _process_existing_workspace_json(list_name: str) -> int:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             _persist_email(data)
-            path.unlink()
+            path.unlink() 
             count += 1
         except Exception as e:
             logger.exception("Failed to process %s: %s", path, e)

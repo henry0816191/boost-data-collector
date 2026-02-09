@@ -36,6 +36,18 @@ def get_list_dir(list_name: str) -> Path:
     return path
 
 
+def get_raw_dir(list_name: str) -> Path:
+    """Return .../<list_name>/raw/; creates if missing. Raw scraped data is kept (not removed)."""
+    path = get_list_dir(list_name) / "raw"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_raw_json_path(list_name: str, msg_id: str) -> Path:
+    """Path for raw/<msg_id_safe>.json. Raw files are not removed after processing."""
+    return get_raw_dir(list_name) / f"{_safe_msg_id(msg_id)}.json"
+
+
 def get_messages_dir(list_name: str) -> Path:
     """Return .../<list_name>/messages/; creates if missing."""
     path = get_list_dir(list_name) / "messages"
