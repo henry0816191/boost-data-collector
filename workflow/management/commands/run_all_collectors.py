@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # Identity/profile (CPPA) -> GitHub repos/commits/issues/PRs -> Boost library (extends repos), etc.
 COLLECTOR_COMMANDS = [
     "run_boost_library_tracker",
+    "run_boost_mailing_list_tracker",
     # Add more as apps are added: run_boost_usage_tracker, etc.
 ]
 
