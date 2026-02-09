@@ -1,4 +1,4 @@
-"""Tests for github_activity_tracker.workspace (3+ tests per function)."""
+"""Tests for github_activity_tracker.workspace."""
 
 import pytest
 from pathlib import Path
@@ -27,12 +27,13 @@ def mock_workspace_path(tmp_path):
         yield m.return_value
 
 
-# --- get_workspace_root (3+ tests) ---
+# --- get_workspace_root ---
 
 
 def test_get_workspace_root_returns_path(mock_workspace_path):
     """get_workspace_root returns Path from get_workspace_path(app_slug)."""
     from github_activity_tracker.workspace import get_workspace_root
+
     root = get_workspace_root()
     assert root == mock_workspace_path
 
@@ -42,6 +43,7 @@ def test_get_workspace_root_calls_get_workspace_path(mock_workspace_path):
     with patch("github_activity_tracker.workspace.get_workspace_path") as m:
         m.return_value = Path("/fake/workspace/github_activity_tracker")
         from github_activity_tracker.workspace import get_workspace_root
+
         get_workspace_root()
     m.assert_called_once()
     assert "github_activity_tracker" in str(m.call_args[0][0])
@@ -52,11 +54,12 @@ def test_get_workspace_root_is_path():
     with patch("github_activity_tracker.workspace.get_workspace_path") as m:
         m.return_value = Path("/x")
         from github_activity_tracker.workspace import get_workspace_root
+
         root = get_workspace_root()
     assert isinstance(root, Path)
 
 
-# --- get_repo_dir (3+ tests) ---
+# --- get_repo_dir ---
 
 
 def test_get_repo_dir_returns_owner_repo_path(mock_workspace_path):
@@ -79,7 +82,7 @@ def test_get_repo_dir_idempotent(mock_workspace_path):
     assert p1 == p2
 
 
-# --- get_commits_dir (3+ tests) ---
+# --- get_commits_dir ---
 
 
 def test_get_commits_dir_returns_commits_subdir(mock_workspace_path):
@@ -103,7 +106,7 @@ def test_get_commits_dir_idempotent(mock_workspace_path):
     assert p1 == p2
 
 
-# --- get_issues_dir (3+ tests) ---
+# --- get_issues_dir ---
 
 
 def test_get_issues_dir_returns_issues_subdir(mock_workspace_path):
@@ -127,7 +130,7 @@ def test_get_issues_dir_idempotent(mock_workspace_path):
     assert p1 == p2
 
 
-# --- get_prs_dir (3+ tests) ---
+# --- get_prs_dir ---
 
 
 def test_get_prs_dir_returns_prs_subdir(mock_workspace_path):
@@ -151,13 +154,20 @@ def test_get_prs_dir_idempotent(mock_workspace_path):
     assert p1 == p2
 
 
-# --- get_commit_json_path (3+ tests) ---
+# --- get_commit_json_path ---
 
 
 def test_get_commit_json_path_returns_commits_sha_json(mock_workspace_path):
     """get_commit_json_path returns .../commits/<sha>.json."""
     path = get_commit_json_path("owner", "repo", "abc123def")
-    assert path == mock_workspace_path / "owner" / "repo" / "commits" / "abc123def.json"
+    assert (
+        path
+        == mock_workspace_path
+        / "owner"
+        / "repo"
+        / "commits"
+        / "abc123def.json"
+    )
 
 
 def test_get_commit_json_path_does_not_create_file(mock_workspace_path):
@@ -174,13 +184,15 @@ def test_get_commit_json_path_consistent(mock_workspace_path):
     assert p1 == p2
 
 
-# --- get_issue_json_path (3+ tests) ---
+# --- get_issue_json_path ---
 
 
 def test_get_issue_json_path_returns_issues_num_json(mock_workspace_path):
     """get_issue_json_path returns .../issues/<number>.json."""
     path = get_issue_json_path("owner", "repo", 42)
-    assert path == mock_workspace_path / "owner" / "repo" / "issues" / "42.json"
+    assert (
+        path == mock_workspace_path / "owner" / "repo" / "issues" / "42.json"
+    )
 
 
 def test_get_issue_json_path_integer_number(mock_workspace_path):
@@ -196,7 +208,7 @@ def test_get_issue_json_path_consistent(mock_workspace_path):
     assert p1 == p2
 
 
-# --- get_pr_json_path (3+ tests) ---
+# --- get_pr_json_path ---
 
 
 def test_get_pr_json_path_returns_prs_num_json(mock_workspace_path):
@@ -218,7 +230,7 @@ def test_get_pr_json_path_consistent(mock_workspace_path):
     assert p1 == p2
 
 
-# --- iter_existing_commit_jsons (3+ tests) ---
+# --- iter_existing_commit_jsons ---
 
 
 def test_iter_existing_commit_jsons_empty_when_no_dir(mock_workspace_path):
@@ -250,7 +262,7 @@ def test_iter_existing_commit_jsons_ignores_non_json(mock_workspace_path):
     assert paths[0].name == "x.json"
 
 
-# --- iter_existing_issue_jsons (3+ tests) ---
+# --- iter_existing_issue_jsons ---
 
 
 def test_iter_existing_issue_jsons_empty_when_no_dir(mock_workspace_path):
@@ -280,7 +292,7 @@ def test_iter_existing_issue_jsons_ignores_non_json(mock_workspace_path):
     assert paths[0].name == "2.json"
 
 
-# --- iter_existing_pr_jsons (3+ tests) ---
+# --- iter_existing_pr_jsons ---
 
 
 def test_iter_existing_pr_jsons_empty_when_no_dir(mock_workspace_path):

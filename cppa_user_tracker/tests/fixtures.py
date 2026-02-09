@@ -45,3 +45,17 @@ def make_github_account():
             kwargs["github_account_id"] = 99999
         return baker.make("cppa_user_tracker.GitHubAccount", **kwargs)
     return _make
+
+
+@pytest.fixture
+def tmp_identity(db):
+    """Single TmpIdentity instance (staging)."""
+    return baker.make("cppa_user_tracker.TmpIdentity", display_name="Tmp Identity")
+
+
+@pytest.fixture
+def make_tmp_identity():
+    """Factory: create TmpIdentity with optional kwargs."""
+    def _make(**kwargs):
+        return baker.make("cppa_user_tracker.TmpIdentity", **kwargs)
+    return _make
