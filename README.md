@@ -59,6 +59,37 @@ python manage.py run_all_collectors
 
 For local development you can also start the dev server: `python manage.py runserver`.
 
+## Running tests
+
+The project uses **pytest** with **pytest-django**. Tests run against `config.test_settings` (SQLite in-memory by default; set `DATABASE_URL` to use PostgreSQL).
+
+1. Install test dependencies (once):
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+2. Run the full test suite:
+
+```bash
+python -m pytest
+```
+
+3. Optional: run with coverage and a short traceback:
+
+```bash
+python -m pytest --tb=short --cov=. --cov-report=term-missing
+```
+
+4. Run a subset of tests (e.g. one app or one file):
+
+```bash
+python -m pytest cppa_user_tracker/tests/ -v
+python -m pytest github_activity_tracker/tests/test_sync_utils.py -v
+```
+
+See [docs/Development_guideline.md](docs/Development_guideline.md#testing-workflow) for when to run tests during development.
+
 ## Project structure
 
 ```
@@ -117,6 +148,7 @@ One folder, subfolders per app. For **github_activity_tracker**, sync uses `work
 Docs are organized **by topic** (one doc per concern: workflow, workspace, service API, etc.). See **[docs/README.md](docs/README.md)** for the full index.
 
 - [docs/README.md](docs/README.md) – Per-topic index and how to find app-specific info.
+- [Running tests](#running-tests) – How to run the test suite (pytest, coverage).
 - [operations/](docs/operations/README.md) – **Operations group:** shared I/O (GitHub, Discord, etc.); index and per-operation docs.
 - [Workflow.md](docs/Workflow.md) – Main application workflow, execution order, and project details.
 - [operations/github.md](docs/operations/github.md) – GitHub layer (clone, push, fetch file, create PR/issue/comment) and token use.

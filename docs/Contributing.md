@@ -47,6 +47,7 @@ For a full list of functions, parameter/return types, and validation (e.g. empty
 
 ### Testing
 
+- **Running tests:** From the project root, install dev deps (`pip install -r requirements-dev.txt`) and run `python -m pytest`. See [README.md](../README.md#running-tests) and [Development_guideline.md](Development_guideline.md#testing-workflow) for full commands and options.
 - **Unit tests for `services.py`:** Call the service functions and assert on the database (or mocks) as needed.
 - **Other tests:** Prefer service functions when setting up data. If you must create models directly for tests, keep it in test code (e.g. fixtures or test helpers) and avoid doing the same in production code.
 

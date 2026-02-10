@@ -67,12 +67,10 @@ Use these steps to get the Django project running on your machine.
 
 Run tests often so you catch problems early.
 
-- Before each commit: run the test suite for the code you changed (e.g. `python manage.py test` or `pytest` in the project root).
-- For app commands: ensure the command runs successfully (e.g. `python manage.py run_boost_library_tracker` exits with 0 and does the expected work).
-- Run the full workflow or integration tests if the project defines them (e.g. `python manage.py run_all_collectors`).
-- In CI: the project may run tests on every push or pull request; fix any failures before merging.
-
-If the project uses a test framework (e.g. Django's test runner or pytest), add tests for new behavior and keep them passing. See the project README or this doc for the exact test commands.
+- **Before each commit:** run the test suite for the code you changed (`python -m pytest` or a subset).
+- **For app commands:** ensure the command runs successfully (e.g. `python manage.py run_boost_library_tracker` exits with 0 and does the expected work).
+- **Full workflow:** run `python manage.py run_all_collectors` when testing integration.
+  Add tests for new behavior and keep them passing.
 
 ## Step-by-step development workflow guide
 
