@@ -28,3 +28,7 @@ media/
 .vscode/
 *.swp
 *.swo
+
+# DiscordChatExporter CLI binaries (download separately, ~35MB)
+discord_activity_tracker/tools/*
+!discord_activity_tracker/tools/README.md

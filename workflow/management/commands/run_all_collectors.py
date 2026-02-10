@@ -1,8 +1,4 @@
-"""
-Management command: run_all_collectors
-Runs all app collector commands in a fixed order (see docs/Workflow.md).
-Exits with 0 only when all succeed; non-zero on any failure.
-"""
+"""Run all collector commands in order (see docs/Workflow.md)."""
 
 import logging
 import sys
@@ -12,10 +8,10 @@ from django.core.management.base import BaseCommand, CommandError
 
 logger = logging.getLogger(__name__)
 
-# Execution order: data-collection first, then processing (per Workflow.md)
-# Identity/profile (CPPA) -> GitHub repos/commits/issues/PRs -> Boost library (extends repos), etc.
+# Order matters — see docs/Workflow.md
 COLLECTOR_COMMANDS = [
     "run_boost_library_tracker",
+    "run_discord_exporter",
     # Add more as apps are added: run_boost_usage_tracker, etc.
 ]
 

@@ -3,7 +3,6 @@ Django settings for Boost Data Collector project.
 Uses django-environ for environment variables.
 """
 
-import os
 from pathlib import Path
 
 import environ
@@ -42,6 +41,7 @@ INSTALLED_APPS = [
     "github_ops",
     "github_activity_tracker",
     "boost_library_tracker",
+    "discord_activity_tracker",
 ]
 
 MIDDLEWARE = [
@@ -123,7 +123,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Workspace: one folder for raw/processed files, subfolders per app (see docs/Workspace.md)
 WORKSPACE_DIR = Path(env("WORKSPACE_DIR", default=str(BASE_DIR / "workspace"))).resolve()
-_WORKSPACE_APP_SLUGS = ("github_activity_tracker", "boost_library_tracker", "shared")
+_WORKSPACE_APP_SLUGS = ("github_activity_tracker", "boost_library_tracker", "discord_activity_tracker", "shared")
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 for _slug in _WORKSPACE_APP_SLUGS:
     (WORKSPACE_DIR / _slug).mkdir(parents=True, exist_ok=True)
@@ -142,6 +142,14 @@ if not GITHUB_TOKENS_SCRAPING and GITHUB_TOKEN:
 GITHUB_TOKEN_WRITE = (
     (env("GITHUB_TOKEN_WRITE", default="") or "").strip() or GITHUB_TOKEN
 )
+
+# Discord configuration (for discord_activity_tracker)
+DISCORD_TOKEN = (env("DISCORD_TOKEN", default="") or "").strip()
+DISCORD_USER_TOKEN = (env("DISCORD_USER_TOKEN", default="") or "").strip()
+DISCORD_SERVER_ID = (env("DISCORD_SERVER_ID", default="") or "").strip()
+DISCORD_CONTEXT_REPO_PATH = Path(
+    env("DISCORD_CONTEXT_REPO_PATH", default=str(BASE_DIR.parent / "discord-cplusplus-together-context"))
+).resolve()
 
 # Logging - project-wide configuration for app commands (console + rotating file)
 LOG_DIR = Path(env("LOG_DIR", default=str(BASE_DIR / "logs")))
