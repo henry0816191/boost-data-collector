@@ -4,21 +4,13 @@ Index of all app service modules. All writes to app models must go through the s
 
 **Import pattern:** `from <app>.services import <function>`
 
-<<<<<<< HEAD
 | Service module | App | Short description |
 |----------------|-----|-------------------|
 | [cppa_user_tracker.services](cppa_user_tracker.md) | cppa_user_tracker | Identity, profiles, emails, and staging (TmpIdentity, TempProfileIdentityRelation). |
 | [github_activity_tracker.services](github_activity_tracker.md) | github_activity_tracker | Repos, languages, licenses, issues, pull requests, assignees, labels. |
 | [boost_library_tracker.services](boost_library_tracker.md) | boost_library_tracker | Boost libraries, versions, dependencies, categories, maintainers/authors. |
+| [cppa_pinecone_sync.services](cppa_pinecone_sync.md)           | cppa_pinecone_sync      | Pinecone fail list and sync status (failure tracking, last-sync bookkeeping). |
 | [discord_activity_tracker.services](discord_activity_tracker.md) | discord_activity_tracker | Servers, channels, messages, reactions (user profiles in cppa_user_tracker). |
-=======
-| Service module                                                 | App                     | Short description                                                                   |
-| -------------------------------------------------------------- | ----------------------- | ----------------------------------------------------------------------------------- |
-| [cppa_user_tracker.services](cppa_user_tracker.md)             | cppa_user_tracker       | Identity, profiles, emails, and staging (TmpIdentity, TempProfileIdentityRelation). |
-| [github_activity_tracker.services](github_activity_tracker.md) | github_activity_tracker | Repos, languages, licenses, issues, pull requests, assignees, labels.               |
-| [boost_library_tracker.services](boost_library_tracker.md)     | boost_library_tracker   | Boost libraries, versions, dependencies, categories, maintainers/authors.           |
-| [cppa_pinecone_sync.services](cppa_pinecone_sync.md)           | cppa_pinecone_sync      | Pinecone fail list and sync status (failure tracking, last-sync bookkeeping).       |
->>>>>>> 2583dc3 (#29-create cppa-pinecone-sync app)
 
 ---
 
@@ -27,10 +19,7 @@ Index of all app service modules. All writes to app models must go through the s
 - **cppa_user_tracker** – Create/update Identity, TmpIdentity, BaseProfile–TmpIdentity relations, and Email.
 - **github_activity_tracker** – Get-or-create Language/License/Repository; add repo languages/licenses; manage issue and PR assignees and labels.
 - **boost_library_tracker** – Get-or-create BoostLibraryRepository, BoostLibrary, BoostVersion, BoostLibraryVersion; add dependencies, categories, and role relationships.
-<<<<<<< HEAD
 - **discord_activity_tracker** – Get-or-create DiscordServer, DiscordChannel; create/update DiscordMessage, DiscordReaction. Discord user profiles in cppa_user_tracker.
-=======
 - **cppa_pinecone_sync** – Get/clear/record failed IDs in PineconeFailList; get/update PineconeSyncStatus.
->>>>>>> 2583dc3 (#29-create cppa-pinecone-sync app)
 
 See [Contributing.md](../Contributing.md) for the rule that all writes go through the service layer.

@@ -44,7 +44,7 @@ INSTALLED_APPS = [
     "operations",
     "github_activity_tracker",
     "boost_library_tracker",
-	"cppa_pinecone_sync",
+    "cppa_pinecone_sync",
     "cppa_slack_transcript_tracker",
     "discord_activity_tracker",
 ]
@@ -127,9 +127,7 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Workspace: one folder for raw/processed files, subfolders per app (see docs/Workspace.md)
-WORKSPACE_DIR = Path(
-    env("WORKSPACE_DIR", default=str(BASE_DIR / "workspace"))
-).resolve()
+WORKSPACE_DIR = Path(env("WORKSPACE_DIR", default=str(BASE_DIR / "workspace"))).resolve()
 _WORKSPACE_APP_SLUGS = (
     "github_activity_tracker",
     "boost_library_tracker",
@@ -153,8 +151,7 @@ GITHUB_TOKENS_SCRAPING = [
 if not GITHUB_TOKENS_SCRAPING and GITHUB_TOKEN:
     GITHUB_TOKENS_SCRAPING = [GITHUB_TOKEN]
 GITHUB_TOKEN_WRITE = (
-    env("GITHUB_TOKEN_WRITE", default="") or ""
-).strip() or GITHUB_TOKEN
+    (env("GITHUB_TOKEN_WRITE", default="") or "").strip() or GITHUB_TOKEN
 # Optional: GitHub repo for Slack huddle transcript uploads
 GITHUB_SLACK_HUDDLE_REPO_OWNER = (
     env("GITHUB_SLACK_HUDDLE_REPO_OWNER", default="") or ""
@@ -208,27 +205,7 @@ DISCORD_CONTEXT_REPO_PATH = Path(
         default=str(BASE_DIR.parent / "discord-cplusplus-together-context"),
     )
 ).resolve()
-
-# Pinecone (cppa_pinecone_sync) - vector search indexes
-PINECONE_API_KEY = (env("PINECONE_API_KEY", default="") or "").strip()
-PINECONE_INDEX_NAME = (env("PINECONE_INDEX_NAME", default="") or "").strip()
-PINECONE_ENVIRONMENT = (
-    env("PINECONE_ENVIRONMENT", default="us-east-1") or "us-east-1"
-).strip()
-PINECONE_CLOUD = (env("PINECONE_CLOUD", default="aws") or "aws").strip()
-PINECONE_BATCH_SIZE = int(env("PINECONE_BATCH_SIZE", default=96))
-PINECONE_CHUNK_SIZE = int(env("PINECONE_CHUNK_SIZE", default=1000))
-PINECONE_CHUNK_OVERLAP = int(env("PINECONE_CHUNK_OVERLAP", default=200))
-PINECONE_MIN_TEXT_LENGTH = int(env("PINECONE_MIN_TEXT_LENGTH", default=50))
-PINECONE_MIN_WORDS = int(env("PINECONE_MIN_WORDS", default=5))
-PINECONE_DENSE_MODEL = (
-    env("PINECONE_DENSE_MODEL", default="multilingual-e5-large")
-    or "multilingual-e5-large"
-).strip()
-PINECONE_SPARSE_MODEL = (
-    env("PINECONE_SPARSE_MODEL", default="pinecone-sparse-english-v0")
-    or "pinecone-sparse-english-v0"
-).strip()
+)
 # Logging - project-wide configuration for app commands (console + rotating file)
 LOG_DIR = Path(env("LOG_DIR", default=str(BASE_DIR / "logs")))
 LOG_FILE = env("LOG_FILE", default="app.log")
