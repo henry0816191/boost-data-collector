@@ -92,3 +92,4 @@ Each file: YAML frontmatter (metadata) + messages grouped by date.
 - Only exports channels active in last 30 days (configurable via `--active-days`)
 - Incremental sync via `last_synced_at` per channel
 - First run may take 30-60 min; subsequent runs ~5-10 sec per channel
+- **Bot messages**: Both sync methods include bot-generated content. DiscordChatExporter exports all messages by default. Bot authors are labeled `(bot)` in the markdown output.
