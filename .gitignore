@@ -18,6 +18,11 @@ local_settings.py
 db.sqlite3
 staticfiles/
 media/
+.test_artifacts/
+
+# Testing / coverage
+.coverage
+htmlcov/
 
 # Environment
 .env

@@ -1,0 +1,10 @@
+# Test stack (see docs/testing or project testing summary)
+pytest>=7.4
+pytest-django>=4.5
+django-test-plus>=2.2
+model-bakery>=0.17
+
+# Optional: coverage, HTTP mocking, fake data
+pytest-cov>=4.1
+responses>=0.24
+Faker>=20.0
