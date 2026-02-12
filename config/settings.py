@@ -3,7 +3,6 @@ Django settings for Boost Data Collector project.
 Uses django-environ for environment variables.
 """
 
-import os
 from pathlib import Path
 
 import environ
@@ -21,9 +20,7 @@ if env_file.exists():
     environ.Env.read_env(str(env_file))
 
 # Security
-SECRET_KEY = (
-    env("SECRET_KEY") or "django-insecure-dev-only-change-in-production"
-)
+SECRET_KEY = env("SECRET_KEY") or "django-insecure-dev-only-change-in-production"
 DEBUG = env("DEBUG")
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
@@ -103,12 +100,8 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
     },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
-    {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"
-    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 # Internationalization
@@ -122,7 +115,9 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Workspace: one folder for raw/processed files, subfolders per app (see docs/Workspace.md)
-WORKSPACE_DIR = Path(env("WORKSPACE_DIR", default=str(BASE_DIR / "workspace"))).resolve()
+WORKSPACE_DIR = Path(
+    env("WORKSPACE_DIR", default=str(BASE_DIR / "workspace"))
+).resolve()
 _WORKSPACE_APP_SLUGS = ("github_activity_tracker", "boost_library_tracker", "shared")
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 for _slug in _WORKSPACE_APP_SLUGS:
@@ -140,8 +135,8 @@ GITHUB_TOKENS_SCRAPING = [
 if not GITHUB_TOKENS_SCRAPING and GITHUB_TOKEN:
     GITHUB_TOKENS_SCRAPING = [GITHUB_TOKEN]
 GITHUB_TOKEN_WRITE = (
-    (env("GITHUB_TOKEN_WRITE", default="") or "").strip() or GITHUB_TOKEN
-)
+    env("GITHUB_TOKEN_WRITE", default="") or ""
+).strip() or GITHUB_TOKEN
 
 # Logging - project-wide configuration for app commands (console + rotating file)
 LOG_DIR = Path(env("LOG_DIR", default=str(BASE_DIR / "logs")))

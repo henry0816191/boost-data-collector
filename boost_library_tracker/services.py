@@ -102,7 +102,11 @@ def get_or_create_boost_version(
         version=version.strip(),
         defaults={"version_created_at": version_created_at},
     )
-    if not created and version_created_at is not None and obj.version_created_at != version_created_at:
+    if (
+        not created
+        and version_created_at is not None
+        and obj.version_created_at != version_created_at
+    ):
         obj.version_created_at = version_created_at
         obj.save(update_fields=["version_created_at"])
     return obj, created
@@ -163,7 +167,9 @@ def add_dependency_changelog(
 
 
 # --- BoostLibraryCategory ---
-def get_or_create_boost_library_category(name: str) -> tuple[BoostLibraryCategory, bool]:
+def get_or_create_boost_library_category(
+    name: str,
+) -> tuple[BoostLibraryCategory, bool]:
     """Get or create BoostLibraryCategory by name."""
     if not (name and name.strip()):
         raise ValueError("Category name must not be empty.")

@@ -5,14 +5,7 @@ from datetime import datetime, timezone
 
 from github_activity_tracker import services
 from github_activity_tracker.models import (
-    GitCommit,
-    GitHubFile,
-    GitHubRepository,
-    Issue,
     IssueLabel,
-    Language,
-    License,
-    PullRequest,
     PullRequestLabel,
     RepoLanguage,
 )
@@ -98,18 +91,14 @@ def test_get_or_create_license_empty_name_raises():
 @pytest.mark.django_db
 def test_get_or_create_repository_creates_new(github_account):
     """get_or_create_repository creates new repo and returns (repo, True)."""
-    repo, created = services.get_or_create_repository(
-        github_account, "new-repo"
-    )
+    repo, created = services.get_or_create_repository(github_account, "new-repo")
     assert created is True
     assert repo.repo_name == "new-repo"
     assert repo.owner_account_id == github_account.id
 
 
 @pytest.mark.django_db
-def test_get_or_create_repository_gets_existing(
-    github_repository, github_account
-):
+def test_get_or_create_repository_gets_existing(github_repository, github_account):
     """get_or_create_repository returns existing repo and (repo, False)."""
     repo, created = services.get_or_create_repository(
         github_account,
@@ -120,9 +109,7 @@ def test_get_or_create_repository_gets_existing(
 
 
 @pytest.mark.django_db
-def test_get_or_create_repository_updates_defaults(
-    github_repository, github_account
-):
+def test_get_or_create_repository_updates_defaults(github_repository, github_account):
     """get_or_create_repository updates stars/forks/description when repo exists."""
     repo, _ = services.get_or_create_repository(
         github_account,
@@ -171,9 +158,7 @@ def test_ensure_repository_owner_sets_owner_when_none(
     github_repository, github_account, make_github_repository
 ):
     """ensure_repository_owner sets owner_account when currently None (e.g. migrated row)."""
-    repo = make_github_repository(
-        owner_account=github_account, repo_name="orphan-repo"
-    )
+    repo = make_github_repository(owner_account=github_account, repo_name="orphan-repo")
     repo.refresh_from_db()
     # Simulate null owner: we can't easily set FK to null with constraint, so test the save path
     services.ensure_repository_owner(repo, github_account)
@@ -193,9 +178,7 @@ def test_ensure_repository_owner_no_op_when_owner_set(
 
 
 @pytest.mark.django_db
-def test_ensure_repository_owner_refreshes_from_db(
-    github_repository, github_account
-):
+def test_ensure_repository_owner_refreshes_from_db(github_repository, github_account):
     """ensure_repository_owner calls refresh_from_db before check."""
     services.ensure_repository_owner(github_repository, github_account)
     # No exception; repo unchanged when already has owner
@@ -230,9 +213,7 @@ def test_add_repo_language_updates_existing(github_repository, language):
 
 
 @pytest.mark.django_db
-def test_add_repo_language_default_line_count_zero(
-    github_repository, make_language
-):
+def test_add_repo_language_default_line_count_zero(github_repository, make_language):
     """add_repo_language defaults line_count to 0."""
     lang = make_language(name="Go")
     rl, _ = services.add_repo_language(github_repository, lang)
@@ -243,14 +224,10 @@ def test_add_repo_language_default_line_count_zero(
 
 
 @pytest.mark.django_db
-def test_update_repo_language_line_count_updates_existing(
-    github_repository, language
-):
+def test_update_repo_language_line_count_updates_existing(github_repository, language):
     """update_repo_language_line_count updates line_count for existing RepoLanguage."""
     services.add_repo_language(github_repository, language, line_count=10)
-    rl = services.update_repo_language_line_count(
-        github_repository, language, 500
-    )
+    rl = services.update_repo_language_line_count(github_repository, language, 500)
     assert rl.line_count == 500
     rl.refresh_from_db()
     assert rl.line_count == 500
@@ -262,9 +239,7 @@ def test_update_repo_language_line_count_returns_repo_language(
 ):
     """update_repo_language_line_count returns the RepoLanguage instance."""
     services.add_repo_language(github_repository, language, line_count=0)
-    rl = services.update_repo_language_line_count(
-        github_repository, language, 100
-    )
+    rl = services.update_repo_language_line_count(github_repository, language, 100)
     assert rl.repo_id == github_repository.id
     assert rl.language_id == language.id
 
@@ -400,9 +375,7 @@ def test_add_commit_file_change_creates(github_repository, github_account):
 
 
 @pytest.mark.django_db
-def test_add_commit_file_change_updates_existing(
-    github_repository, github_account
-):
+def test_add_commit_file_change_updates_existing(github_repository, github_account):
     """add_commit_file_change updates status/additions/deletions/patch when exists."""
     commit_obj, _ = services.create_or_update_commit(
         github_repository,
@@ -423,9 +396,7 @@ def test_add_commit_file_change_updates_existing(
 
 
 @pytest.mark.django_db
-def test_add_commit_file_change_defaults_patch_empty(
-    github_repository, github_account
-):
+def test_add_commit_file_change_defaults_patch_empty(github_repository, github_account):
     """add_commit_file_change defaults patch to empty string."""
     commit_obj, _ = services.create_or_update_commit(
         github_repository,
@@ -461,9 +432,7 @@ def test_create_or_update_issue_creates(github_repository, github_account):
 
 
 @pytest.mark.django_db
-def test_create_or_update_issue_updates_existing(
-    github_repository, github_account
-):
+def test_create_or_update_issue_updates_existing(github_repository, github_account):
     """create_or_update_issue updates existing issue by issue_id."""
     services.create_or_update_issue(
         github_repository,
@@ -510,9 +479,7 @@ def test_create_or_update_issue_empty_title_body_allowed(
 
 
 @pytest.mark.django_db
-def test_add_issue_label_creates(
-    issue_with_repo, github_repository, github_account
-):
+def test_add_issue_label_creates(issue_with_repo, github_repository, github_account):
     """add_issue_label creates IssueLabel."""
     issue, _ = issue_with_repo
     label, created = services.add_issue_label(issue, "bug")
@@ -535,18 +502,14 @@ def test_remove_issue_label_removes(issue_with_repo):
     issue, _ = issue_with_repo
     services.add_issue_label(issue, "wontfix")
     services.remove_issue_label(issue, "wontfix")
-    assert not IssueLabel.objects.filter(
-        issue=issue, label_name="wontfix"
-    ).exists()
+    assert not IssueLabel.objects.filter(issue=issue, label_name="wontfix").exists()
 
 
 # --- create_or_update_pull_request ---
 
 
 @pytest.mark.django_db
-def test_create_or_update_pull_request_creates(
-    github_repository, github_account
-):
+def test_create_or_update_pull_request_creates(github_repository, github_account):
     """create_or_update_pull_request creates new PullRequest."""
     pr, created = services.create_or_update_pull_request(
         github_repository,
@@ -634,9 +597,7 @@ def test_remove_pull_request_label_removes(pr_with_repo):
     pr, _ = pr_with_repo
     services.add_pull_request_label(pr, "blocked")
     services.remove_pull_request_label(pr, "blocked")
-    assert not PullRequestLabel.objects.filter(
-        pr=pr, label_name="blocked"
-    ).exists()
+    assert not PullRequestLabel.objects.filter(pr=pr, label_name="blocked").exists()
 
 
 # --- Fixtures used by issue/PR tests ---

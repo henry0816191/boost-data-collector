@@ -2,6 +2,7 @@
 Git and content operations for GitHub: clone, push, fetch one file.
 All apps use this module (and github_ops.client) for GitHub operations.
 """
+
 from __future__ import annotations
 
 import logging
@@ -44,7 +45,11 @@ def clone_repo(
     if "github.com" not in url_or_slug and "/" in url_or_slug:
         url_or_slug = f"https://github.com/{url_or_slug}"
     clone_url = _url_with_token(
-        url_or_slug if url_or_slug.endswith(".git") else url_or_slug.rstrip("/") + ".git",
+        (
+            url_or_slug
+            if url_or_slug.endswith(".git")
+            else url_or_slug.rstrip("/") + ".git"
+        ),
         token,
     )
     cmd = ["git", "clone", clone_url, str(dest_dir)]

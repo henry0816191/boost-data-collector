@@ -1,19 +1,12 @@
 """Tests for boost_library_tracker models (at least 3 test cases per model)."""
+
 import pytest
 from datetime import date
 from model_bakery import baker
 
 from boost_library_tracker.models import (
-    BoostDependency,
-    BoostFile,
-    BoostLibrary,
     BoostLibraryCategory,
-    BoostLibraryCategoryRelationship,
-    BoostLibraryRepository,
-    BoostLibraryRoleRelationship,
-    BoostLibraryVersion,
     BoostVersion,
-    DependencyChangeLog,
 )
 
 
@@ -57,8 +50,8 @@ def test_boost_library_belongs_to_repo(boost_library, boost_library_repository):
 @pytest.mark.django_db
 def test_multiple_libraries_in_repo(make_boost_library, boost_library_repository):
     """Multiple BoostLibraries can be created in the same repository."""
-    a = make_boost_library(repo=boost_library_repository, name="algorithm")
-    b = make_boost_library(repo=boost_library_repository, name="container")
+    make_boost_library(repo=boost_library_repository, name="algorithm")
+    make_boost_library(repo=boost_library_repository, name="container")
     assert boost_library_repository.libraries.count() == 2
 
 
@@ -162,7 +155,9 @@ def test_boost_library_version_links_library_and_version(
 
 
 @pytest.mark.django_db
-def test_boost_library_version_cpp_version_and_description(boost_library_version):
+def test_boost_library_version_cpp_version_and_description(
+    boost_library_version,
+):
     """BoostLibraryVersion stores cpp_version and description."""
     assert boost_library_version.cpp_version == "C++14"
     assert boost_library_version.description == "Algorithm library"
@@ -280,7 +275,9 @@ def test_dependency_changelog_reverse_relations(
 
     client = make_boost_library(repo=boost_library_repository, name="cl3")
     dep = make_boost_library(repo=boost_library_repository, name="dp3")
-    services.add_dependency_changelog(client, dep, is_add=True, created_at=date(2024, 3, 1))
+    services.add_dependency_changelog(
+        client, dep, is_add=True, created_at=date(2024, 3, 1)
+    )
     assert client.dependency_changelog_as_client.filter(dep_library=dep).exists()
     assert dep.dependency_changelog_as_dep.filter(client_library=client).exists()
 
@@ -345,7 +342,9 @@ def test_boost_library_role_reverse_relations(
         github_account,
         is_maintainer=True,
     )
-    assert boost_library_version.role_relationships.filter(account=github_account).exists()
+    assert boost_library_version.role_relationships.filter(
+        account=github_account
+    ).exists()
     assert github_account.boost_library_roles.filter(
         library_version=boost_library_version
     ).exists()

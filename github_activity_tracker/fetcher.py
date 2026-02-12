@@ -2,6 +2,7 @@
 Fetch data from GitHub API.
 Adapted from BoostDataCollector/github/fetch.py.
 """
+
 from __future__ import annotations
 
 import logging
@@ -67,10 +68,9 @@ def fetch_commits_from_github(
         logger.debug(f"Fetched {len(commits)} commits from page {page}")
 
         for commit in reversed(commits):
-            commit_date_str = (
-                commit.get("commit", {}).get("author", {}).get("date")
-                or commit.get("commit", {}).get("committer", {}).get("date")
-            )
+            commit_date_str = commit.get("commit", {}).get("author", {}).get(
+                "date"
+            ) or commit.get("commit", {}).get("committer", {}).get("date")
             if commit_date_str:
                 try:
                     commit_dt = datetime.fromisoformat(
@@ -219,9 +219,7 @@ def fetch_issues_from_github(
 
         # Filter out PRs (issues endpoint returns both issues and PRs)
         issues = [i for i in issues if "pull_request" not in i]
-        logger.debug(
-            f"Fetched {len(issues)} issues (excluding PRs) from page {page}"
-        )
+        logger.debug(f"Fetched {len(issues)} issues (excluding PRs) from page {page}")
 
         for issue in issues:
             updated_str = issue.get("updated_at") or issue.get("created_at")
@@ -232,6 +230,13 @@ def fetch_issues_from_github(
                     )
                 except Exception as e:
                     logger.debug(f"Failed to parse issue date '{updated_str}': {e}")
+
+            if start_time:
+                if issue_dt < start_time:
+                    continue
+            if end_time:
+                if issue_dt > end_time:
+                    continue
 
             issue_number = issue.get("number")
             if issue_number:

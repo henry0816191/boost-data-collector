@@ -1,18 +1,14 @@
 """Tests for boost_library_tracker.services (at least 3 test cases per function)."""
+
 import pytest
 from datetime import date
 
 from boost_library_tracker import services
 from boost_library_tracker.models import (
     BoostDependency,
-    BoostFile,
-    BoostLibrary,
-    BoostLibraryCategory,
     BoostLibraryCategoryRelationship,
     BoostLibraryRepository,
     BoostLibraryRoleRelationship,
-    BoostLibraryVersion,
-    BoostVersion,
     DependencyChangeLog,
 )
 
@@ -31,7 +27,9 @@ def test_get_or_create_boost_library_repo_creates_new(github_repository):
 
 
 @pytest.mark.django_db
-def test_get_or_create_boost_library_repo_gets_existing(boost_library_repository, github_repository):
+def test_get_or_create_boost_library_repo_gets_existing(
+    boost_library_repository, github_repository
+):
     """get_or_create_boost_library_repo returns existing and (repo, False)."""
     repo, created = services.get_or_create_boost_library_repo(github_repository)
     assert created is False
@@ -44,7 +42,6 @@ def test_get_or_create_boost_library_repo_updates_updated_at(
     github_repository,
 ):
     """get_or_create_boost_library_repo updates updated_at when existing."""
-    from django.utils import timezone
 
     old_updated = boost_library_repository.updated_at
     repo, created = services.get_or_create_boost_library_repo(github_repository)
@@ -69,7 +66,9 @@ def test_get_or_create_boost_library_creates_new(boost_library_repository):
 
 
 @pytest.mark.django_db
-def test_get_or_create_boost_library_gets_existing(boost_library, boost_library_repository):
+def test_get_or_create_boost_library_gets_existing(
+    boost_library, boost_library_repository
+):
     """get_or_create_boost_library returns existing and (lib, False)."""
     lib, created = services.get_or_create_boost_library(
         boost_library_repository,
@@ -267,11 +266,14 @@ def test_add_boost_dependency_get_existing(
     services.add_boost_dependency(client, boost_version, dep_lib)
     dep2, created2 = services.add_boost_dependency(client, boost_version, dep_lib)
     assert created2 is False
-    assert BoostDependency.objects.filter(
-        client_library=client,
-        version=boost_version,
-        dep_library=dep_lib,
-    ).count() == 1
+    assert (
+        BoostDependency.objects.filter(
+            client_library=client,
+            version=boost_version,
+            dep_library=dep_lib,
+        ).count()
+        == 1
+    )
 
 
 @pytest.mark.django_db
@@ -358,11 +360,14 @@ def test_add_dependency_changelog_same_args_idempotent(
         created_at=date(2024, 5, 3),
     )
     assert created2 is False
-    assert DependencyChangeLog.objects.filter(
-        client_library=client,
-        dep_library=dep,
-        created_at=date(2024, 5, 3),
-    ).count() == 1
+    assert (
+        DependencyChangeLog.objects.filter(
+            client_library=client,
+            dep_library=dep,
+            created_at=date(2024, 5, 3),
+        ).count()
+        == 1
+    )
 
 
 # --- get_or_create_boost_library_category (3+ tests) ---
@@ -380,7 +385,9 @@ def test_get_or_create_boost_library_category_creates_new():
 @pytest.mark.django_db
 def test_get_or_create_boost_library_category_gets_existing(boost_library_category):
     """get_or_create_boost_library_category returns existing and (obj, False)."""
-    cat, created = services.get_or_create_boost_library_category(boost_library_category.name)
+    cat, created = services.get_or_create_boost_library_category(
+        boost_library_category.name
+    )
     assert created is False
     assert cat.pk == boost_library_category.pk
 
@@ -424,10 +431,13 @@ def test_add_library_category_gets_existing(boost_library, boost_library_categor
         boost_library_category,
     )
     assert created2 is False
-    assert BoostLibraryCategoryRelationship.objects.filter(
-        library=boost_library,
-        category=boost_library_category,
-    ).count() == 1
+    assert (
+        BoostLibraryCategoryRelationship.objects.filter(
+            library=boost_library,
+            category=boost_library_category,
+        ).count()
+        == 1
+    )
 
 
 @pytest.mark.django_db
@@ -501,7 +511,10 @@ def test_add_library_version_role_idempotent(
         is_maintainer=True,
     )
     assert created2 is False
-    assert BoostLibraryRoleRelationship.objects.filter(
-        library_version=boost_library_version,
-        account=github_account,
-    ).count() == 1
+    assert (
+        BoostLibraryRoleRelationship.objects.filter(
+            library_version=boost_library_version,
+            account=github_account,
+        ).count()
+        == 1
+    )

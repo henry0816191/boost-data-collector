@@ -2,6 +2,7 @@
 Test-only Django settings.
 Imports base settings, then overrides for fast and isolated tests.
 """
+
 from pathlib import Path
 
 from .settings import *  # noqa: F401, F403
@@ -9,6 +10,7 @@ from .settings import *  # noqa: F401, F403
 # Use SQLite in-memory for speed when DATABASE_URL not set (e.g. local pytest).
 # CI can set DATABASE_URL=sqlite:///test.sqlite3 or leave unset for :memory:
 import os
+
 if not os.environ.get("DATABASE_URL", "").strip():
     DATABASES = {
         "default": {

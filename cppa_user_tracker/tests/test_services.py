@@ -8,7 +8,6 @@ from cppa_user_tracker.models import (
     GitHubAccountType,
     Identity,
     TempProfileIdentityRelation,
-    TmpIdentity,
 )
 from cppa_user_tracker import services
 
@@ -50,9 +49,7 @@ def test_create_identity_empty_defaults():
 @pytest.mark.django_db
 def test_get_or_create_identity_creates_new():
     """get_or_create_identity creates new Identity and returns (obj, True)."""
-    identity, created = services.get_or_create_identity(
-        display_name="New User"
-    )
+    identity, created = services.get_or_create_identity(display_name="New User")
     assert created is True
     assert identity.display_name == "New User"
     assert Identity.objects.filter(display_name="New User").count() == 1
@@ -113,9 +110,7 @@ def test_create_tmp_identity_empty_defaults():
 
 
 @pytest.mark.django_db
-def test_add_temp_profile_identity_relation_creates(
-    github_account, tmp_identity
-):
+def test_add_temp_profile_identity_relation_creates(github_account, tmp_identity):
     """add_temp_profile_identity_relation creates new relation and returns (rel, True)."""
     rel, created = services.add_temp_profile_identity_relation(
         github_account,
@@ -171,9 +166,7 @@ def test_remove_temp_profile_identity_relation_removes_existing(
 ):
     """remove_temp_profile_identity_relation deletes existing relation."""
     services.add_temp_profile_identity_relation(github_account, tmp_identity)
-    services.remove_temp_profile_identity_relation(
-        github_account, tmp_identity
-    )
+    services.remove_temp_profile_identity_relation(github_account, tmp_identity)
     assert not TempProfileIdentityRelation.objects.filter(
         base_profile=github_account,
         target_identity=tmp_identity,
@@ -186,9 +179,7 @@ def test_remove_temp_profile_identity_relation_no_error_when_none(
     tmp_identity,
 ):
     """remove_temp_profile_identity_relation does not raise when relation missing."""
-    services.remove_temp_profile_identity_relation(
-        github_account, tmp_identity
-    )
+    services.remove_temp_profile_identity_relation(github_account, tmp_identity)
     # No exception; other relations unchanged
     assert TempProfileIdentityRelation.objects.count() == 0
 
@@ -280,9 +271,7 @@ def test_update_email_changes_is_primary(github_account):
 @pytest.mark.django_db
 def test_update_email_changes_is_active(github_account):
     """update_email updates is_active."""
-    email_obj = services.add_email(
-        github_account, "e@example.com", is_active=True
-    )
+    email_obj = services.add_email(github_account, "e@example.com", is_active=True)
     services.update_email(email_obj, is_active=False)
     email_obj.refresh_from_db()
     assert email_obj.is_active is False
@@ -307,9 +296,7 @@ def test_remove_email_other_emails_remain(github_account):
     email2 = services.add_email(github_account, "remove@example.com")
     services.remove_email(email2)
     assert github_account.emails.filter(email="keep@example.com").exists()
-    assert not github_account.emails.filter(
-        email="remove@example.com"
-    ).exists()
+    assert not github_account.emails.filter(email="remove@example.com").exists()
 
 
 @pytest.mark.django_db
@@ -389,9 +376,7 @@ def test_get_or_create_owner_account_returns_existing_by_username(
             return {}  # Should not be called
 
     client = MockClient()
-    result = services.get_or_create_owner_account(
-        client, github_account.username
-    )
+    result = services.get_or_create_owner_account(client, github_account.username)
     assert result.id == github_account.id
     assert result.username == github_account.username
 
@@ -492,9 +477,7 @@ def test_get_or_create_unknown_github_account_creates_first():
 def test_get_or_create_unknown_github_account_gets_existing():
     """get_or_create_unknown_github_account returns existing by display_name and (obj, False)."""
     services.get_or_create_unknown_github_account(name="Same Name")
-    account2, created2 = services.get_or_create_unknown_github_account(
-        name="Same Name"
-    )
+    account2, created2 = services.get_or_create_unknown_github_account(name="Same Name")
     assert created2 is False
     assert (
         GitHubAccount.objects.filter(

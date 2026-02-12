@@ -58,17 +58,11 @@ class GitHubAPIClient:
                 )
                 if response.status_code == 200:
                     data = response.json()
-                    self.rate_limit_remaining = data["resources"]["core"][
-                        "remaining"
-                    ]
-                    self.rate_limit_reset_time = data["resources"]["core"][
-                        "reset"
-                    ]
+                    self.rate_limit_remaining = data["resources"]["core"]["remaining"]
+                    self.rate_limit_reset_time = data["resources"]["core"]["reset"]
 
                     if self.rate_limit_remaining == 0:
-                        wait_time = self.rate_limit_reset_time - int(
-                            time.time()
-                        )
+                        wait_time = self.rate_limit_reset_time - int(time.time())
                         if wait_time > 0:
                             raise RateLimitException(
                                 f"Rate limit exceeded. Reset at {datetime.fromtimestamp(self.rate_limit_reset_time)}. "
@@ -77,9 +71,7 @@ class GitHubAPIClient:
                 return True
             except (ConnectionError, ProtocolError, Timeout) as e:
                 if attempt < self.max_retries - 1:
-                    wait_time = self.retry_delay * (
-                        2**attempt
-                    )  # Exponential backoff
+                    wait_time = self.retry_delay * (2**attempt)  # Exponential backoff
                     logger.warning(
                         f"Connection error checking rate limit (attempt {attempt + 1}/{self.max_retries}): {e}"
                     )
@@ -102,16 +94,12 @@ class GitHubAPIClient:
             wait_time = max_delay
 
         logger.warning(f"Rate limit hit. Waiting {wait_time} seconds...")
-        logger.debug(
-            f"Resume time: {datetime.fromtimestamp(time.time() + wait_time)}"
-        )
+        logger.debug(f"Resume time: {datetime.fromtimestamp(time.time() + wait_time)}")
 
         time.sleep(wait_time)
         self._check_rate_limit()
 
-    def rest_request(
-        self, endpoint: str, params: Optional[dict] = None
-    ) -> dict:
+    def rest_request(self, endpoint: str, params: Optional[dict] = None) -> dict:
         """Make REST API request with rate limit and connection error handling."""
         self._check_rate_limit()
 
@@ -123,16 +111,10 @@ class GitHubAPIClient:
 
                 if response.status_code == 403:
                     if "X-RateLimit-Remaining" in response.headers:
-                        remaining = int(
-                            response.headers["X-RateLimit-Remaining"]
-                        )
+                        remaining = int(response.headers["X-RateLimit-Remaining"])
                         if remaining == 0:
-                            reset_time = int(
-                                response.headers["X-RateLimit-Reset"]
-                            )
-                            wait_time = (
-                                reset_time - int(time.time()) + 10
-                            )  # Add buffer
+                            reset_time = int(response.headers["X-RateLimit-Reset"])
+                            wait_time = reset_time - int(time.time()) + 10  # Add buffer
                             self._handle_rate_limit(wait_time)
                             return self.rest_request(endpoint, params)
 
@@ -172,9 +154,7 @@ class GitHubAPIClient:
                 logger.error(f"Request error on {endpoint}: {e}")
                 raise
 
-    def rest_post(
-        self, endpoint: str, json_data: Optional[dict] = None
-    ) -> dict:
+    def rest_post(self, endpoint: str, json_data: Optional[dict] = None) -> dict:
         """POST to REST API with rate limit and connection error handling."""
         self._check_rate_limit()
         url = f"{self.rest_base_url}{endpoint}"
@@ -182,22 +162,14 @@ class GitHubAPIClient:
 
         for attempt in range(self.max_retries):
             try:
-                response = self.session.post(
-                    url, json=json_data, timeout=30
-                )
+                response = self.session.post(url, json=json_data, timeout=30)
 
                 if response.status_code == 403:
                     if "X-RateLimit-Remaining" in response.headers:
-                        remaining = int(
-                            response.headers["X-RateLimit-Remaining"]
-                        )
+                        remaining = int(response.headers["X-RateLimit-Remaining"])
                         if remaining == 0:
-                            reset_time = int(
-                                response.headers["X-RateLimit-Reset"]
-                            )
-                            wait_time = (
-                                reset_time - int(time.time()) + 10
-                            )
+                            reset_time = int(response.headers["X-RateLimit-Reset"])
+                            wait_time = reset_time - int(time.time()) + 10
                             self._handle_rate_limit(wait_time)
                             return self.rest_post(endpoint, json_data)
 
@@ -277,9 +249,7 @@ class GitHubAPIClient:
             },
         )
 
-    def create_issue(
-        self, owner: str, repo: str, title: str, body: str = ""
-    ) -> dict:
+    def create_issue(self, owner: str, repo: str, title: str, body: str = "") -> dict:
         """Create an issue. Use client from get_github_client(use='write')."""
         return self.rest_post(
             f"/repos/{owner}/{repo}/issues",
@@ -295,9 +265,7 @@ class GitHubAPIClient:
             json_data={"body": body},
         )
 
-    def graphql_request(
-        self, query: str, variables: Optional[dict] = None
-    ) -> dict:
+    def graphql_request(self, query: str, variables: Optional[dict] = None) -> dict:
         """Make GraphQL API request with rate limit and connection error handling."""
         self._check_rate_limit()
 
@@ -316,13 +284,9 @@ class GitHubAPIClient:
 
                 if response.status_code == 403:
                     if "X-RateLimit-Remaining" in response.headers:
-                        remaining = int(
-                            response.headers["X-RateLimit-Remaining"]
-                        )
+                        remaining = int(response.headers["X-RateLimit-Remaining"])
                         if remaining == 0:
-                            reset_time = int(
-                                response.headers["X-RateLimit-Reset"]
-                            )
+                            reset_time = int(response.headers["X-RateLimit-Reset"])
                             wait_time = reset_time - int(time.time()) + 10
                             self._handle_rate_limit(wait_time)
                             return self.graphql_request(query, variables)
@@ -332,10 +296,7 @@ class GitHubAPIClient:
 
                 if "errors" in data:
                     error_msg = "; ".join(
-                        [
-                            e.get("message", "Unknown error")
-                            for e in data["errors"]
-                        ]
+                        [e.get("message", "Unknown error") for e in data["errors"]]
                     )
                     raise Exception(f"GraphQL errors: {error_msg}")
 
@@ -422,9 +383,9 @@ class GitHubAPIClient:
                 current_submodule["repo_url"] = url.replace(
                     "../", "https://github.com/boostorg/"
                 )
-                current_submodule["repo_name"] = url.replace(
-                    "../", ""
-                ).replace(".git", "")
+                current_submodule["repo_name"] = url.replace("../", "").replace(
+                    ".git", ""
+                )
 
         if current_submodule:
             submodules.append(current_submodule)
@@ -437,23 +398,15 @@ class GitHubAPIClient:
         """Get submodules from .gitmodules file (local file or GitHub API)."""
         if local_file:
             logger.debug(f"Reading submodules from local file: {local_file}")
-            submodules = self.get_submodules_from_file(
-                local_file, default_owner=owner
-            )
+            submodules = self.get_submodules_from_file(local_file, default_owner=owner)
             if submodules:
-                logger.debug(
-                    f"Found {len(submodules)} submodule(s) from local file"
-                )
+                logger.debug(f"Found {len(submodules)} submodule(s) from local file")
                 return submodules
             else:
-                logger.debug(
-                    "No submodules found in local file, trying GitHub API..."
-                )
+                logger.debug("No submodules found in local file, trying GitHub API...")
 
         try:
-            content = self.rest_request(
-                f"/repos/{owner}/{repo}/contents/.gitmodules"
-            )
+            content = self.rest_request(f"/repos/{owner}/{repo}/contents/.gitmodules")
 
             if isinstance(content, list):
                 logger.warning(
@@ -463,9 +416,9 @@ class GitHubAPIClient:
 
             if content.get("type") == "file":
                 try:
-                    gitmodules_content = base64.b64decode(
-                        content["content"]
-                    ).decode("utf-8")
+                    gitmodules_content = base64.b64decode(content["content"]).decode(
+                        "utf-8"
+                    )
                 except Exception as e:
                     logger.error(
                         f"Failed to decode .gitmodules content for {owner}/{repo}: {e}"

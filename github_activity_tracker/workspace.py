@@ -6,6 +6,7 @@ Layout: workspace/github_activity_tracker/<owner>/<repo>/
   - issues/<issue_number>.json
   - prs/<pr_number>.json
 """
+
 from pathlib import Path
 
 from config.workspace import get_workspace_path

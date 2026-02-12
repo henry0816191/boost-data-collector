@@ -1,6 +1,5 @@
 """Tests for github_activity_tracker.fetcher."""
 
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
@@ -105,11 +104,7 @@ def test_fetch_commits_from_github_includes_since_until_params():
     client.rest_request.return_value = []
     start = datetime(2024, 1, 1, tzinfo=timezone.utc)
     end = datetime(2024, 12, 31, tzinfo=timezone.utc)
-    list(
-        fetch_commits_from_github(
-            client, "o", "r", start_time=start, end_time=end
-        )
-    )
+    list(fetch_commits_from_github(client, "o", "r", start_time=start, end_time=end))
     call_args = client.rest_request.call_args
     params = call_args[0][1] or {}
     assert "since" in params
@@ -146,10 +141,7 @@ def test_fetch_comments_from_github_calls_correct_endpoint():
     client.rest_request.return_value = []
     fetch_comments_from_github(client, "owner", "repo", issue_number=42)
     client.rest_request.assert_called_once()
-    assert (
-        "/repos/owner/repo/issues/42/comments"
-        in client.rest_request.call_args[0][0]
-    )
+    assert "/repos/owner/repo/issues/42/comments" in client.rest_request.call_args[0][0]
 
 
 # --- fetch_issues_from_github ---
@@ -220,10 +212,7 @@ def test_fetch_pr_reviews_from_github_calls_pulls_comments():
     client.rest_request.return_value = []
     fetch_pr_reviews_from_github(client, "owner", "repo", pr_number=3)
     client.rest_request.assert_called_once()
-    assert (
-        "/repos/owner/repo/pulls/3/comments"
-        in client.rest_request.call_args[0][0]
-    )
+    assert "/repos/owner/repo/pulls/3/comments" in client.rest_request.call_args[0][0]
 
 
 # --- fetch_pull_requests_from_github ---

@@ -3,7 +3,7 @@
 import pytest
 from django.db import IntegrityError
 
-from github_activity_tracker.models import GitHubRepository, Language, License
+from github_activity_tracker.models import GitHubRepository
 
 
 @pytest.mark.django_db

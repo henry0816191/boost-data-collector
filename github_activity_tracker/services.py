@@ -16,7 +16,6 @@ from datetime import datetime
 from typing import Optional
 
 from .models import (
-    FileChangeStatus,
     GitCommit,
     GitCommitFileChange,
     GitHubFile,
@@ -25,7 +24,6 @@ from .models import (
     IssueComment,
     IssueLabel,
     IssueState,
-    IssueStateReason,
     Language,
     License,
     PullRequest,
@@ -84,7 +82,14 @@ def get_or_create_repository(
     **defaults: Any,
 ) -> tuple[GitHubRepository, bool]:
     """Get or create a GitHubRepository by owner_account and repo_name. If exists, updates fields in defaults. Returns (repo, created)."""
-    updatable = {"stars", "forks", "description", "repo_pushed_at", "repo_created_at", "repo_updated_at"}
+    updatable = {
+        "stars",
+        "forks",
+        "description",
+        "repo_pushed_at",
+        "repo_created_at",
+        "repo_updated_at",
+    }
     repo, created = GitHubRepository.objects.get_or_create(
         owner_account=owner_account,
         repo_name=repo_name,
@@ -101,7 +106,9 @@ def get_or_create_repository(
     return repo, created
 
 
-def ensure_repository_owner(repo: GitHubRepository, owner_account: GitHubAccount) -> None:
+def ensure_repository_owner(
+    repo: GitHubRepository, owner_account: GitHubAccount
+) -> None:
     """Ensure repo has owner_account set (fixes rows with null owner_account_id)."""
     repo.refresh_from_db()
     if repo.owner_account_id is None:
@@ -150,7 +157,6 @@ def update_repo_language_line_count(
 
 
 # --- GitCommit, GitHubFile, GitCommitFileChange ---
-from .models import GitCommit, GitHubFile, GitCommitFileChange, FileChangeStatus
 
 
 def create_or_update_commit(

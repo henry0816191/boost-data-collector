@@ -2,6 +2,7 @@
 Fixtures for github_activity_tracker app.
 Uses model_bakery; repository fixtures depend on cppa_user_tracker.github_account.
 """
+
 import uuid
 import pytest
 from model_bakery import baker

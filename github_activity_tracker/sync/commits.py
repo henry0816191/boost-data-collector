@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from cppa_user_tracker.services import (
@@ -99,10 +98,9 @@ def _process_commit_data(repo: GitHubRepository, commit_data: dict) -> None:
 
     commit_hash = commit_data.get("sha")
     comment = commit_data.get("commit", {}).get("message", "")
-    commit_date_str = (
-        commit_data.get("commit", {}).get("author", {}).get("date")
-        or commit_data.get("commit", {}).get("committer", {}).get("date")
-    )
+    commit_date_str = commit_data.get("commit", {}).get("author", {}).get(
+        "date"
+    ) or commit_data.get("commit", {}).get("committer", {}).get("date")
     commit_at = parse_datetime(commit_date_str)
 
     commit_obj, _ = services.create_or_update_commit(
@@ -143,7 +141,9 @@ def sync_commits(repo: GitHubRepository) -> None:
         # Phase 1: process existing JSON files
         n_existing = _process_existing_commit_jsons(repo)
         if n_existing:
-            logger.info("sync_commits: processed %s existing commit JSON(s)", n_existing)
+            logger.info(
+                "sync_commits: processed %s existing commit JSON(s)", n_existing
+            )
 
         # Phase 2: fetch from GitHub, write JSON, persist to DB, remove file
         client = get_github_client()
@@ -181,5 +181,7 @@ def sync_commits(repo: GitHubRepository) -> None:
         logger.error("sync_commits: failed for repo id=%s: %s", repo.pk, e)
         raise
     except Exception as e:
-        logger.exception("sync_commits: unexpected error for repo id=%s: %s", repo.pk, e)
+        logger.exception(
+            "sync_commits: unexpected error for repo id=%s: %s", repo.pk, e
+        )
         raise

@@ -73,7 +73,14 @@ class BoostLibraryCategoryAdmin(ModelAdmin):
 
 @admin.register(BoostLibraryRoleRelationship)
 class BoostLibraryRoleRelationshipAdmin(ModelAdmin):
-    list_display = ("id", "library_version", "account", "is_maintainer", "is_author", "updated_at")
+    list_display = (
+        "id",
+        "library_version",
+        "account",
+        "is_maintainer",
+        "is_author",
+        "updated_at",
+    )
     list_filter = ("is_maintainer", "is_author")
     raw_id_fields = ("library_version", "account")
 

@@ -68,9 +68,7 @@ class Command(BaseCommand):
             failed,
         )
         self.stdout.write(
-            self.style.WARNING(
-                f"Summary: {succeeded} succeeded, {failed} failed."
-            )
+            self.style.WARNING(f"Summary: {succeeded} succeeded, {failed} failed.")
         )
 
         if exit_code != 0:
