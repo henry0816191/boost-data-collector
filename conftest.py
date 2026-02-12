@@ -10,6 +10,7 @@ pytest_plugins = [
     "github_ops.tests.fixtures",
     "github_activity_tracker.tests.fixtures",
     "boost_library_tracker.tests.fixtures",
+    "boost_library_usage_dashboard.tests.fixtures",
 ]
 
 
