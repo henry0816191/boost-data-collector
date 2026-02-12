@@ -115,7 +115,44 @@ def remove_email(email_obj: Email) -> None:
 
 
 # --- BaseProfile / subclasses ---
-from .models import GitHubAccount, GitHubAccountType
+from .models import GitHubAccount, GitHubAccountType, MailingListProfile
+
+
+def get_or_create_mailing_list_profile(
+    display_name: str = "",
+    email: str = "",
+) -> tuple[MailingListProfile, bool]:
+    """Get or create a MailingListProfile by display_name and email. Returns (profile, created).
+
+    Mailing list has no external id; we identify by display_name + email. Looks up a profile
+    that has this display_name and an Email with this address. If found, returns that profile.
+    Otherwise creates a new MailingListProfile, adds the email, and returns the new profile.
+
+    Raises ValueError if display_name or email is missing or empty after stripping.
+    """
+    display_name_val = (display_name or "").strip()
+    email_val = (email or "").strip()
+    if not display_name_val:
+        raise ValueError("display_name must not be empty.")
+    if not email_val:
+        raise ValueError("email must not be empty.")
+
+    profile = (
+        MailingListProfile.objects.filter(
+            display_name=display_name_val,
+            emails__email=email_val,
+        )
+        .distinct()
+        .first()
+    )
+    if profile is not None:
+        return profile, False
+
+    profile = MailingListProfile.objects.create(
+        display_name=display_name_val,
+    )
+    add_email(profile, email_val, is_primary=True)
+    return profile, True
 
 
 def get_or_create_github_account(
