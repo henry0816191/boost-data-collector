@@ -20,7 +20,7 @@ import requests
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from boost_library_tracker.models import BoostLibraryRepository
+from boost_library_tracker.models import BoostLibraryRepository, BoostVersion
 from boost_library_tracker.parsing import (
     parse_gitmodules_lib_submodules,
     parse_libraries_json_full,
@@ -47,6 +47,13 @@ RAW_LIBS_JSON_URL = (
     "https://raw.githubusercontent.com/boostorg/{submodule_name}/{ref}/meta/libraries.json"
 )
 FETCH_TIMEOUT = 30
+
+
+def _normalize_ref(ref: str) -> str:
+    """If ref is a numeric short form (e.g. 90, 89), return boost-1.90.0, boost-1.89.0."""
+    if ref.isdigit():
+        return f"boost-1.{ref}.0"
+    return ref
 
 
 def _fetch_raw_url(url: str) -> bytes | None:
@@ -183,7 +190,24 @@ class Command(BaseCommand):
         parser.add_argument(
             "--ref",
             type=str,
-            help="Collect libraries for a specific ref only (e.g., boost-1.84.0)",
+            help="Collect libraries for a single ref (e.g., boost-1.84.0)",
+        )
+        parser.add_argument(
+            "-v",
+            "--refs",
+            type=str,
+            help="Comma-separated refs to process (e.g. 90,89 or boost-1.90.0,boost-1.89.0)",
+        )
+        parser.add_argument(
+            "--new-only",
+            action="store_true",
+            help="Only process releases not yet in BoostVersion (default when no --ref/--refs)",
+        )
+        parser.add_argument(
+            "--all",
+            action="store_true",
+            dest="process_all",
+            help="Process all releases from API (default without this is new-only)",
         )
         parser.add_argument(
             "--limit",
@@ -202,49 +226,53 @@ class Command(BaseCommand):
             return
 
         client = GitHubAPIClient(token)
-        
-        specific_ref = options.get("ref")
         limit = options.get("limit")
+        refs_arg = options.get("refs")
+        ref_arg = options.get("ref")
+        process_all = options.get("process_all", False)
 
-        if specific_ref:
-            self.stdout.write(f"Collecting libraries for ref: {specific_ref}")
+        refs_list = None
+        if refs_arg:
+            refs_list = [
+                _normalize_ref(r.strip())
+                for r in refs_arg.split(",")
+                if r.strip()
+            ]
+        elif ref_arg:
+            refs_list = [_normalize_ref(ref_arg.strip())]
 
-            version_obj, created = get_or_create_boost_version(specific_ref)
-            if created:
-                self.stdout.write(f"Created BoostVersion: {specific_ref}")
-
-            lib_created, submodules = _collect_libraries_for_version(
-                version_obj, specific_ref
-            )
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"Done: {lib_created} library versions created from {submodules} submodules."
-                )
-            )
+        if refs_list:
+            self._process_refs(refs_list)
             return
-        
+
+        new_only = not process_all
         self.stdout.write("Fetching all releases from boostorg/boost...")
         releases = _fetch_releases(client)
-        
         if not releases:
             self.stdout.write(self.style.WARNING("No releases found"))
             return
-        
-        self.stdout.write(f"Found {len(releases)} releases")
-        
+
+        if new_only:
+            existing_versions = set(
+                BoostVersion.objects.values_list("version", flat=True)
+            )
+            releases = [r for r in releases if r.get("tag_name") not in existing_versions]
+            self.stdout.write(
+                f"Processing {len(releases)} new release(s) (not in BoostVersion)"
+            )
+        else:
+            self.stdout.write(f"Found {len(releases)} releases")
+
         if limit:
             releases = releases[:limit]
             self.stdout.write(f"Processing first {limit} releases")
-        
+
         total_versions_created = 0
         total_lib_versions_created = 0
-        total_submodules = 0
-        
         for release in releases:
             tag_name = release.get("tag_name", "")
             if not tag_name:
                 continue
-            
             published_at_str = release.get("published_at")
             published_at = None
             if published_at_str:
@@ -254,26 +282,66 @@ class Command(BaseCommand):
                     )
                 except Exception as e:
                     logger.warning(f"Could not parse date {published_at_str}: {e}")
-            
-            with transaction.atomic():
-                version_obj, created = get_or_create_boost_version(
-                    version=tag_name,
-                    version_created_at=published_at,
-                )
-                if created:
-                    total_versions_created += 1
-                    self.stdout.write(f"Created BoostVersion: {tag_name}")
-                
-                lib_created, submodules = _collect_libraries_for_version(
-                    version_obj, tag_name
-                )
-                total_lib_versions_created += lib_created
-                total_submodules += submodules
-                
+
+            try:
+                with transaction.atomic():
+                    version_obj, created = get_or_create_boost_version(
+                        version=tag_name,
+                        version_created_at=published_at,
+                    )
+                    if created:
+                        total_versions_created += 1
+                        self.stdout.write(f"Created BoostVersion: {tag_name}")
+                    lib_created, submodules = _collect_libraries_for_version(
+                        version_obj, tag_name
+                    )
+                    total_lib_versions_created += lib_created
+                    self.stdout.write(
+                        f"  {tag_name}: {lib_created} library versions from {submodules} submodules"
+                    )
+            except Exception as e:
+                logger.exception("Failed to process release %s", tag_name)
                 self.stdout.write(
-                    f"  {tag_name}: {lib_created} library versions from {submodules} submodules"
+                    self.style.ERROR(
+                        f"  {tag_name}: failed (rolled back, retry with --new-only): {e}"
+                    )
                 )
-        
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"\nDone: {total_versions_created} versions, "
+                f"{total_lib_versions_created} library versions created."
+            )
+        )
+
+    def _process_refs(self, refs_list: list[str]) -> None:
+        """Process a list of refs; each ref in its own transaction. BoostVersion is
+        committed only after library collection succeeds, so a failed run leaves no
+        version row and can be retried.
+        """
+        total_versions_created = 0
+        total_lib_versions_created = 0
+        for ref in refs_list:
+            self.stdout.write(f"Collecting libraries for ref: {ref}")
+            try:
+                with transaction.atomic():
+                    version_obj, created = get_or_create_boost_version(ref)
+                    if created:
+                        total_versions_created += 1
+                        self.stdout.write(f"Created BoostVersion: {ref}")
+                    lib_created, submodules = _collect_libraries_for_version(
+                        version_obj, ref
+                    )
+                    total_lib_versions_created += lib_created
+                    self.stdout.write(
+                        f"  {ref}: {lib_created} library versions from {submodules} submodules"
+                    )
+            except Exception as e:
+                logger.exception("Failed to process ref %s", ref)
+                self.stdout.write(
+                    self.style.ERROR(f"Failed ref {ref} (rolled back, retry later): {e}")
+                )
+                raise
         self.stdout.write(
             self.style.SUCCESS(
                 f"\nDone: {total_versions_created} versions, "
