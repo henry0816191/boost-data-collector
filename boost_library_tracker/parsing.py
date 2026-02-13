@@ -67,3 +67,64 @@ def parse_libraries_json_library_names(
         else:
             names.append(name)
     return names
+
+
+def parse_libraries_json_full(
+    content: str | bytes, submodule_name: str
+) -> list[dict]:
+    """
+    Parse meta/libraries.json content and return full library data.
+    Returns list of dicts with keys: name, key, description, documentation,
+    authors, maintainers, category, cxxstd.
+    """
+    if isinstance(content, bytes):
+        content = content.decode("utf-8")
+    try:
+        raw = json.loads(content)
+    except json.JSONDecodeError:
+        return []
+    if isinstance(raw, list):
+        libs = raw
+    elif isinstance(raw, dict):
+        libs = [raw]
+    else:
+        return []
+    
+    results: list[dict] = []
+    for obj in libs:
+        if not isinstance(obj, dict):
+            continue
+
+        name = obj.get("name") or obj.get("key", "")
+        key = str(obj.get("key") or "")
+        if not name or not key:
+            continue
+
+        lib_name = key if key == submodule_name else name
+
+        description = obj.get("description", "")
+        documentation = str(obj.get("documentation") or "")
+        authors = obj.get("authors", [])
+        maintainers = obj.get("maintainers", [])
+        category = obj.get("category", [])
+        cxxstd = obj.get("cxxstd", "")
+        
+        if not isinstance(authors, list):
+            authors = [authors] if authors else []
+        if not isinstance(maintainers, list):
+            maintainers = [maintainers] if maintainers else []
+        if not isinstance(category, list):
+            category = [category] if category else []
+        
+        results.append({
+            "name": lib_name,
+            "key": key,
+            "description": description,
+            "documentation": documentation,
+            "authors": authors,
+            "maintainers": maintainers,
+            "category": category,
+            "cxxstd": cxxstd,
+        })
+    
+    return results

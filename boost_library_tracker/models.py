@@ -94,6 +94,8 @@ class BoostLibraryVersion(models.Model):
     )
     cpp_version = models.CharField(max_length=64, blank=True)
     description = models.TextField(blank=True)
+    key = models.CharField(max_length=255, blank=True, db_index=True)
+    documentation = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

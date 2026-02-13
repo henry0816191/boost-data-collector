@@ -118,17 +118,26 @@ def get_or_create_boost_library_version(
     version: BoostVersion,
     cpp_version: str = "",
     description: str = "",
+    key: str = "",
+    documentation: str = "",
 ) -> tuple[BoostLibraryVersion, bool]:
-    """Get or create BoostLibraryVersion for library + version. If exists, updates cpp_version and description."""
+    """Get or create BoostLibraryVersion for library + version. If exists, updates cpp_version, description, key, documentation."""
     obj, created = BoostLibraryVersion.objects.get_or_create(
         library=library,
         version=version,
-        defaults={"cpp_version": cpp_version, "description": description},
+        defaults={
+            "cpp_version": cpp_version,
+            "description": description,
+            "key": key,
+            "documentation": documentation,
+        },
     )
     if not created:
         obj.cpp_version = cpp_version
         obj.description = description
-        obj.save(update_fields=["cpp_version", "description"])
+        obj.key = key
+        obj.documentation = documentation
+        obj.save(update_fields=["cpp_version", "description", "key", "documentation"])
     return obj, created
 
 
@@ -206,3 +215,25 @@ def add_library_version_role(
         rel.is_author = rel.is_author or is_author
         rel.save()
     return rel, created
+
+
+def get_or_create_account_from_name(name: str) -> GitHubAccount:
+    """Get or create a GitHubAccount for a contributor name string (from libraries.json).
+    
+    Looks up by username first. If not found, creates an unknown account with negative ID.
+    """
+    from cppa_user_tracker.services import (
+        get_or_create_github_account,
+        get_or_create_unknown_github_account,
+    )
+    from cppa_user_tracker.models import GitHubAccount
+    
+    name = (name or "").strip()
+    if not name:
+        return get_or_create_unknown_github_account()[0]
+    
+    existing = GitHubAccount.objects.filter(username=name).first()
+    if existing:
+        return existing
+    
+    return get_or_create_unknown_github_account(name=name)[0]

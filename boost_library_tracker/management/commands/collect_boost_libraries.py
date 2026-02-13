@@ -1,33 +1,46 @@
 """
 Management command: collect_boost_libraries
 
-Collects all Boost library names from boostorg/boost and persists them as
-BoostLibrary rows. Fetches .gitmodules to find libs/ submodules, then
-meta/libraries.json from each submodule at the given ref via raw URLs:
+Collects Boost versions (releases) from boostorg/boost and library metadata
+for each version. For each release, fetches .gitmodules to find libs/ submodules,
+then meta/libraries.json from each submodule to collect library names, descriptions,
+authors, maintainers, categories, and C++ standard requirements.
 
-  https://raw.githubusercontent.com/boostorg/boost/{ref}/.gitmodules
-  https://raw.githubusercontent.com/boostorg/{submodule_name}/{ref}/meta/libraries.json
-
-No doc-extension fetching. Intended to run after run_boost_library_tracker
-has synced repos (submodules are not fetched again here).
+Creates:
+- BoostVersion rows for each release
+- BoostLibrary rows for each library (if not exists)
+- BoostLibraryVersion rows with full metadata
+- BoostLibraryRoleRelationship for authors/maintainers
+- BoostLibraryCategoryRelationship for categories
 """
 import logging
+from datetime import datetime
 
 import requests
 from django.core.management.base import BaseCommand
+from django.db import transaction
 
 from boost_library_tracker.models import BoostLibraryRepository
 from boost_library_tracker.parsing import (
     parse_gitmodules_lib_submodules,
-    parse_libraries_json_library_names,
+    parse_libraries_json_full,
 )
-from boost_library_tracker.services import get_or_create_boost_library
+from boost_library_tracker.services import (
+    add_library_category,
+    add_library_version_role,
+    get_or_create_account_from_name,
+    get_or_create_boost_library,
+    get_or_create_boost_library_category,
+    get_or_create_boost_library_version,
+    get_or_create_boost_version,
+)
+from github_ops.client import GitHubAPIClient
+from github_ops.tokens import get_github_token
 
 logger = logging.getLogger(__name__)
 
 MAIN_OWNER = "boostorg"
 MAIN_REPO = "boost"
-DEFAULT_REF = "develop"
 
 RAW_GITMODULES_URL = "https://raw.githubusercontent.com/boostorg/boost/{ref}/.gitmodules"
 RAW_LIBS_JSON_URL = (
@@ -47,17 +60,43 @@ def _fetch_raw_url(url: str) -> bytes | None:
         return None
 
 
-def _collect_libraries_for_ref(ref: str) -> tuple[int, int]:
+def _fetch_releases(client: GitHubAPIClient) -> list[dict]:
+    """Fetch all releases from boostorg/boost using GitHub API."""
+    releases = []
+    page = 1
+    per_page = 100
+    
+    while True:
+        try:
+            page_releases = client.rest_request(
+                f"/repos/{MAIN_OWNER}/{MAIN_REPO}/releases",
+                params={"per_page": per_page, "page": page}
+            )
+            if not page_releases:
+                break
+            releases.extend(page_releases)
+            if len(page_releases) < per_page:
+                break
+            page += 1
+        except Exception as e:
+            logger.error(f"Failed to fetch releases page {page}: {e}")
+            break
+    
+    return releases
+
+
+def _collect_libraries_for_version(boost_version, ref: str) -> tuple[int, int]:
     """
     Fetch .gitmodules from boostorg/boost at ref, then for each lib submodule
-    fetch meta/libraries.json from raw URL and create BoostLibrary records.
-    Uses existing BoostLibraryRepository rows (no submodule sync).
+    fetch meta/libraries.json from raw URL and create BoostLibraryVersion records
+    with full metadata (description, authors, maintainers, categories, cxxstd).
 
-    Returns (libraries_created, submodules_processed).
+    Returns (library_versions_created, submodules_processed).
     """
     gitmodules_url = RAW_GITMODULES_URL.format(ref=ref)
     content = _fetch_raw_url(gitmodules_url)
     if not content:
+        logger.warning(f"Could not fetch .gitmodules for {ref}")
         return 0, 0
     gitmodules_text = content.decode("utf-8")
     lib_submodules = parse_gitmodules_lib_submodules(gitmodules_text)
@@ -66,15 +105,14 @@ def _collect_libraries_for_ref(ref: str) -> tuple[int, int]:
     for submodule_name, _path_in_boost in lib_submodules:
         boost_repo = (
             BoostLibraryRepository.objects.filter(
-                owner_account__login=MAIN_OWNER,
+                owner_account__username=MAIN_OWNER,
                 repo_name=submodule_name,
             )
             .first()
         )
         if not boost_repo:
             logger.debug(
-                "Skipping submodule %s: no BoostLibraryRepository (run run_boost_library_tracker first)",
-                submodule_name,
+                "Skipping submodule %s: no BoostLibraryRepository", submodule_name
             )
             continue
 
@@ -84,57 +122,161 @@ def _collect_libraries_for_ref(ref: str) -> tuple[int, int]:
         raw = _fetch_raw_url(libs_json_url)
         if not raw:
             continue
-        names = parse_libraries_json_library_names(raw, submodule_name)
-        for name in names:
-            _, created = get_or_create_boost_library(boost_repo, name)
+        
+        lib_data_list = parse_libraries_json_full(raw, submodule_name)
+        
+        for lib_data in lib_data_list:
+            lib_name = lib_data["name"]
+            description = lib_data["description"]
+            key = lib_data.get("key", "")
+            documentation = lib_data.get("documentation", "")
+            cxxstd = lib_data["cxxstd"]
+            authors = lib_data["authors"]
+            maintainers = lib_data["maintainers"]
+            categories = lib_data["category"]
+
+            boost_library, _ = get_or_create_boost_library(boost_repo, lib_name)
+
+            lib_version, created = get_or_create_boost_library_version(
+                library=boost_library,
+                version=boost_version,
+                cpp_version=cxxstd,
+                description=description,
+                key=key,
+                documentation=documentation,
+            )
             if created:
                 created_total += 1
+            
+            for author_name in authors:
+                account = get_or_create_account_from_name(author_name)
+                add_library_version_role(
+                    library_version=lib_version,
+                    account=account,
+                    is_author=True,
+                )
+            
+            for maintainer_name in maintainers:
+                account = get_or_create_account_from_name(maintainer_name)
+                add_library_version_role(
+                    library_version=lib_version,
+                    account=account,
+                    is_maintainer=True,
+                )
+            
+            for category_name in categories:
+                category, _ = get_or_create_boost_library_category(category_name)
+                add_library_category(boost_library, category)
 
     return created_total, len(lib_submodules)
 
 
 class Command(BaseCommand):
+    """Management command: collect Boost versions and library metadata."""
+
     help = (
-        "Collect all Boost libraries from boostorg/boost: read .gitmodules at ref, "
-        "then meta/libraries.json per lib submodule, and create BoostLibrary rows. "
-        "Requires repos to exist (run run_boost_library_tracker first). No doc extensions."
+        "Collect Boost versions (releases) from boostorg/boost and library metadata "
+        "for each version. Creates BoostVersion, BoostLibraryVersion, and related records."
     )
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--ref",
-            default=DEFAULT_REF,
-            help=f"Branch/tag for .gitmodules and meta/libraries.json (default: {DEFAULT_REF}).",
+            type=str,
+            help="Collect libraries for a specific ref only (e.g., boost-1.84.0)",
         )
         parser.add_argument(
-            "--dry-run",
-            action="store_true",
-            help="Only fetch and parse; do not create BoostLibrary rows.",
+            "--limit",
+            type=int,
+            help="Limit number of versions to process (processes newest first)",
         )
 
     def handle(self, *args, **options):
-        ref = (options.get("ref") or DEFAULT_REF).strip()
-        dry_run = options.get("dry_run", False)
-
-        self.stdout.write(
-            f"Collecting Boost libraries at ref={ref} (dry_run={dry_run})..."
-        )
-
-        if dry_run:
-            url = RAW_GITMODULES_URL.format(ref=ref)
-            content = _fetch_raw_url(url)
-            if not content:
-                self.stdout.write(self.style.WARNING("No .gitmodules content."))
-                return
-            lib_submodules = parse_gitmodules_lib_submodules(content.decode("utf-8"))
-            self.stdout.write(
-                f"Would process {len(lib_submodules)} lib submodules (no DB writes)."
-            )
+        try:
+            token = get_github_token(use="scraping")
+        except ValueError as e:
+            self.stdout.write(self.style.ERROR(str(e)))
+            return
+        if not token:
+            self.stdout.write(self.style.ERROR("No GitHub token available"))
             return
 
-        created, num_submodules = _collect_libraries_for_ref(ref)
+        client = GitHubAPIClient(token)
+        
+        specific_ref = options.get("ref")
+        limit = options.get("limit")
+
+        if specific_ref:
+            self.stdout.write(f"Collecting libraries for ref: {specific_ref}")
+
+            version_obj, created = get_or_create_boost_version(specific_ref)
+            if created:
+                self.stdout.write(f"Created BoostVersion: {specific_ref}")
+
+            lib_created, submodules = _collect_libraries_for_version(
+                version_obj, specific_ref
+            )
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Done: {lib_created} library versions created from {submodules} submodules."
+                )
+            )
+            return
+        
+        self.stdout.write("Fetching all releases from boostorg/boost...")
+        releases = _fetch_releases(client)
+        
+        if not releases:
+            self.stdout.write(self.style.WARNING("No releases found"))
+            return
+        
+        self.stdout.write(f"Found {len(releases)} releases")
+        
+        if limit:
+            releases = releases[:limit]
+            self.stdout.write(f"Processing first {limit} releases")
+        
+        total_versions_created = 0
+        total_lib_versions_created = 0
+        total_submodules = 0
+        
+        for release in releases:
+            tag_name = release.get("tag_name", "")
+            if not tag_name:
+                continue
+            
+            published_at_str = release.get("published_at")
+            published_at = None
+            if published_at_str:
+                try:
+                    published_at = datetime.fromisoformat(
+                        published_at_str.replace("Z", "+00:00")
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not parse date {published_at_str}: {e}")
+            
+            with transaction.atomic():
+                version_obj, created = get_or_create_boost_version(
+                    version=tag_name,
+                    version_created_at=published_at,
+                )
+                if created:
+                    total_versions_created += 1
+                    self.stdout.write(f"Created BoostVersion: {tag_name}")
+                
+                lib_created, submodules = _collect_libraries_for_version(
+                    version_obj, tag_name
+                )
+                total_lib_versions_created += lib_created
+                total_submodules += submodules
+                
+                self.stdout.write(
+                    f"  {tag_name}: {lib_created} library versions from {submodules} submodules"
+                )
+        
         self.stdout.write(
             self.style.SUCCESS(
-                f"Created {created} new BoostLibrary row(s) across {num_submodules} lib submodules."
+                f"\nDone: {total_versions_created} versions, "
+                f"{total_lib_versions_created} library versions created."
             )
         )
