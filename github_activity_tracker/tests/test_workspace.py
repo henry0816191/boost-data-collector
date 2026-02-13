@@ -32,7 +32,6 @@ def mock_workspace_path(tmp_path):
 
 def test_get_workspace_root_returns_path(mock_workspace_path):
     """get_workspace_root returns Path from get_workspace_path(app_slug)."""
-    from github_activity_tracker.workspace import get_workspace_root
 
     root = get_workspace_root()
     assert root == mock_workspace_path
@@ -71,7 +70,7 @@ def test_get_repo_dir_returns_owner_repo_path(mock_workspace_path):
 
 def test_get_repo_dir_creates_parents(mock_workspace_path):
     """get_repo_dir creates parent directories."""
-    path = get_repo_dir("org", "repo")
+    get_repo_dir("org", "repo")
     assert (mock_workspace_path / "org" / "repo").exists()
 
 
@@ -160,14 +159,7 @@ def test_get_prs_dir_idempotent(mock_workspace_path):
 def test_get_commit_json_path_returns_commits_sha_json(mock_workspace_path):
     """get_commit_json_path returns .../commits/<sha>.json."""
     path = get_commit_json_path("owner", "repo", "abc123def")
-    assert (
-        path
-        == mock_workspace_path
-        / "owner"
-        / "repo"
-        / "commits"
-        / "abc123def.json"
-    )
+    assert path == mock_workspace_path / "owner" / "repo" / "commits" / "abc123def.json"
 
 
 def test_get_commit_json_path_does_not_create_file(mock_workspace_path):
@@ -190,9 +182,7 @@ def test_get_commit_json_path_consistent(mock_workspace_path):
 def test_get_issue_json_path_returns_issues_num_json(mock_workspace_path):
     """get_issue_json_path returns .../issues/<number>.json."""
     path = get_issue_json_path("owner", "repo", 42)
-    assert (
-        path == mock_workspace_path / "owner" / "repo" / "issues" / "42.json"
-    )
+    assert path == mock_workspace_path / "owner" / "repo" / "issues" / "42.json"
 
 
 def test_get_issue_json_path_integer_number(mock_workspace_path):

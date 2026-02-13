@@ -1,15 +1,22 @@
-"""Test settings - SQLite in-memory, fast hashing, isolated workspace."""
+"""
+Test-only Django settings.
+Imports base settings, then overrides for fast and isolated tests.
+"""
+
+import os
 from pathlib import Path
 
 from .settings import *  # noqa: F401, F403
 
-# Always use SQLite for tests (avoids PostgreSQL CREATEDB permission issues)
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
+# Use SQLite in-memory for speed when DATABASE_URL not set (e.g. local pytest).
+# CI can set DATABASE_URL=sqlite:///test.sqlite3 or leave unset for :memory:
+if not os.environ.get("DATABASE_URL", "").strip():
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
     }
-}
 
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
@@ -40,7 +47,7 @@ _test_dir = BASE_DIR / ".test_artifacts"
 _test_dir.mkdir(exist_ok=True)
 WORKSPACE_DIR = _test_dir / "workspace"
 WORKSPACE_DIR.mkdir(exist_ok=True)
-for _slug in ("github_activity_tracker", "boost_library_tracker", "shared"):
+for _slug in ("github_activity_tracker", "boost_library_tracker", "discord_activity_tracker", "shared"):
     (WORKSPACE_DIR / _slug).mkdir(parents=True, exist_ok=True)
 LOG_DIR = _test_dir / "logs"
 LOG_DIR.mkdir(exist_ok=True)

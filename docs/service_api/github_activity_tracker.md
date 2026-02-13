@@ -1,6 +1,6 @@
 # github_activity_tracker.services
 
-**Module path:** `github_activity_tracker.services`  
+**Module path:** `github_activity_tracker.services`
 **Description:** Repos, languages, licenses, issues, pull requests, assignees, and labels. Single place for all writes to github_activity_tracker models.
 
 **Type notation:** Model types refer to `github_activity_tracker.models`. Cross-app: `GitHubAccount` is `cppa_user_tracker.models.GitHubAccount`.
@@ -79,7 +79,7 @@ To sync a repo from GitHub (read last updated from DB, fetch from GitHub, save v
 |-------------|-----------------|-------------|-------------|
 | `sync_github(repo)` | `repo: GitHubRepository` | `None` | Run full sync for one repo: repos (metadata), then commits, issues, pull requests. Accepts `GitHubRepository` or a subclass (e.g. `BoostLibraryRepository`). Raises `ValueError` if `repo` is `None`. |
 
-**Module:** `github_activity_tracker.sync`  
+**Module:** `github_activity_tracker.sync`
 **Usage:** `from github_activity_tracker.sync import sync_github` then `sync_github(repo)`.
 
 ---

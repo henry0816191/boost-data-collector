@@ -8,7 +8,6 @@ from django.conf import settings
 from github_ops.client import (
     ConnectionException,
     GitHubAPIClient,
-    RateLimitException,
 )
 from github_ops.tokens import get_github_client, get_github_token
 
@@ -172,9 +171,7 @@ def test_rest_request_connection_error_after_retries_raises():
 
     client = GitHubAPIClient("token")
     client._check_rate_limit = MagicMock()
-    client.session.get = MagicMock(
-        side_effect=ReqConnectionError("network down")
-    )
+    client.session.get = MagicMock(side_effect=ReqConnectionError("network down"))
     with pytest.raises(ConnectionException, match="retries"):
         client.rest_request("/repos/foo/bar")
 
@@ -211,9 +208,7 @@ def test_rest_post_sends_json_data():
         )
     )
     client.session.post = post_mock
-    client.rest_post(
-        "/repos/a/b/issues", json_data={"title": "T", "body": "B"}
-    )
+    client.rest_post("/repos/a/b/issues", json_data={"title": "T", "body": "B"})
     post_mock.assert_called_once()
     call_kw = post_mock.call_args[1]
     assert call_kw["json"] == {"title": "T", "body": "B"}
@@ -269,9 +264,7 @@ def test_get_file_content_empty_content_returns_empty_bytes():
 def test_get_file_content_passes_ref_as_param():
     """get_file_content passes ref to rest_request when provided."""
     client = GitHubAPIClient("token")
-    client.rest_request = MagicMock(
-        return_value={"content": "", "encoding": None}
-    )
+    client.rest_request = MagicMock(return_value={"content": "", "encoding": None})
     client.get_file_content("o", "r", "f", ref="main")
     client.rest_request.assert_called_once()
     assert client.rest_request.call_args[1]["params"] == {"ref": "main"}
@@ -306,9 +299,7 @@ def test_create_pull_request_sends_title_head_base_body():
 def test_create_pull_request_returns_rest_post_response():
     """create_pull_request returns the dict returned by rest_post."""
     client = GitHubAPIClient("token")
-    client.rest_post = MagicMock(
-        return_value={"number": 42, "html_url": "https://..."}
-    )
+    client.rest_post = MagicMock(return_value={"number": 42, "html_url": "https://..."})
     out = client.create_pull_request("o", "r", "T", "h", "b")
     assert out["number"] == 42
     assert out["html_url"] == "https://..."
@@ -470,27 +461,20 @@ def test_get_repository_info_passes_owner_repo_in_path():
 def test_get_submodules_from_file_not_found_returns_empty_list(tmp_path):
     """get_submodules_from_file returns [] when file does not exist."""
     client = GitHubAPIClient("token")
-    out = client.get_submodules_from_file(
-        str(tmp_path / "nonexistent.gitmodules")
-    )
+    out = client.get_submodules_from_file(str(tmp_path / "nonexistent.gitmodules"))
     assert out == []
 
 
 def test_get_submodules_from_file_valid_returns_parsed_list(tmp_path):
     """get_submodules_from_file returns parsed submodules from valid .gitmodules."""
     f = tmp_path / ".gitmodules"
-    f.write_text(
-        '[submodule "libs/foo"]\n' "path = libs/foo\n" "url = ../foo.git\n"
-    )
+    f.write_text('[submodule "libs/foo"]\n' "path = libs/foo\n" "url = ../foo.git\n")
     client = GitHubAPIClient("token")
     out = client.get_submodules_from_file(str(f), default_owner="boostorg")
     assert len(out) == 1
     assert "repo_name" in out[0]
     assert "repo_url" in out[0]
-    assert (
-        "boostorg" in out[0].get("repo_url", "")
-        or out[0].get("owner") == "boostorg"
-    )
+    assert "boostorg" in out[0].get("repo_url", "") or out[0].get("owner") == "boostorg"
 
 
 def test_get_submodules_from_file_empty_file_returns_empty_list(tmp_path):
@@ -519,9 +503,7 @@ def test_parse_gitmodules_single_submodule():
     out = client._parse_gitmodules(content, default_owner="boostorg")
     assert len(out) == 1
     assert out[0]["repo_name"] == "x" or "x" in out[0]["repo_name"]
-    assert (
-        "boostorg" in out[0]["repo_url"] or out[0].get("owner") == "boostorg"
-    )
+    assert "boostorg" in out[0]["repo_url"] or out[0].get("owner") == "boostorg"
 
 
 def test_parse_gitmodules_multiple_submodules():
@@ -562,9 +544,7 @@ def test_get_submodules_with_local_file_empty_falls_back_to_api(tmp_path):
     f = tmp_path / ".gitmodules"
     f.write_text("# empty\n")
     client = GitHubAPIClient("token")
-    client.rest_request = MagicMock(
-        return_value={"type": "file", "content": ""}
-    )
+    client.rest_request = MagicMock(return_value={"type": "file", "content": ""})
     out = client.get_submodules("owner", "repo", local_file=str(f))
     assert isinstance(out, list)
     client.rest_request.assert_called_once_with(
@@ -588,9 +568,7 @@ def test_get_submodules_from_api_returns_parsed_list():
     )
     out = client.get_submodules("owner", "repo")
     assert len(out) == 1
-    client.rest_request.assert_called_with(
-        "/repos/owner/repo/contents/.gitmodules"
-    )
+    client.rest_request.assert_called_with("/repos/owner/repo/contents/.gitmodules")
 
 
 def test_get_submodules_api_404_returns_empty_list():

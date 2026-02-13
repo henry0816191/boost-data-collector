@@ -44,7 +44,14 @@ class TempProfileIdentityRelationAdmin(ModelAdmin):
 
 @admin.register(Email)
 class EmailAdmin(ModelAdmin):
-    list_display = ("id", "base_profile", "email", "is_primary", "is_active", "created_at")
+    list_display = (
+        "id",
+        "base_profile",
+        "email",
+        "is_primary",
+        "is_active",
+        "created_at",
+    )
     list_filter = ("is_primary", "is_active")
     search_fields = ("email",)
     raw_id_fields = ("base_profile",)
@@ -52,7 +59,15 @@ class EmailAdmin(ModelAdmin):
 
 @admin.register(GitHubAccount)
 class GitHubAccountAdmin(ModelAdmin):
-    list_display = ("id", "identity", "github_account_id", "username", "display_name", "type", "updated_at")
+    list_display = (
+        "id",
+        "identity",
+        "github_account_id",
+        "username",
+        "display_name",
+        "type",
+        "updated_at",
+    )
     list_filter = ("type",)
     search_fields = ("username", "display_name")
     raw_id_fields = ("identity",)
@@ -60,7 +75,14 @@ class GitHubAccountAdmin(ModelAdmin):
 
 @admin.register(SlackUser)
 class SlackUserAdmin(ModelAdmin):
-    list_display = ("id", "identity", "slack_user_id", "username", "display_name", "updated_at")
+    list_display = (
+        "id",
+        "identity",
+        "slack_user_id",
+        "username",
+        "display_name",
+        "updated_at",
+    )
     search_fields = ("slack_user_id", "username", "display_name")
     raw_id_fields = ("identity",)
 

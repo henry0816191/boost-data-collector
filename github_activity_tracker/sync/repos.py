@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from github_activity_tracker import services
 from github_ops import get_github_client
 from github_ops.client import ConnectionException, RateLimitException
 from github_activity_tracker.sync.utils import parse_datetime
@@ -22,9 +21,7 @@ logger = logging.getLogger(__name__)
 
 def sync_repos(repo: GitHubRepository) -> None:
     """Sync this repo's metadata (and repo languages, repo licenses) from GitHub to the database."""
-    logger.info(
-        f"sync_repos: starting for repo id={repo.pk} ({repo.repo_name})"
-    )
+    logger.info(f"sync_repos: starting for repo id={repo.pk} ({repo.repo_name})")
 
     try:
         client = get_github_client()
@@ -57,7 +54,5 @@ def sync_repos(repo: GitHubRepository) -> None:
         logger.error(f"sync_repos: failed for repo id={repo.pk}: {e}")
         raise
     except Exception as e:
-        logger.exception(
-            f"sync_repos: unexpected error for repo id={repo.pk}: {e}"
-        )
+        logger.exception(f"sync_repos: unexpected error for repo id={repo.pk}: {e}")
         raise

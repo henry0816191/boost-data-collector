@@ -3,6 +3,7 @@ Management command: run_cppa_user_tracker
 Syncs identity and profile data; stages profile-to-identity relations (TmpIdentity,
 TempProfileIdentityRelation) before merging. Implements restart logic per Development_guideline.
 """
+
 import logging
 
 from django.core.management.base import BaseCommand

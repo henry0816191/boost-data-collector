@@ -1,7 +1,5 @@
 """Tests for github_ops git_ops (clone, push, fetch_file_content)."""
 
-import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from github_ops.git_ops import (
@@ -154,9 +152,7 @@ def test_fetch_file_content_returns_client_get_file_content_bytes():
     """fetch_file_content returns first element of client.get_file_content (content bytes)."""
     mock_client = MagicMock()
     mock_client.get_file_content.return_value = (b"file contents", "utf-8")
-    out = fetch_file_content(
-        "owner", "repo", "path/file.txt", client=mock_client
-    )
+    out = fetch_file_content("owner", "repo", "path/file.txt", client=mock_client)
     assert out == b"file contents"
     mock_client.get_file_content.assert_called_once_with(
         "owner", "repo", "path/file.txt", ref=None
@@ -168,9 +164,7 @@ def test_fetch_file_content_passes_ref_to_client():
     mock_client = MagicMock()
     mock_client.get_file_content.return_value = (b"x", None)
     fetch_file_content("o", "r", "p", ref="main", client=mock_client)
-    mock_client.get_file_content.assert_called_once_with(
-        "o", "r", "p", ref="main"
-    )
+    mock_client.get_file_content.assert_called_once_with("o", "r", "p", ref="main")
 
 
 def test_fetch_file_content_uses_get_github_client_when_client_none():

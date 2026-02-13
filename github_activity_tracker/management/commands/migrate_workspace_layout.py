@@ -14,6 +14,7 @@ Target (app expects):
 
 Run: python manage.py migrate_workspace_layout
 """
+
 import shutil
 from pathlib import Path
 
@@ -38,14 +39,16 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         root = Path(settings.WORKSPACE_DIR) / "github_activity_tracker"
         if not root.is_dir():
-            self.stdout.write(self.style.WARNING(f"Workspace root does not exist: {root}"))
+            self.stdout.write(
+                self.style.WARNING(f"Workspace root does not exist: {root}")
+            )
             return
 
         moved = 0
         for owner_path in root.iterdir():
             if not owner_path.is_dir():
                 continue
-            owner = owner_path.name
+            # owner = owner_path.name
 
             # commits: owner/commits/<repo>/master/<hash>.json or .../developer/<hash>.json -> owner/<repo>/commits/<hash>.json
             # Prefer master; if master/ is missing, use developer/. Ignore developer when master exists.
@@ -57,14 +60,20 @@ class Command(BaseCommand):
                     repo = repo_path.name
                     master_dir = repo_path / "master"
                     developer_dir = repo_path / "developer"
-                    source_commits = master_dir if master_dir.is_dir() else developer_dir if developer_dir.is_dir() else None
+                    source_commits = (
+                        master_dir
+                        if master_dir.is_dir()
+                        else developer_dir if developer_dir.is_dir() else None
+                    )
                     if not source_commits or not source_commits.is_dir():
                         continue
                     dest_commits = owner_path / repo / "commits"
                     for f in source_commits.glob("*.json"):
                         dest = dest_commits / f.name
                         if dry_run:
-                            self.stdout.write(f"  would move: {f.relative_to(root)} -> {dest.relative_to(root)}")
+                            self.stdout.write(
+                                f"  would move: {f.relative_to(root)} -> {dest.relative_to(root)}"
+                            )
                         else:
                             dest.parent.mkdir(parents=True, exist_ok=True)
                             shutil.move(str(f), str(dest))
@@ -86,7 +95,9 @@ class Command(BaseCommand):
                             new_name = f.name
                         dest = dest_issues / new_name
                         if dry_run:
-                            self.stdout.write(f"  would move: {f.relative_to(root)} -> {dest.relative_to(root)}")
+                            self.stdout.write(
+                                f"  would move: {f.relative_to(root)} -> {dest.relative_to(root)}"
+                            )
                         else:
                             dest.parent.mkdir(parents=True, exist_ok=True)
                             shutil.move(str(f), str(dest))
@@ -108,13 +119,19 @@ class Command(BaseCommand):
                             new_name = f.name
                         dest = dest_prs / new_name
                         if dry_run:
-                            self.stdout.write(f"  would move: {f.relative_to(root)} -> {dest.relative_to(root)}")
+                            self.stdout.write(
+                                f"  would move: {f.relative_to(root)} -> {dest.relative_to(root)}"
+                            )
                         else:
                             dest.parent.mkdir(parents=True, exist_ok=True)
                             shutil.move(str(f), str(dest))
                         moved += 1
 
         if dry_run:
-            self.stdout.write(self.style.SUCCESS(f"Dry run: {moved} file(s) would be moved."))
+            self.stdout.write(
+                self.style.SUCCESS(f"Dry run: {moved} file(s) would be moved.")
+            )
         else:
-            self.stdout.write(self.style.SUCCESS(f"Moved {moved} file(s) to app layout."))
+            self.stdout.write(
+                self.style.SUCCESS(f"Moved {moved} file(s) to app layout.")
+            )

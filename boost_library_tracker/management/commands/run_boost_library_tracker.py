@@ -8,6 +8,7 @@ Runs several tasks in order:
 
 For now only task 1 (fetch GitHub activity) is implemented.
 """
+
 import logging
 
 import requests
@@ -79,7 +80,9 @@ def task_fetch_github_activity(self, dry_run: bool = False) -> None:
             )
     except requests.exceptions.HTTPError as e:
         if e.response is not None and e.response.status_code == 404:
-            logger.debug("No .gitmodules in %s/%s; syncing main repo only", MAIN_OWNER, MAIN_REPO)
+            logger.debug(
+                "No .gitmodules in %s/%s; syncing main repo only", MAIN_OWNER, MAIN_REPO
+            )
         else:
             raise
     except Exception as e:
@@ -112,7 +115,9 @@ def task_fetch_github_activity(self, dry_run: bool = False) -> None:
             logger.exception("Sync failed for %s/%s: %s", owner, repo_name, e)
             raise
 
-    self.stdout.write(self.style.SUCCESS(f"  GitHub activity: synced {synced} repo(s)."))
+    self.stdout.write(
+        self.style.SUCCESS(f"  GitHub activity: synced {synced} repo(s).")
+    )
 
 
 def task_library_tracker(self, dry_run: bool = False) -> None:
@@ -156,7 +161,9 @@ class Command(BaseCommand):
             if not task_filter or task_filter == "library_tracker":
                 task_library_tracker(self, dry_run=dry_run)
 
-            self.stdout.write(self.style.SUCCESS("run_boost_library_tracker: finished successfully"))
+            self.stdout.write(
+                self.style.SUCCESS("run_boost_library_tracker: finished successfully")
+            )
             logger.debug("run_boost_library_tracker: finished successfully")
         except Exception as e:
             logger.exception("run_boost_library_tracker failed: %s", e)

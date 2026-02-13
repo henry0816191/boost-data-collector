@@ -80,12 +80,8 @@ def _process_issue_data(repo: GitHubRepository, issue_data: dict) -> None:
                 issue_comment_updated_at=parse_datetime(comment_data.get("updated_at")),
             )
 
-    assignee_infos = [
-        parse_github_user(a) for a in issue_data.get("assignees", [])
-    ]
-    current_assignee_ids = {
-        i["account_id"] for i in assignee_infos if i["account_id"]
-    }
+    assignee_infos = [parse_github_user(a) for a in issue_data.get("assignees", [])]
+    current_assignee_ids = {i["account_id"] for i in assignee_infos if i["account_id"]}
     for assignee_account in issue_obj.assignees.all():
         if assignee_account.github_account_id not in current_assignee_ids:
             services.remove_issue_assignee(issue_obj, assignee_account)

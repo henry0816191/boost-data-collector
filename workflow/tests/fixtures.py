@@ -2,6 +2,7 @@
 Fixtures for workflow app.
 Workflow has no models; only management commands.
 """
+
 import pytest
 
 

@@ -63,9 +63,7 @@ def test_sync_repos_raises_on_connection_exception(github_repository):
     from github_ops.client import ConnectionException
 
     mock_client = MagicMock()
-    mock_client.get_repository_info.side_effect = ConnectionException(
-        "network error"
-    )
+    mock_client.get_repository_info.side_effect = ConnectionException("network error")
     with patch(
         "github_activity_tracker.sync.repos.get_github_client",
         return_value=mock_client,
@@ -80,9 +78,7 @@ def test_sync_repos_raises_on_rate_limit_exception(github_repository):
     from github_ops.client import RateLimitException
 
     mock_client = MagicMock()
-    mock_client.get_repository_info.side_effect = RateLimitException(
-        "rate limited"
-    )
+    mock_client.get_repository_info.side_effect = RateLimitException("rate limited")
     with patch(
         "github_activity_tracker.sync.repos.get_github_client",
         return_value=mock_client,

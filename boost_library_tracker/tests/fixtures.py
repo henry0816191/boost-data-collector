@@ -39,9 +39,7 @@ def boost_library_repository(db, github_repository):
 @pytest.fixture
 def boost_library(db, boost_library_repository):
     """Single BoostLibrary in a BoostLibraryRepository. Uses service API."""
-    lib, _ = services.get_or_create_boost_library(
-        boost_library_repository, "algorithm"
-    )
+    lib, _ = services.get_or_create_boost_library(boost_library_repository, "algorithm")
     return lib
 
 
