@@ -193,7 +193,6 @@ class Command(BaseCommand):
             help="Collect libraries for a single ref (e.g., boost-1.84.0)",
         )
         parser.add_argument(
-            "-v",
             "--refs",
             type=str,
             help="Comma-separated refs to process (e.g. 90,89 or boost-1.90.0,boost-1.89.0)",
