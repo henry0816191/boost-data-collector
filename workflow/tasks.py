@@ -24,9 +24,7 @@ def run_all_collectors_task(self, stop_on_failure=False):
         logger.info("run_all_collectors_task: finished successfully")
     except SystemExit as e:
         if e.code != 0:
-            logger.error(
-                "run_all_collectors_task: command exited with code %s", e.code
-            )
+            logger.error("run_all_collectors_task: command exited with code %s", e.code)
             raise
     except Exception as e:
         logger.exception("run_all_collectors_task failed: %s", e)

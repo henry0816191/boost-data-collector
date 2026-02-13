@@ -57,7 +57,21 @@ If you see `relation "cppa_user_tracker_githubaccount" does not exist` (or simil
 python manage.py run_all_collectors
 ```
 
-For local development you can also start the dev server: `python manage.py runserver`.
+For local development you can start the dev server: `python manage.py runserver`.
+
+## Celery
+
+The daily workflow runs as a Celery task (see [docs/Celery_test.md](docs/Celery_test.md)). You need **Redis** running (default: `localhost:6379`). Start the worker and (optionally) Beat in separate terminals:
+
+```bash
+# Worker (executes tasks)
+celery -A config worker -l info
+
+# Beat (schedules the daily task at 1:00 AM Pacific)
+celery -A config beat -l info
+```
+
+On Windows, the project configures the worker to use the `solo` pool automatically; if you see `PermissionError [WinError 5]`, run: `celery -A config worker -l info --pool=solo`.
 
 ## Running tests
 
@@ -149,6 +163,8 @@ Docs are organized **by topic** (one doc per concern: workflow, workspace, servi
 
 - [docs/README.md](docs/README.md) – Per-topic index and how to find app-specific info.
 - [Running tests](#running-tests) – How to run the test suite (pytest, coverage).
+- [Celery](#celery) – How to start the Celery worker and Beat.
+- [Celery_test.md](docs/Celery_test.md) – Testing the Celery task (run once, Beat, Redis).
 - [operations/](docs/operations/README.md) – **Operations group:** shared I/O (GitHub, Discord, etc.); index and per-operation docs.
 - [Workflow.md](docs/Workflow.md) – Main application workflow, execution order, and project details.
 - [operations/github.md](docs/operations/github.md) – GitHub layer (clone, push, fetch file, create PR/issue/comment) and token use.
