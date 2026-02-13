@@ -19,6 +19,7 @@ from discord_activity_tracker.services import (
     update_channel_last_synced,
     update_channel_last_activity
 )
+from discord_activity_tracker.workspace import get_raw_dir
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +128,7 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN - no database writes"))
 
-        temp_dir = Path(__file__).parent.parent.parent / "workspace" / "exporter_temp"
-        temp_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir = get_raw_dir()
 
         try:
             server = DiscordServer.objects.filter(server_id=guild_id).first()
@@ -238,10 +238,10 @@ class Command(BaseCommand):
                 continue
 
     def _import_json_files(self, dry_run: bool, guild_id: int):
-        """Import pre-exported JSON files from exporter_temp/ into the database."""
+        """Import pre-exported JSON files from workspace/discord_activity_tracker/raw/ into the database."""
         self.stdout.write("\n=== Importing JSON Files ===")
 
-        temp_dir = Path(__file__).parent.parent.parent / "workspace" / "exporter_temp"
+        temp_dir = get_raw_dir()
 
         json_files = sorted(temp_dir.glob("*.json"))
         if not json_files:

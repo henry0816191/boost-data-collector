@@ -1,16 +1,15 @@
 """Test settings - SQLite in-memory, fast hashing, isolated workspace."""
-import os
 from pathlib import Path
 
 from .settings import *  # noqa: F401, F403
 
-if not os.environ.get("DATABASE_URL", "").strip():
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": ":memory:",
-        }
+# Always use SQLite for tests (avoids PostgreSQL CREATEDB permission issues)
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": ":memory:",
     }
+}
 
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",

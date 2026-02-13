@@ -1,4 +1,4 @@
-"""Workspace utilities - path helpers for temp JSON files."""
+"""Workspace utilities - path helpers for raw export JSON and per-server data."""
 from pathlib import Path
 from config.workspace import get_workspace_path
 
@@ -8,6 +8,13 @@ _APP_SLUG = "discord_activity_tracker"
 def get_workspace_root() -> Path:
     """Return workspace/discord_activity_tracker/."""
     return get_workspace_path(_APP_SLUG)
+
+
+def get_raw_dir() -> Path:
+    """Return workspace/discord_activity_tracker/raw/ for DiscordChatExporter JSON output."""
+    path = get_workspace_root() / "raw"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def get_server_dir(server_id: int) -> Path:

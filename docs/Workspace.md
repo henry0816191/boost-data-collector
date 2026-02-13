@@ -11,6 +11,9 @@ workspace/                                    # WORKSPACE_DIR (configurable via 
 │       ├── commits/<hash>.json
 │       ├── issues/<issue_number>.json
 │       └── prs/<pr_number>.json
+├── discord_activity_tracker/                 # Raw DiscordChatExporter JSON, per-server data
+│   ├── raw/                                  # DiscordChatExporter output (imported then removed)
+│   └── <server_id>/                          # Per-server channels, messages
 ├── boost_library_tracker/                    # PDFs, converted files, etc.
 └── shared/                                   # Temp files used by more than one app
 ```
@@ -68,10 +71,23 @@ from config.workspace import get_workspace_path
 
 path = get_workspace_path("github_activity_tracker")
 path = get_workspace_path("boost_library_tracker")
+path = get_workspace_path("discord_activity_tracker")
 pdf_dir = path / "pdfs"
 
 # Root (for custom layout)
 root = Path(settings.WORKSPACE_DIR)
+```
+
+**discord_activity_tracker** (raw export + per-server):
+
+```python
+from discord_activity_tracker.workspace import get_raw_dir, get_server_dir, get_channel_json_path
+
+# Raw JSON from DiscordChatExporter (workspace/discord_activity_tracker/raw/)
+raw_dir = get_raw_dir()
+
+# Per-server dirs (workspace/discord_activity_tracker/<server_id>/)
+server_dir = get_server_dir(331718482485837825)
 ```
 
 ## Migrating from legacy layout
@@ -87,6 +103,7 @@ Use `--dry-run` to see what would be moved without changing files. For commits, 
 ## Conventions
 
 - **github_activity_tracker:** JSON cache for commits, issues, and PRs; files are removed after being saved to the DB.
+- **discord_activity_tracker:** Raw JSON from DiscordChatExporter in `raw/`; imported then removed. Per-server data in `<server_id>/`.
 - **boost_library_tracker:** Downloaded PDFs, converted documents.
 - **shared:** Files that multiple apps read or write; clean up when no longer needed.
 

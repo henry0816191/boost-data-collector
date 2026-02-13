@@ -62,7 +62,8 @@ The CLI export for full history takes hours and will timeout via Python subproce
 
 ```bash
 # Step 1: Run CLI manually (no timeout)
-discord_activity_tracker\tools\DiscordChatExporter.Cli.exe exportguild --token "USER_TOKEN" --guild 331718482485837825 --output "discord_activity_tracker\workspace\exporter_temp\" --format Json --parallel 3
+# Output goes to workspace/discord_activity_tracker/raw/ (or WORKSPACE_DIR/discord_activity_tracker/raw/)
+discord_activity_tracker\tools\DiscordChatExporter.Cli.exe exportguild --token "USER_TOKEN" --guild 331718482485837825 --output "workspace\discord_activity_tracker\raw\" --format Json --parallel 3
 
 # Step 2: Import JSON files to DB + export markdown
 python manage.py run_discord_exporter --task import-only --months 120 --active-days 99999
@@ -89,6 +90,7 @@ Each file: YAML frontmatter (metadata) + messages grouped by date.
 
 ## Notes
 
+- **Intended use:** Daily incremental runs. Each run syncs only new messages since the last sync, so runs stay fast (~5–10 sec per channel). Full-historical scrapes are slow; for first-time setup, see [Full History](#full-history-first-time-setup) above.
 - Only exports channels active in last 30 days (configurable via `--active-days`)
 - Incremental sync via `last_synced_at` per channel
 - First run may take 30-60 min; subsequent runs ~5-10 sec per channel
