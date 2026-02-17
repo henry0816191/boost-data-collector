@@ -6,10 +6,14 @@ Automatically sends error logs to configured channels.
 import json
 import logging
 import sys
+import time
 import traceback
 from datetime import datetime, timezone
 from urllib import request
 from urllib.error import URLError
+
+
+COOLDOWN_TIME = 60  # 1 minute
 
 
 class DiscordHandler(logging.Handler):
@@ -28,10 +32,17 @@ class DiscordHandler(logging.Handler):
         super().__init__(level)
         self.webhook_url = webhook_url
         self.username = username
+        self.last_notification = 0
 
     def emit(self, record):
         """Send log record to Discord."""
         try:
+            # Check cooldown
+            now = time.time()
+            if now - self.last_notification < COOLDOWN_TIME:
+                return
+            self.last_notification = now
+
             # Build embed for better formatting
             embed = {
                 "title": f"🚨 {record.levelname}: {record.name}",
@@ -123,10 +134,17 @@ class SlackHandler(logging.Handler):
         self.webhook_url = webhook_url
         self.username = username
         self.channel = channel
+        self.last_notification = 0
 
     def emit(self, record):
         """Send log record to Slack."""
         try:
+            # Check cooldown
+            now = time.time()
+            if now - self.last_notification < COOLDOWN_TIME:
+                return
+            self.last_notification = now
+
             # Build blocks for better formatting (Slack Block Kit)
             blocks = [
                 {
