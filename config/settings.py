@@ -22,7 +22,9 @@ if env_file.exists():
     environ.Env.read_env(str(env_file))
 
 # Security
-SECRET_KEY = env("SECRET_KEY") or "django-insecure-dev-only-change-in-production"
+SECRET_KEY = (
+    env("SECRET_KEY") or "django-insecure-dev-only-change-in-production"
+)
 DEBUG = env("DEBUG")
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
@@ -102,8 +104,12 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
     },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"
+    },
 ]
 
 # Internationalization
@@ -134,7 +140,9 @@ for _slug in _WORKSPACE_APP_SLUGS:
 # - GITHUB_TOKENS_SCRAPING: comma-separated list for API read/scraping (round-robin for rate limits)
 # - GITHUB_TOKEN_WRITE: for create PR, issue, comment, and git push
 GITHUB_TOKEN = (env("GITHUB_TOKEN", default="") or "").strip()
-_github_tokens_scraping_str = (env("GITHUB_TOKENS_SCRAPING", default="") or "").strip()
+_github_tokens_scraping_str = (
+    env("GITHUB_TOKENS_SCRAPING", default="") or ""
+).strip()
 GITHUB_TOKENS_SCRAPING = [
     t.strip() for t in _github_tokens_scraping_str.split(",") if t.strip()
 ]
@@ -159,6 +167,13 @@ else:
     LOG_LEVEL = "INFO"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 _LOG_FILE_PATH = LOG_DIR / LOG_FILE
+
+# Error notification settings (Discord/Slack)
+ENABLE_ERROR_NOTIFICATIONS = env.bool(
+    "ENABLE_ERROR_NOTIFICATIONS", default=False
+)
+DISCORD_WEBHOOK_URL = env("DISCORD_WEBHOOK_URL", default="")
+SLACK_WEBHOOK_URL = env("SLACK_WEBHOOK_URL", default="")
 
 LOGGING = {
     "version": 1,
@@ -214,3 +229,23 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=1, minute=0),
     },
 }
+
+# Conditionally add Discord/Slack handlers for error notifications
+if ENABLE_ERROR_NOTIFICATIONS:
+    if DISCORD_WEBHOOK_URL:
+        LOGGING["handlers"]["discord"] = {
+            "class": "config.logging_handlers.DiscordHandler",
+            "webhook_url": DISCORD_WEBHOOK_URL,
+            "level": "ERROR",
+            "formatter": "verbose",
+        }
+        LOGGING["root"]["handlers"].append("discord")
+
+    if SLACK_WEBHOOK_URL:
+        LOGGING["handlers"]["slack"] = {
+            "class": "config.logging_handlers.SlackHandler",
+            "webhook_url": SLACK_WEBHOOK_URL,
+            "level": "ERROR",
+            "formatter": "verbose",
+        }
+        LOGGING["root"]["handlers"].append("slack")
