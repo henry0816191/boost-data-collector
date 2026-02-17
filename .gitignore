@@ -24,6 +24,10 @@ media/
 .coverage
 htmlcov/
 
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
 # Environment
 .env
 .env.local

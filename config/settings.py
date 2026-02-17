@@ -7,6 +7,8 @@ from pathlib import Path
 
 import environ
 
+from celery.schedules import crontab
+
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -201,5 +203,27 @@ LOGGING = {
     "root": {
         "handlers": ["console", "file"],
         "level": LOG_LEVEL,
+    },
+}
+
+# Celery
+CELERY_BROKER_URL = env(
+    "CELERY_BROKER_URL",
+    default="redis://localhost:6379/0",
+)
+CELERY_RESULT_BACKEND = env(
+    "CELERY_RESULT_BACKEND",
+    default=CELERY_BROKER_URL,
+)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "America/Los_Angeles"
+
+# Daily at 1:00 AM Pacific (PST/PDT)
+CELERY_BEAT_SCHEDULE = {
+    "run-all-collectors-daily": {
+        "task": "workflow.tasks.run_all_collectors_task",
+        "schedule": crontab(hour=1, minute=0),
     },
 }
