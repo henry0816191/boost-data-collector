@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from django.utils import timezone as django_timezone
 from asgiref.sync import sync_to_async
@@ -16,6 +16,7 @@ from ..services import (
     add_or_update_reaction,
     update_channel_last_synced,
     update_channel_last_activity,
+    bulk_process_message_batch,
 )
 from .client import DiscordSyncClient, run_async
 from .utils import parse_datetime, parse_discord_user
@@ -130,6 +131,74 @@ async def _process_message_data(channel: DiscordChannel, message_data: Dict[str,
         logger.exception(f"Error processing message {message_data.get('id')}: {e}")
 
 
+BATCH_SIZE = 500
+
+
+def _prepare_message_data(
+    message_data: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Parse raw Discord message dict into normalized format for bulk processing."""
+    author_data = message_data.get("author", {})
+    author_info = parse_discord_user(author_data)
+
+    created_at = parse_datetime(message_data.get("created_at"))
+    edited_at = parse_datetime(message_data.get("edited_at"))
+
+    if created_at is None:
+        logger.error(f"Message {message_data.get('id')} has no created_at timestamp")
+        return None
+
+    attachments = message_data.get("attachments", [])
+    attachment_urls = [att.get("url") for att in attachments if att.get("url")]
+
+    reference = message_data.get("reference", {})
+    reply_to_message_id = reference.get("message_id") if reference else None
+
+    return {
+        "message_id": message_data["id"],
+        "author": author_info,
+        "content": message_data.get("content", ""),
+        "message_created_at": created_at,
+        "message_edited_at": edited_at,
+        "reply_to_message_id": reply_to_message_id,
+        "attachment_urls": attachment_urls,
+        "reactions": message_data.get("reactions", []),
+    }
+
+
+async def _process_messages_in_batches(
+    channel: DiscordChannel,
+    messages: List[Dict[str, Any]],
+    batch_size: int = BATCH_SIZE,
+) -> int:
+    """Process messages in batches using bulk DB operations."""
+    total_processed = 0
+
+    for i in range(0, len(messages), batch_size):
+        batch_raw = messages[i : i + batch_size]
+
+        batch_prepared = []
+        for msg_data in batch_raw:
+            prepared = _prepare_message_data(msg_data)
+            if prepared is not None:
+                batch_prepared.append(prepared)
+
+        if not batch_prepared:
+            continue
+
+        count = await sync_to_async(bulk_process_message_batch)(
+            batch_prepared, channel
+        )
+        total_processed += count
+
+        logger.info(
+            f"Batch {i // batch_size + 1}: {total_processed}/{len(messages)} "
+            f"messages for #{channel.channel_name}"
+        )
+
+    return total_processed
+
+
 async def sync_channel_messages_async(
     client: DiscordSyncClient,
     channel: DiscordChannel,
@@ -169,8 +238,8 @@ async def sync_channel_messages_async(
 
         logger.info(f"Fetched {len(messages)} messages from #{channel.channel_name}")
 
-        for message_data in messages:
-            await _process_message_data(channel, message_data)
+        processed = await _process_messages_in_batches(channel, messages)
+        logger.info(f"Bulk-processed {processed} messages for #{channel.channel_name}")
 
         if messages:
             last_message_time = parse_datetime(messages[-1]["created_at"])
@@ -235,33 +304,41 @@ def sync_all_channels(
     active_only: bool = True,
     active_days: int = 30,
 ):
-    """Sync all channels in guild."""
+    """Sync all channels in guild (single client for entire run)."""
     logger.info(f"Starting sync for guild {guild_id}")
 
-    # Sync guild
-    server = sync_guild(token, guild_id)
+    client = DiscordSyncClient(token)
+    try:
+        # Sync guild
+        server = run_async(sync_guild_async(client, guild_id))
 
-    # Sync channels
-    channels = sync_channels(token, server, guild_id)
+        # Sync channels
+        channels = run_async(sync_channels_async(client, server, guild_id))
 
-    # Filter for active channels if requested
-    if active_only and not full_sync:
-        cutoff = django_timezone.now() - timedelta(days=active_days)
-        channels = [
-            ch
-            for ch in channels
-            if ch.last_activity_at and ch.last_activity_at >= cutoff
-        ]
-        logger.info(
-            f"Filtered to {len(channels)} active channels (last {active_days} days)"
-        )
+        # Filter for active channels if requested
+        if active_only and not full_sync:
+            cutoff = django_timezone.now() - timedelta(days=active_days)
+            channels = [
+                ch
+                for ch in channels
+                if ch.last_activity_at and ch.last_activity_at >= cutoff
+            ]
+            logger.info(
+                f"Filtered to {len(channels)} active channels (last {active_days} days)"
+            )
 
-    # Sync messages for each channel
-    for channel in channels:
-        try:
-            sync_channel_messages(token, channel, guild_id, since_date, full_sync)
-        except Exception as e:
-            logger.error(f"Failed to sync channel #{channel.channel_name}: {e}")
-            continue
+        # Sync messages for each channel (reusing same client)
+        for channel in channels:
+            try:
+                run_async(
+                    sync_channel_messages_async(
+                        client, channel, guild_id, since_date, full_sync
+                    )
+                )
+            except Exception as e:
+                logger.error(f"Failed to sync channel #{channel.channel_name}: {e}")
+                continue
+    finally:
+        run_async(client.close())
 
     logger.info(f"Completed sync for guild {guild_id}")

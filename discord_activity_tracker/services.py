@@ -5,8 +5,9 @@ All DB writes go through these functions (get_or_create_* pattern).
 
 import logging
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+from django.db import transaction
 from django.utils import timezone as django_timezone
 
 from .models import (
@@ -238,3 +239,178 @@ def get_active_channels(server: DiscordServer, days: int = 30) -> list:
     return DiscordChannel.objects.filter(
         server=server, last_activity_at__gte=cutoff
     ).order_by("position", "channel_name")
+
+
+# ---------------------------------------------------------------------------
+# Bulk operations (for high-throughput message sync)
+# ---------------------------------------------------------------------------
+
+
+def bulk_upsert_discord_users(
+    user_data_list: List[Dict[str, Any]],
+) -> Dict[int, DiscordUser]:
+    """Bulk upsert users. Returns {discord_user_id: DiscordUser} with PKs."""
+    if not user_data_list:
+        return {}
+
+    # Deduplicate by user_id (last-seen wins)
+    unique = {d["user_id"]: d for d in user_data_list}
+
+    now = django_timezone.now()
+    instances = [
+        DiscordUser(
+            user_id=d["user_id"],
+            username=d["username"],
+            display_name=d.get("display_name", ""),
+            avatar_url=d.get("avatar_url", ""),
+            is_bot=d.get("is_bot", False),
+            created_at=now,
+            updated_at=now,
+        )
+        for d in unique.values()
+    ]
+
+    DiscordUser.objects.bulk_create(
+        instances,
+        update_conflicts=True,
+        unique_fields=["user_id"],
+        update_fields=["username", "display_name", "avatar_url", "is_bot", "updated_at"],
+    )
+
+    # Fetch back with PKs (bulk_create+update_conflicts doesn't return PKs for updated rows)
+    db_users = DiscordUser.objects.filter(
+        user_id__in=list(unique.keys())
+    ).only("id", "user_id")
+    return {u.user_id: u for u in db_users}
+
+
+def bulk_upsert_discord_messages(
+    message_data_list: List[Dict[str, Any]],
+    channel: DiscordChannel,
+    user_map: Dict[int, DiscordUser],
+) -> Dict[int, DiscordMessage]:
+    """Bulk upsert messages. Returns {discord_message_id: DiscordMessage} with PKs."""
+    if not message_data_list:
+        return {}
+
+    now = django_timezone.now()
+    instances = []
+    for d in message_data_list:
+        author = user_map.get(d["author"]["user_id"])
+        if author is None:
+            logger.warning(f"Skipping message {d['message_id']}: author not in user_map")
+            continue
+        attachments = d.get("attachment_urls", [])
+        instances.append(
+            DiscordMessage(
+                message_id=d["message_id"],
+                channel=channel,
+                author=author,
+                content=d.get("content", ""),
+                message_created_at=d["message_created_at"],
+                message_edited_at=d.get("message_edited_at"),
+                reply_to_message_id=d.get("reply_to_message_id"),
+                has_attachments=len(attachments) > 0,
+                attachment_urls=attachments,
+                is_deleted=False,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    if not instances:
+        return {}
+
+    DiscordMessage.objects.bulk_create(
+        instances,
+        update_conflicts=True,
+        unique_fields=["message_id"],
+        update_fields=[
+            "channel",
+            "author",
+            "content",
+            "message_created_at",
+            "message_edited_at",
+            "reply_to_message_id",
+            "has_attachments",
+            "attachment_urls",
+            "is_deleted",
+            "updated_at",
+        ],
+    )
+
+    msg_ids = [inst.message_id for inst in instances]
+    db_msgs = DiscordMessage.objects.filter(
+        message_id__in=msg_ids
+    ).only("id", "message_id")
+    return {m.message_id: m for m in db_msgs}
+
+
+def bulk_upsert_discord_reactions(
+    reaction_data_list: List[Dict[str, Any]],
+    message_map: Dict[int, DiscordMessage],
+) -> None:
+    """Bulk upsert reactions."""
+    if not reaction_data_list:
+        return
+
+    now = django_timezone.now()
+    # Deduplicate by (message_id, emoji) — keep last
+    seen = {}
+    for d in reaction_data_list:
+        msg = message_map.get(d["discord_message_id"])
+        if msg is None:
+            continue
+        key = (msg.pk, d["emoji"])
+        seen[key] = DiscordReaction(
+            message=msg,
+            emoji=d["emoji"],
+            count=d.get("count", 1),
+            created_at=now,
+            updated_at=now,
+        )
+
+    if not seen:
+        return
+
+    DiscordReaction.objects.bulk_create(
+        list(seen.values()),
+        update_conflicts=True,
+        unique_fields=["message", "emoji"],
+        update_fields=["count", "updated_at"],
+    )
+
+
+def bulk_process_message_batch(
+    message_data_list: List[Dict[str, Any]],
+    channel: DiscordChannel,
+) -> int:
+    """Orchestrate bulk upsert: users → messages → reactions. Returns count."""
+    if not message_data_list:
+        return 0
+
+    with transaction.atomic():
+        # Phase 1: users
+        user_data_by_id = {}
+        for msg in message_data_list:
+            author = msg["author"]
+            user_data_by_id[author["user_id"]] = author
+        user_map = bulk_upsert_discord_users(list(user_data_by_id.values()))
+
+        # Phase 2: messages
+        message_map = bulk_upsert_discord_messages(message_data_list, channel, user_map)
+
+        # Phase 3: reactions
+        reaction_data = []
+        for msg in message_data_list:
+            for reaction in msg.get("reactions", []):
+                if reaction.get("emoji"):
+                    reaction_data.append({
+                        "discord_message_id": msg["message_id"],
+                        "emoji": reaction["emoji"],
+                        "count": reaction.get("count", 0),
+                    })
+        if reaction_data:
+            bulk_upsert_discord_reactions(reaction_data, message_map)
+
+    return len(message_data_list)
