@@ -10,6 +10,7 @@ class ProfileType(models.TextChoices):
     SLACK = "slack", "Slack"
     MAILING_LIST = "mailing_list", "Mailing list"
     WG21 = "wg21", "WG21"
+    DISCORD = "discord", "Discord"
 
 
 class GitHubAccountType(models.TextChoices):
@@ -185,3 +186,22 @@ class WG21PaperAuthorProfile(BaseProfile):
 
     class Meta:
         db_table = "cppa_user_tracker_wg21paperauthorprofile"
+
+
+class DiscordProfile(BaseProfile):
+    """Profile for Discord; extends BaseProfile."""
+
+    def save(self, *args, **kwargs):
+        self.type = ProfileType.DISCORD
+        super().save(*args, **kwargs)
+
+    discord_user_id = models.BigIntegerField(unique=True, db_index=True)
+    username = models.CharField(max_length=255, db_index=True, blank=True)
+    display_name = models.CharField(max_length=255, db_index=True, blank=True)
+    avatar_url = models.URLField(max_length=512, blank=True)
+    is_bot = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "cppa_user_tracker_discordprofile"

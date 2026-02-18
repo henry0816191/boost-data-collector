@@ -1,5 +1,7 @@
 from django.db import models
 
+from cppa_user_tracker.models import DiscordProfile
+
 
 class DiscordServer(models.Model):
     """Discord server/guild."""
@@ -79,9 +81,9 @@ class DiscordMessage(models.Model):
         db_column="channel_id",
     )
     author = models.ForeignKey(
-        DiscordUser,
+        DiscordProfile,
         on_delete=models.CASCADE,
-        related_name="messages",
+        related_name="discord_messages",
         db_column="author_id",
     )
     content = models.TextField(blank=True)

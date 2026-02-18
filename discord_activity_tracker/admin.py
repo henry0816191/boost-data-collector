@@ -3,7 +3,6 @@
 from django.contrib import admin
 from .models import (
     DiscordServer,
-    DiscordUser,
     DiscordChannel,
     DiscordMessage,
     DiscordReaction,
@@ -14,14 +13,6 @@ from .models import (
 class DiscordServerAdmin(admin.ModelAdmin):
     list_display = ("server_name", "server_id", "created_at", "updated_at")
     search_fields = ("server_name", "server_id")
-    readonly_fields = ("created_at", "updated_at")
-
-
-@admin.register(DiscordUser)
-class DiscordUserAdmin(admin.ModelAdmin):
-    list_display = ("username", "display_name", "user_id", "is_bot", "created_at")
-    list_filter = ("is_bot",)
-    search_fields = ("username", "display_name", "user_id")
     readonly_fields = ("created_at", "updated_at")
 
 

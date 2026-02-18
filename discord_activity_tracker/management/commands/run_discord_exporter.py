@@ -11,7 +11,8 @@ from asgiref.sync import sync_to_async
 
 from discord_activity_tracker.models import DiscordServer, DiscordChannel
 from discord_activity_tracker.sync.chat_exporter import (
-    export_and_parse_guild,
+    export_guild_to_json,
+    parse_exported_json,
     convert_exporter_message_to_dict,
 )
 from discord_activity_tracker.sync.messages import (
@@ -199,31 +200,52 @@ class Command(BaseCommand):
                 else:
                     self.stdout.write("First sync - fetching all messages")
 
-            parsed_data = export_and_parse_guild(
+            json_files = export_guild_to_json(
                 user_token=user_token,
                 guild_id=guild_id,
                 output_dir=temp_dir,
                 after_date=after_date,
             )
 
-            self.stdout.write(f"Exported {len(parsed_data)} channels")
+            self.stdout.write(f"Exported {len(json_files)} channel files")
 
             if dry_run:
-                for channel_data in parsed_data:
-                    channel_info = channel_data["channel"]
-                    msg_count = len(channel_data["messages"])
+                for json_path in json_files:
+                    data = parse_exported_json(json_path)
+                    ch = data.get("channel", {})
+                    msg_count = len(data.get("messages", []))
                     self.stdout.write(
-                        f"  #{channel_info['name']}: {msg_count} messages"
+                        f"  #{ch.get('name', '?')}: {msg_count} messages"
                     )
                 return
 
             import asyncio
 
-            asyncio.run(self._persist_exported_data(guild_id, parsed_data))
+            # Process one file at a time to avoid loading 900MB+ into memory
+            for i, json_path in enumerate(json_files, 1):
+                try:
+                    data = parse_exported_json(json_path)
+                    channel_data = {
+                        "guild": data.get("guild", {}),
+                        "channel": data.get("channel", {}),
+                        "messages": data.get("messages", []),
+                    }
+                    ch_name = channel_data["channel"].get("name", "?")
+                    msg_count = len(channel_data["messages"])
+                    self.stdout.write(
+                        f"  [{i}/{len(json_files)}] #{ch_name}: {msg_count} messages"
+                    )
+                    asyncio.run(
+                        self._persist_exported_data(
+                            guild_id, [channel_data]
+                        )
+                    )
+                    json_path.unlink()
+                except Exception as e:
+                    logger.error(f"Failed to process {json_path.name}: {e}")
+                    continue
 
-            for json_file in temp_dir.glob("*.json"):
-                json_file.unlink()
-            self.stdout.write("Cleaned up temporary JSON files")
+            self.stdout.write("Done persisting all channels")
 
         except Exception as e:
             logger.exception(f"Sync failed: {e}")
@@ -296,8 +318,6 @@ class Command(BaseCommand):
             for f in json_files:
                 self.stdout.write(f"  {f.name}")
             return
-
-        from discord_activity_tracker.sync.chat_exporter import parse_exported_json
 
         parsed_data = []
         for json_path in json_files:

@@ -3,9 +3,9 @@
 import pytest
 from datetime import datetime, timezone
 
+from cppa_user_tracker.models import DiscordProfile
 from discord_activity_tracker.models import (
     DiscordServer,
-    DiscordUser,
     DiscordChannel,
     DiscordMessage,
     DiscordReaction,
@@ -79,12 +79,13 @@ class TestBulkUpsertUsers:
         assert len(result) == 2
         assert 1001 in result
         assert 1002 in result
-        assert result[1001].user_id == 1001
-        assert DiscordUser.objects.count() == 2
+        assert result[1001].discord_user_id == 1001
+        assert DiscordProfile.objects.count() == 2
 
     def test_update_existing_users(self):
-        DiscordUser.objects.create(
-            user_id=1001,
+        DiscordProfile.objects.create(
+            discord_user_id=1001,
+            type="discord",
             username="alice_old",
             display_name="Old",
             is_bot=False,
@@ -95,7 +96,7 @@ class TestBulkUpsertUsers:
         )
 
         assert len(result) == 1
-        refreshed = DiscordUser.objects.get(user_id=1001)
+        refreshed = DiscordProfile.objects.get(discord_user_id=1001)
         assert refreshed.username == "alice_new"
         assert refreshed.display_name == "New Alice"
 
@@ -107,9 +108,9 @@ class TestBulkUpsertUsers:
         result = bulk_upsert_discord_users(user_data)
 
         assert len(result) == 1
-        assert DiscordUser.objects.count() == 1
+        assert DiscordProfile.objects.count() == 1
         # Last-seen wins
-        assert DiscordUser.objects.get(user_id=1001).username == "second"
+        assert DiscordProfile.objects.get(discord_user_id=1001).username == "second"
 
     def test_empty_input(self):
         result = bulk_upsert_discord_users([])
@@ -275,7 +276,7 @@ class TestBulkProcessMessageBatch:
         count = bulk_process_message_batch(messages, channel)
 
         assert count == 2
-        assert DiscordUser.objects.count() == 2
+        assert DiscordProfile.objects.count() == 2
         assert DiscordMessage.objects.count() == 2
         assert DiscordReaction.objects.count() == 2
 
@@ -310,6 +311,6 @@ class TestBulkProcessMessageBatch:
         bulk_process_message_batch(messages, channel)
         bulk_process_message_batch(messages, channel)
 
-        assert DiscordUser.objects.count() == 1
+        assert DiscordProfile.objects.count() == 1
         assert DiscordMessage.objects.count() == 1
         assert DiscordReaction.objects.count() == 1

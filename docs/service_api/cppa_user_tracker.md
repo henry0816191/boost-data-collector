@@ -1,7 +1,7 @@
 # cppa_user_tracker.services
 
 **Module path:** `cppa_user_tracker.services`
-**Description:** Identity, profiles (GitHubAccount, SlackUser, MailingListProfile, etc.), emails, and staging (TmpIdentity, TempProfileIdentityRelation). Single place for all writes to cppa_user_tracker models.
+**Description:** Identity, profiles (GitHubAccount, SlackUser, MailingListProfile, DiscordProfile, etc.), emails, and staging (TmpIdentity, TempProfileIdentityRelation). Single place for all writes to cppa_user_tracker models.
 
 **Type notation:** Model types refer to `cppa_user_tracker.models` (e.g. `Identity`, `BaseProfile`, `Email`).
 
@@ -38,6 +38,14 @@
 | Function                             | Parameter types                             | Return type                       | Description                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------ | ------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `get_or_create_mailing_list_profile` | `display_name: str = ""`, `email: str = ""` | `tuple[MailingListProfile, bool]` | Get or create a MailingListProfile by display_name and email. Looks up a profile with this display_name and an Email with this address; if found, returns it. Otherwise creates a new profile, adds the email via `add_email`, and returns the new profile. Raises `ValueError` if `display_name` or `email` is missing or empty. |
+
+---
+
+## DiscordProfile
+
+| Function                           | Parameter types                                                                                                                      | Return type                     | Description                                                                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `get_or_create_discord_profile`    | `discord_user_id: int`, `username: str = ""`, `display_name: str = ""`, `avatar_url: str = ""`, `is_bot: bool = False`, `identity: Identity \| None = None` | `tuple[DiscordProfile, bool]`   | Get or create a DiscordProfile by `discord_user_id`. Updates username, display_name, avatar_url, is_bot if profile exists. |
 
 ---
 

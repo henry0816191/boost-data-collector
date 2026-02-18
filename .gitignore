@@ -23,6 +23,7 @@ media/
 # Testing / coverage
 .coverage
 htmlcov/
+pytest-cache-files*/
 
 # Celery
 celerybeat-schedule

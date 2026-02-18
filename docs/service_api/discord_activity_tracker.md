@@ -1,9 +1,9 @@
 # discord_activity_tracker.services
 
 **Module path:** `discord_activity_tracker.services`
-**Description:** Discord servers, users, channels, messages, and reactions. Single place for all writes to discord_activity_tracker models.
+**Description:** Discord servers, channels, messages, and reactions. Single place for all writes to discord_activity_tracker models. Discord user profiles live in `cppa_user_tracker.DiscordProfile`.
 
-**Type notation:** Model types refer to `discord_activity_tracker.models`. User/identity profiles live in `cppa_user_tracker`; when linking Discord users to Identity, use `cppa_user_tracker.services`.
+**Type notation:** Model types refer to `discord_activity_tracker.models` unless noted. `DiscordProfile` refers to `cppa_user_tracker.models.DiscordProfile`.
 
 ---
 
@@ -15,11 +15,11 @@
 
 ---
 
-## DiscordUser
+## DiscordUser (delegates to cppa_user_tracker)
 
 | Function                    | Parameter types                                                          | Return type               | Description                                    |
 | --------------------------- | ------------------------------------------------------------------------ | ------------------------- | ---------------------------------------------- |
-| `get_or_create_discord_user` | `user_id: int`, `username: str`, `display_name: str = ""`, `avatar_url: str = ""`, `is_bot: bool = False` | `tuple[DiscordUser, bool]` | Get or create user; update fields if changed. |
+| `get_or_create_discord_user` | `user_id: int`, `username: str`, `display_name: str = ""`, `avatar_url: str = ""`, `is_bot: bool = False` | `tuple[DiscordProfile, bool]` | Delegates to `cppa_user_tracker.services.get_or_create_discord_profile`. |
 
 ---
 
@@ -37,7 +37,7 @@
 
 | Function                        | Parameter types                                                                 | Return type                 | Description                    |
 | ------------------------------- | -------------------------------------------------------------------------------- | --------------------------- | ------------------------------ |
-| `create_or_update_discord_message` | `message_id: int`, `channel: DiscordChannel`, `author: DiscordUser`, `content: str`, `message_created_at: datetime`, `message_edited_at: datetime \| None = None`, `reply_to_message_id: int \| None = None`, `attachment_urls: list \| None = None` | `tuple[DiscordMessage, bool]` | Create or update message.      |
+| `create_or_update_discord_message` | `message_id: int`, `channel: DiscordChannel`, `author: DiscordProfile`, `content: str`, `message_created_at: datetime`, `message_edited_at: datetime \| None = None`, `reply_to_message_id: int \| None = None`, `attachment_urls: list \| None = None` | `tuple[DiscordMessage, bool]` | Create or update message.      |
 | `mark_message_deleted`         | `message: DiscordMessage`, `deleted_at: datetime \| None = None`                  | `DiscordMessage`            | Mark message as deleted.       |
 
 ---

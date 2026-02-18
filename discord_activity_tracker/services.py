@@ -10,9 +10,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from django.db import transaction
 from django.utils import timezone as django_timezone
 
+from cppa_user_tracker.models import DiscordProfile
+from cppa_user_tracker.services import get_or_create_discord_profile
 from .models import (
     DiscordServer,
-    DiscordUser,
     DiscordChannel,
     DiscordMessage,
     DiscordReaction,
@@ -56,47 +57,15 @@ def get_or_create_discord_user(
     display_name: str = "",
     avatar_url: str = "",
     is_bot: bool = False,
-) -> Tuple[DiscordUser, bool]:
-    """Get or create user, update fields if changed."""
-    user, created = DiscordUser.objects.get_or_create(
-        user_id=user_id,
-        defaults={
-            "username": username,
-            "display_name": display_name,
-            "avatar_url": avatar_url,
-            "is_bot": is_bot,
-        },
+) -> Tuple[DiscordProfile, bool]:
+    """Get or create Discord user profile. Delegates to cppa_user_tracker."""
+    return get_or_create_discord_profile(
+        discord_user_id=user_id,
+        username=username,
+        display_name=display_name,
+        avatar_url=avatar_url,
+        is_bot=is_bot,
     )
-
-    if not created:
-        # Update fields if changed
-        updated = False
-        if user.username != username:
-            user.username = username
-            updated = True
-        if user.display_name != display_name:
-            user.display_name = display_name
-            updated = True
-        if user.avatar_url != avatar_url:
-            user.avatar_url = avatar_url
-            updated = True
-        if user.is_bot != is_bot:
-            user.is_bot = is_bot
-            updated = True
-
-        if updated:
-            user.save(
-                update_fields=[
-                    "username",
-                    "display_name",
-                    "avatar_url",
-                    "is_bot",
-                    "updated_at",
-                ]
-            )
-            logger.debug(f"Updated user: {username}")
-
-    return user, created
 
 
 def get_or_create_discord_channel(
@@ -153,7 +122,7 @@ def get_or_create_discord_channel(
 def create_or_update_discord_message(
     message_id: int,
     channel: DiscordChannel,
-    author: DiscordUser,
+    author: DiscordProfile,
     content: str,
     message_created_at: datetime,
     message_edited_at: Optional[datetime] = None,
@@ -248,52 +217,67 @@ def get_active_channels(server: DiscordServer, days: int = 30) -> list:
 
 def bulk_upsert_discord_users(
     user_data_list: List[Dict[str, Any]],
-) -> Dict[int, DiscordUser]:
-    """Bulk upsert users. Returns {discord_user_id: DiscordUser} with PKs."""
+) -> Dict[int, DiscordProfile]:
+    """Bulk upsert Discord user profiles. Returns {discord_user_id: DiscordProfile} with PKs.
+
+    Uses get_or_create per user because DiscordProfile uses multi-table
+    inheritance (BaseProfile) which doesn't support bulk_create(update_conflicts=True).
+    Typical batches have 10-50 unique users, so individual creates are fine.
+    """
     if not user_data_list:
         return {}
 
     # Deduplicate by user_id (last-seen wins)
     unique = {d["user_id"]: d for d in user_data_list}
 
-    now = django_timezone.now()
-    instances = [
-        DiscordUser(
-            user_id=d["user_id"],
-            username=d["username"],
-            display_name=d.get("display_name", ""),
-            avatar_url=d.get("avatar_url", ""),
-            is_bot=d.get("is_bot", False),
-            created_at=now,
-            updated_at=now,
+    # Fetch existing profiles in one query
+    existing = {
+        p.discord_user_id: p
+        for p in DiscordProfile.objects.filter(
+            discord_user_id__in=list(unique.keys())
         )
-        for d in unique.values()
-    ]
+    }
 
-    DiscordUser.objects.bulk_create(
-        instances,
-        update_conflicts=True,
-        unique_fields=["user_id"],
-        update_fields=[
-            "username",
-            "display_name",
-            "avatar_url",
-            "is_bot",
-            "updated_at",
-        ],
-    )
+    result = {}
+    for uid, d in unique.items():
+        if uid in existing:
+            profile = existing[uid]
+            username_val = d["username"] or ""
+            display_name_val = d.get("display_name", "") or ""
+            avatar_url_val = d.get("avatar_url", "") or ""
+            updated = False
+            if username_val and profile.username != username_val:
+                profile.username = username_val
+                updated = True
+            if display_name_val and profile.display_name != display_name_val:
+                profile.display_name = display_name_val
+                updated = True
+            if avatar_url_val and profile.avatar_url != avatar_url_val:
+                profile.avatar_url = avatar_url_val
+                updated = True
+            if profile.is_bot != d.get("is_bot", False):
+                profile.is_bot = d.get("is_bot", False)
+                updated = True
+            if updated:
+                profile.save()
+            result[uid] = profile
+        else:
+            profile, _ = get_or_create_discord_profile(
+                discord_user_id=uid,
+                username=d["username"],
+                display_name=d.get("display_name", ""),
+                avatar_url=d.get("avatar_url", ""),
+                is_bot=d.get("is_bot", False),
+            )
+            result[uid] = profile
 
-    # Fetch back with PKs (bulk_create+update_conflicts doesn't return PKs for updated rows)
-    db_users = DiscordUser.objects.filter(user_id__in=list(unique.keys())).only(
-        "id", "user_id"
-    )
-    return {u.user_id: u for u in db_users}
+    return result
 
 
 def bulk_upsert_discord_messages(
     message_data_list: List[Dict[str, Any]],
     channel: DiscordChannel,
-    user_map: Dict[int, DiscordUser],
+    user_map: Dict[int, DiscordProfile],
 ) -> Dict[int, DiscordMessage]:
     """Bulk upsert messages. Returns {discord_message_id: DiscordMessage} with PKs."""
     if not message_data_list:

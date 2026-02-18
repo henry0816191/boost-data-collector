@@ -23,6 +23,7 @@ from .models import (
     GitHubAccount,
     GitHubAccountType,
     MailingListProfile,
+    DiscordProfile,
 )
 
 
@@ -273,3 +274,38 @@ def get_or_create_unknown_github_account(
     if email_str:
         add_email(account, email_str, is_primary=True)
     return account, True
+
+
+def get_or_create_discord_profile(
+    discord_user_id: int,
+    username: str = "",
+    display_name: str = "",
+    avatar_url: str = "",
+    is_bot: bool = False,
+    identity: Optional[Identity] = None,
+) -> tuple[DiscordProfile, bool]:
+    """Get or create a DiscordProfile by discord_user_id. Returns (profile, created).
+
+    If profile exists, updates username, display_name, avatar_url, is_bot if provided.
+    identity is only set on creation; to update identity use a separate service function.
+    """
+    username_val = username or ""
+    display_name_val = display_name or ""
+    avatar_url_val = avatar_url or ""
+    profile, created = DiscordProfile.objects.get_or_create(
+        discord_user_id=discord_user_id,
+        defaults={
+            "username": username_val,
+            "display_name": display_name_val,
+            "avatar_url": avatar_url_val,
+            "is_bot": is_bot,
+            "identity": identity,
+        },
+    )
+    if not created:
+        profile.username = username_val or profile.username
+        profile.display_name = display_name_val or profile.display_name
+        profile.avatar_url = avatar_url_val or profile.avatar_url
+        profile.is_bot = is_bot
+        profile.save()
+    return profile, created
