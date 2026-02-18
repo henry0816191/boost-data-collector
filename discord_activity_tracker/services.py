@@ -51,7 +51,6 @@ def get_or_create_discord_server(
     return server, created
 
 
-
 def get_or_create_discord_channel(
     server: DiscordServer,
     channel_id: int,
@@ -217,9 +216,7 @@ def bulk_upsert_discord_users(
     # Fetch existing profiles in one query
     existing = {
         p.discord_user_id: p
-        for p in DiscordProfile.objects.filter(
-            discord_user_id__in=list(unique.keys())
-        )
+        for p in DiscordProfile.objects.filter(discord_user_id__in=list(unique.keys()))
     }
 
     result = {}

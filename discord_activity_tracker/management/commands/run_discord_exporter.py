@@ -214,9 +214,7 @@ class Command(BaseCommand):
                     data = parse_exported_json(json_path)
                     ch = data.get("channel", {})
                     msg_count = len(data.get("messages", []))
-                    self.stdout.write(
-                        f"  #{ch.get('name', '?')}: {msg_count} messages"
-                    )
+                    self.stdout.write(f"  #{ch.get('name', '?')}: {msg_count} messages")
                 return
 
             import asyncio
@@ -235,11 +233,7 @@ class Command(BaseCommand):
                     self.stdout.write(
                         f"  [{i}/{len(json_files)}] #{ch_name}: {msg_count} messages"
                     )
-                    asyncio.run(
-                        self._persist_exported_data(
-                            guild_id, [channel_data]
-                        )
-                    )
+                    asyncio.run(self._persist_exported_data(guild_id, [channel_data]))
                     json_path.unlink()
                 except Exception as e:
                     logger.error(f"Failed to process {json_path.name}: {e}")
