@@ -48,6 +48,16 @@ def _resolve_boost_header(header_path: str):
     return None
 
 
+def _resolve_boost_headers_bulk(header_paths: set[str]) -> dict[str, object]:
+    """Resolve a set of Boost include paths to BoostFile instances in one pass.
+
+    Returns a dict ``{header_path: BoostFile | None}``.  Deduplicates the
+    incoming paths so each unique header causes at most one DB lookup instead
+    of one lookup per file occurrence (mirrors old ``get_or_set_header_ids_bulk``).
+    """
+    return {path: _resolve_boost_header(path) for path in header_paths}
+
+
 def process_single_repo(
     client,
     repo_result: RepoSearchResult,
@@ -92,17 +102,32 @@ def process_single_repo(
         existing_keys = {(u.boost_header_id, u.file_path_id): u for u in existing_usages}
         seen_keys: set[tuple[int | None, int]] = set()
 
-        # Collect (boost_header, file_path, last_commit_date) for bulk upsert; handle missing headers in loop
-        bulk_usage_items: list[tuple] = []
-
+        # --- Pass 1: collect file/header data without touching the DB ---
+        # This mirrors old process_boost_usage_files which gathered all headers
+        # first and then called get_or_set_header_ids_bulk in one shot.
+        file_header_map: list[tuple] = []   # (file_result, [header_path, ...])
+        all_header_paths: set[str] = set()
         for file_result in file_results_for_repo:
-            source_file, _ = create_or_update_github_file(github_repo, file_result.file_path)
             header_paths = extract_boost_includes(file_result.content or "")
             if not header_paths:
                 header_paths = list(file_result.boost_headers or [])
+            file_header_map.append((file_result, header_paths))
+            all_header_paths.update(header_paths)
+
+        # --- Pass 2: resolve all unique header paths in one bulk call ---
+        # Each unique path causes at most one DB query instead of one per occurrence.
+        header_cache = _resolve_boost_headers_bulk(all_header_paths)
+
+        # --- Pass 3: persist per-file results using the cached header map ---
+        # Collect (boost_header, file_path, last_commit_date) for bulk upsert;
+        # handle missing headers in the same loop.
+        bulk_usage_items: list[tuple] = []
+
+        for file_result, header_paths in file_header_map:
+            source_file, _ = create_or_update_github_file(github_repo, file_result.file_path)
 
             for header_path in header_paths:
-                boost_header = _resolve_boost_header(header_path)
+                boost_header = header_cache.get(header_path)
                 if boost_header is None:
                     _, _, created_tmp = get_or_create_missing_header_usage(
                         repo=ext_repo,

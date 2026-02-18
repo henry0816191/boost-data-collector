@@ -21,6 +21,7 @@ from django.core.management.base import BaseCommand
 from django.utils.dateparse import parse_datetime
 
 from boost_usage_tracker.models import BoostExternalRepository
+from github_activity_tracker.models import GitHubRepository
 from boost_usage_tracker.boost_searcher import (
     BOOST_INCLUDE_SEARCH_BATCH_SIZE,
     search_boost_include_files_batch,
@@ -187,15 +188,6 @@ def task_monitor_content(
         client, since, until, date_field="pushed", min_stars=min_stars,
     )
 
-    # Deduplicate
-    seen: set[str] = set()
-    unique: list[RepoSearchResult] = []
-    for r in repo_results:
-        if r.full_name not in seen:
-            seen.add(r.full_name)
-            unique.append(r)
-    repo_results = unique
-
     logger.info("Found %d repos pushed in date range", len(repo_results))
 
     if dry_run:
@@ -226,31 +218,64 @@ def task_monitor_stars(
     now = datetime.now(timezone.utc)
     client = get_github_client(use="scraping")
 
-    # Repos already tracked — skip these
-    tracked_names: set[str] = set(
-        BoostExternalRepository.objects.values_list("repo_name", flat=True)
-    )
+    # Load all already-tracked repos with their current star counts.
+    # full_name is "owner/repo_name"; map to (repo_pk, current_stars) so we can
+    # detect star changes without a second DB round-trip.
+    tracked_repos: dict[str, tuple[int, int]] = {
+        f"{owner}/{repo}": (pk, stars)
+        for pk, owner, repo, stars in BoostExternalRepository.objects.values_list(
+            "githubrepository_ptr_id",
+            "owner_account__username",
+            "repo_name",
+            "stars",
+        )
+    }
 
     start_date = CREATION_START_DEFAULT
     if dry_run:
         start_date = now - timedelta(days=30)
 
     new_repos: list[RepoSearchResult] = []
+    stars_to_update: dict[int, int] = {}  # {repo_pk: new_stars} for tracked repos whose stars changed
+
     results = search_repos_with_date_splitting(
         client, start_date, now, date_field="created", min_stars=min_stars,
     )
     for r in results:
-        if r.full_name not in tracked_names:
+        if r.full_name not in tracked_repos:
             new_repos.append(r)
-            tracked_names.add(r.full_name)  # avoid cross-range dups
+            # Mark as seen so cross-range duplicates are not double-processed.
+            tracked_repos[r.full_name] = (-1, r.stars)
+        else:
+            repo_pk, current_stars = tracked_repos[r.full_name]
+            if repo_pk != -1 and r.stars != current_stars:
+                stars_to_update[repo_pk] = r.stars
+                # Update local cache to avoid overwriting with an older range value.
+                tracked_repos[r.full_name] = (repo_pk, r.stars)
 
-    logger.info("Found %d new repos not yet tracked", len(new_repos))
+    logger.info(
+        "Found %d new repos not yet tracked; %d tracked repos have updated star counts",
+        len(new_repos),
+        len(stars_to_update),
+    )
+
+    # Bulk-update star counts for already-tracked repos where the count changed.
+    if stars_to_update and not dry_run:
+        repos_to_refresh = list(
+            GitHubRepository.objects.filter(pk__in=stars_to_update.keys())
+        )
+        for repo_obj in repos_to_refresh:
+            repo_obj.stars = stars_to_update[repo_obj.pk]
+        GitHubRepository.objects.bulk_update(repos_to_refresh, ["stars"])
+        logger.info("Bulk-updated stars for %d repos", len(repos_to_refresh))
 
     if dry_run:
         for r in new_repos[:20]:
-            logger.info("  %s (%s stars)", r.full_name, r.stars)
+            logger.info("  new: %s (%s stars)", r.full_name, r.stars)
         if len(new_repos) > 20:
-            logger.info("  … and %d more", len(new_repos) - 20)
+            logger.info("  … and %d more new", len(new_repos) - 20)
+        for pk, new_stars in list(stars_to_update.items())[:20]:
+            logger.info("  stars changed: repo_pk=%d → %d stars", pk, new_stars)
         return
 
     totals = _run_boost_search_stage(

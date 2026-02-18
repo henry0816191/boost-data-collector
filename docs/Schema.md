@@ -123,6 +123,7 @@ erDiagram
     License ||--o{ RepoLicense : "used_in"
 
     GitHubRepository {
+        int id PK
         int owner_account_id FK
         string repo_name "IX"
         int stars
@@ -459,7 +460,6 @@ erDiagram
     BoostUsage ||--o{ BoostMissingHeaderTmp : "temporary missing header"
 
     BoostExternalRepository {
-        int id PK
         string boost_version "IX"
         boolean is_boost_embedded
         boolean is_boost_used

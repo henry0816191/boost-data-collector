@@ -122,23 +122,21 @@ def generate_date_ranges(
 
 def _process_date_range(
     client: GitHubAPIClient,
-    start_date: datetime,
-    end_date: datetime,
-    date_field: str,
-    language: str,
-    min_stars: int,
-    second_created_range: Optional[tuple[datetime, datetime]] = None,
+    first_range: tuple[datetime, datetime],
+    second_range: Optional[tuple[datetime, datetime]] = None,
+    date_field: str = "pushed",
+    language: str = "C++",
+    min_stars: int = 10,
 ) -> list[RepoSearchResult]:
     """Process a single date range; recursively split when total_count > 1000."""
     primary_str = (
-        f"{start_date.strftime('%Y-%m-%d')}..{end_date.strftime('%Y-%m-%d')}"
+        f"{first_range[0].strftime('%Y-%m-%d')}..{first_range[1].strftime('%Y-%m-%d')}"
     )
     query = f"language:{language} stars:>{min_stars} {date_field}:{primary_str}"
-    if second_created_range:
-        second_start, second_end = second_created_range
+    if second_range:
         query += (
-            f" created:{second_start.strftime('%Y-%m-%d')}"
-            f"..{second_end.strftime('%Y-%m-%d')}"
+            f" created:{second_range[0].strftime('%Y-%m-%d')}"
+            f"..{second_range[1].strftime('%Y-%m-%d')}"
         )
 
     time.sleep(SEARCH_DELAY)
@@ -161,83 +159,40 @@ def _process_date_range(
     logger.info("  %s %s: %d repos", date_field, primary_str, total_count)
 
     if total_count > 1000:
-        days_diff = (end_date - start_date).days
-        second_start_opt: Optional[datetime] = None
-        second_end_opt: Optional[datetime] = None
-        second_diff = 0
-        second_mid: Optional[datetime] = None
-
-        if second_created_range:
-            second_start_opt, second_end_opt = second_created_range
-            second_diff = (second_end_opt - second_start_opt).days
-            second_mid = second_start_opt + timedelta(days=second_diff // 2)
-        elif days_diff <= 0:
-            second_start_opt = CREATION_START_DEFAULT
-            second_end_opt = datetime.now(timezone.utc)
-            second_diff = (second_end_opt - second_start_opt).days
-            second_mid = second_start_opt + timedelta(days=second_diff // 2)
-
+        first_range_1 = first_range
+        first_range_2 = first_range
+        second_range_1 = second_range
+        second_range_2 = second_range
+        days_diff = (first_range[1] - first_range[0]).days
         if days_diff > 0:
-            mid_date = start_date + timedelta(days=days_diff // 2)
-            first_second: Optional[tuple[datetime, datetime]] = None
-            second_second: Optional[tuple[datetime, datetime]] = None
-            if (
-                second_start_opt is not None
-                and second_mid is not None
-                and second_end_opt is not None
-            ):
-                first_second = (second_start_opt, second_mid + timedelta(days=1))
-                second_second = (second_mid + timedelta(days=1), second_end_opt)
-            repos1 = _process_date_range(
-                client,
-                start_date,
-                mid_date,
-                date_field,
-                language,
-                min_stars,
-                second_created_range=first_second,
-            )
-            repos2 = _process_date_range(
-                client,
-                mid_date + timedelta(days=1),
-                end_date,
-                date_field,
-                language,
-                min_stars,
-                second_created_range=second_second,
-            )
-            seen = {r.full_name for r in repos1}
-            for r in repos2:
-                if r.full_name not in seen:
-                    repos1.append(r)
-                    seen.add(r.full_name)
-            return repos1
+            mid_date = first_range[0] + timedelta(days=days_diff // 2)
+            first_range_1 = (first_range[0], mid_date)
+            first_range_2 = (mid_date + timedelta(days=1), first_range[1])
+        else:
+            if not second_range:
+                second_range = (CREATION_START_DEFAULT, datetime.now(timezone.utc))
+            second_diff = (second_range[1] - second_range[0]).days
+            if second_diff > 0:
+                second_mid = second_range[0] + timedelta(days=second_diff // 2)
+                second_range_1 = (second_range[0], second_mid)
+                second_range_2 = (second_mid + timedelta(days=1), second_range[1])
 
-        if (
-            second_diff > 0
-            and second_start_opt is not None
-            and second_mid is not None
-            and second_end_opt is not None
-        ):
-            first_second = (second_start_opt, second_mid + timedelta(days=1))
-            second_second = (second_mid + timedelta(days=1), second_end_opt)
+        if days_diff > 0 or second_diff > 0:
             repos1 = _process_date_range(
-                client,
-                start_date,
-                end_date,
-                date_field,
-                language,
-                min_stars,
-                second_created_range=first_second,
+                client = client,
+                first_range = first_range_1,
+                date_field = date_field,
+                language = language,
+                min_stars = min_stars,
+                second_range = second_range_1,
             )
             repos2 = _process_date_range(
-                client,
-                start_date,
-                end_date,
-                date_field,
-                language,
-                min_stars,
-                second_created_range=second_second,
+                client = client,
+                first_range = first_range_2,
+                date_field = date_field,
+                language = language,
+                min_stars = min_stars,
+                second_range = second_range_2,
             )
             seen = {r.full_name for r in repos1}
             for r in repos2:
@@ -278,12 +233,11 @@ def search_repos_with_date_splitting(
         )
         chunk = _process_date_range(
             client,
-            range_start,
-            range_end,
-            date_field,
-            language,
-            min_stars,
-            second_created_range=second_created_range,
+            first_range=(range_start, range_end),
+            date_field = date_field,
+            language = language,
+            min_stars = min_stars,
+            second_range = second_created_range,
         )
         total_repos.extend(chunk)
 
