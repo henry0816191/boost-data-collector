@@ -1,3 +1,4 @@
+from unittest.mock import patch
 """Unit tests for boost_library_usage_dashboard.analyzer core logic."""
 
 from pathlib import Path
@@ -105,10 +106,27 @@ def test_get_repository_count_by_year_handles_empty_or_missing_values():
     assert out == {"2020": 2}
 
 
-def test_load_repository_count_from_md_db_missing_file_returns_empty():
+def test_collect_top_repositories_handles_mixed_value_types():
     analyzer = _make_analyzer()
-    analyzer.base_dir = Path("/tmp/definitely-not-existing-folder")
-    out = analyzer._load_repository_count_from_md_db({"2020": 3})
+    analyzer.repo_info = [
+        {"repo_name": "a/b", "stars": 10, "usage_count": 3, "created_at": "2024-01-01T00:00:00"},
+        {"repo_name": "c/d", "stars": 5, "usage_count": "", "created_at": ""},
+        {"repo_name": "e/f", "stars": 20, "usage_count": 11, "created_at": "2025-01-01T00:00:00"},
+        {"repo_name": "g/h", "stars": None, "usage_count": None, "created_at": None},
+    ]
+    out = analyzer._collect_top_repositories_for_dashboard()
+    assert out["top20_by_stars"][0]["repo_name"] == "e/f"
+    assert out["top20_by_usage"][0]["repo_name"] == "e/f"
+    assert out["top20_by_created"][0]["repo_name"] == "e/f"
+
+
+def test_load_repository_count_from_db_missing_model_returns_empty():
+    analyzer = _make_analyzer()
+    with patch(
+        "boost_library_usage_dashboard.analyzer.apps.get_model",
+        side_effect=LookupError("missing"),
+    ):
+        out = analyzer._load_repository_count_from_db({"2020": 3})
     assert out["repos_by_year_boost_rate"] == []
     assert out["language_comparison_data"] == {}
 
