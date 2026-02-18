@@ -13,7 +13,6 @@ class DiscordServer(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "discord_activity_tracker_discordserver"
         ordering = ["server_name"]
 
     def __str__(self):
@@ -32,7 +31,6 @@ class DiscordUser(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "discord_activity_tracker_discorduser"
         ordering = ["username"]
 
     def __str__(self):
@@ -59,7 +57,6 @@ class DiscordChannel(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "discord_activity_tracker_discordchannel"
         ordering = ["server", "position", "channel_name"]
         indexes = [
             models.Index(fields=["server", "channel_name"]),
@@ -98,7 +95,6 @@ class DiscordMessage(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "discord_activity_tracker_discordmessage"
         ordering = ["channel", "message_created_at"]
         indexes = [
             models.Index(fields=["channel", "message_created_at"]),
@@ -126,7 +122,6 @@ class DiscordReaction(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "discord_activity_tracker_discordreaction"
         constraints = [
             models.UniqueConstraint(
                 fields=["message", "emoji"],

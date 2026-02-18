@@ -28,7 +28,6 @@ class Identity(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "cppa_user_tracker_identity"
         verbose_name = "Identity"
         verbose_name_plural = "Identities"
         ordering = ["id"]
@@ -43,7 +42,6 @@ class TmpIdentity(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "cppa_user_tracker_tmpidentity"
         ordering = ["id"]
         verbose_name = "Temporary identity"
         verbose_name_plural = "Temporary identities"
@@ -68,7 +66,6 @@ class BaseProfile(models.Model):
 
     class Meta:
         abstract = False
-        db_table = "cppa_user_tracker_baseprofile"
 
 
 class TempProfileIdentityRelation(models.Model):
@@ -90,7 +87,6 @@ class TempProfileIdentityRelation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "cppa_user_tracker_tempprofileidentityrelation"
         ordering = ["id"]
         verbose_name = "Temporary profile-identity relation"
         verbose_name_plural = "Temporary profile-identity relations"
@@ -110,9 +106,6 @@ class Email(models.Model):
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "cppa_user_tracker_email"
 
 
 class GitHubAccount(BaseProfile):
@@ -136,9 +129,6 @@ class GitHubAccount(BaseProfile):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        db_table = "cppa_user_tracker_githubaccount"
-
 
 class SlackUser(BaseProfile):
     """Profile for Slack; extends BaseProfile."""
@@ -154,9 +144,6 @@ class SlackUser(BaseProfile):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        db_table = "cppa_user_tracker_slackuser"
-
 
 class MailingListProfile(BaseProfile):
     """Profile for mailing list; extends BaseProfile."""
@@ -169,9 +156,6 @@ class MailingListProfile(BaseProfile):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        db_table = "cppa_user_tracker_mailinglistprofile"
-
 
 class WG21PaperAuthorProfile(BaseProfile):
     """Profile for WG21 paper authors; extends BaseProfile."""
@@ -183,9 +167,6 @@ class WG21PaperAuthorProfile(BaseProfile):
     display_name = models.CharField(max_length=255, db_index=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "cppa_user_tracker_wg21paperauthorprofile"
 
 
 class DiscordProfile(BaseProfile):
@@ -202,6 +183,3 @@ class DiscordProfile(BaseProfile):
     is_bot = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = "cppa_user_tracker_discordprofile"
