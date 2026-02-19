@@ -160,6 +160,11 @@ else:
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 _LOG_FILE_PATH = LOG_DIR / LOG_FILE
 
+# Error notification settings (Discord/Slack)
+ENABLE_ERROR_NOTIFICATIONS = env.bool("ENABLE_ERROR_NOTIFICATIONS", default=False)
+DISCORD_WEBHOOK_URL = env("DISCORD_WEBHOOK_URL", default="")
+SLACK_WEBHOOK_URL = env("SLACK_WEBHOOK_URL", default="")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -214,3 +219,21 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=1, minute=0),
     },
 }
+
+# Conditionally add Discord/Slack handlers for error notifications
+if ENABLE_ERROR_NOTIFICATIONS:
+    if DISCORD_WEBHOOK_URL:
+        LOGGING["handlers"]["discord"] = {
+            "class": "config.logging_handlers.DiscordHandler",
+            "webhook_url": DISCORD_WEBHOOK_URL,
+            "level": "ERROR",
+        }
+        LOGGING["root"]["handlers"].append("discord")
+
+    if SLACK_WEBHOOK_URL:
+        LOGGING["handlers"]["slack"] = {
+            "class": "config.logging_handlers.SlackHandler",
+            "webhook_url": SLACK_WEBHOOK_URL,
+            "level": "ERROR",
+        }
+        LOGGING["root"]["handlers"].append("slack")
