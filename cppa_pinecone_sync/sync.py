@@ -62,7 +62,7 @@ def _build_documents_from_raw(raw_documents: list[dict[str, Any]]) -> list[Any]:
     for item in raw_documents:
         content = item.get("content", "")
         metadata = dict(item.get("metadata") or {})
-        ids_str = metadata.get("ids", "")
+        ids_str = metadata.get("ids") or item.get("ids", "") or ""
 
         if "doc_id" not in metadata and "url" not in metadata:
             logger.warning(
@@ -89,17 +89,17 @@ def _extract_new_failed_ids(result: dict[str, Any]) -> list[str]:
 
 
 def sync_to_pinecone(
-    sync_type: str,
+    app_id: int,
     namespace: str,
     preprocess_fn: PreprocessFn,
 ) -> dict[str, Any]:
-    """Run a full Pinecone sync cycle for *sync_type*.
+    """Run a full Pinecone sync cycle for *app_id*.
 
     This is the **public API** that other apps call.
 
     Args:
-        sync_type: Identifies the data source (e.g. ``"slack"``, ``"mailing_list"``,
-            ``"wg21"``). Used as the key in PineconeFailList and PineconeSyncStatus.
+        app_id: Identifies the data source (e.g. 1, 2, 3). Stored as str(app_id) in
+            PineconeFailList and PineconeSyncStatus.
         namespace: Pinecone namespace to upsert into.
         preprocess_fn: A callable returning ``(list[dict], is_chunked)``. Each dict
             must have ``content`` and ``metadata``; ``metadata`` must contain
@@ -108,13 +108,14 @@ def sync_to_pinecone(
     Returns:
         dict with keys: upserted, total, failed_count, failed_ids, errors.
     """
-    logger.info("sync_to_pinecone: starting type=%s namespace=%s", sync_type, namespace)
+    sync_type = str(app_id)
+    logger.info("sync_to_pinecone: starting app_id=%s namespace=%s", app_id, namespace)
 
     failed_ids = services.get_failed_ids(sync_type)
     final_sync_at = services.get_final_sync_at(sync_type)
     logger.debug(
-        "type=%s: %d previously failed IDs, final_sync_at=%s",
-        sync_type,
+        "app_id=%s: %d previously failed IDs, final_sync_at=%s",
+        app_id,
         len(failed_ids),
         final_sync_at,
     )
@@ -122,7 +123,7 @@ def sync_to_pinecone(
     raw_documents, is_chunked = preprocess_fn(failed_ids, final_sync_at)
     if not raw_documents:
         logger.info(
-            "sync_to_pinecone: preprocess returned 0 documents for type=%s", sync_type
+            "sync_to_pinecone: preprocess returned 0 documents for app_id=%s", app_id
         )
         services.update_sync_status(sync_type)
         return _empty_sync_result()
@@ -142,7 +143,7 @@ def sync_to_pinecone(
     if new_failed_ids:
         services.record_failed_ids(sync_type, new_failed_ids)
         logger.warning(
-            "type=%s: %d source IDs recorded as failed", sync_type, len(new_failed_ids)
+            "app_id=%s: %d source IDs recorded as failed", app_id, len(new_failed_ids)
         )
 
     services.update_sync_status(sync_type)
@@ -155,8 +156,8 @@ def sync_to_pinecone(
         "errors": result.get("errors", []),
     }
     logger.info(
-        "sync_to_pinecone: type=%s finished — upserted=%d, total=%d, failed=%d",
-        sync_type,
+        "sync_to_pinecone: app_id=%s finished — upserted=%d, total=%d, failed=%d",
+        app_id,
         summary["upserted"],
         summary["total"],
         summary["failed_count"],

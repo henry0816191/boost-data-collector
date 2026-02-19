@@ -10,7 +10,7 @@ Other apps call:
 from cppa_pinecone_sync.sync import sync_to_pinecone
 
 result = sync_to_pinecone(
-    sync_type="your_source",   # e.g. "slack", "mailing_list", "wg21"
+    app_id=1,                  # e.g. 1, 2, 3 (stored as str(app_id) in DB)
     namespace="your_namespace",
     preprocess_fn=your_preprocess_fn,
 )
@@ -18,7 +18,7 @@ result = sync_to_pinecone(
 
 The sync pipeline will:
 
-1. Load **failed IDs** and **last sync time** for `sync_type` from the database.
+1. Load **failed IDs** and **last sync time** for this app (by `app_id`) from the database.
 2. Call your **preprocess function** with those two inputs.
 3. Upsert the documents you return to Pinecone (with chunking and validation as needed).
 4. Update the fail list and sync status in the database.
@@ -39,7 +39,7 @@ def your_preprocess_fn(
 ```
 
 - **`failed_ids`** — Source record IDs that failed in a previous upsert. You should **include these again** in this run so they can be retried. The sync app will clear and repopulate the fail list after the run based on this run’s failures.
-- **`final_sync_at`** — Timestamp of the last successful sync for this `sync_type`, or `None` if never synced. Use it to fetch only **new or updated** records (e.g. `WHERE updated_at > final_sync_at`) for incremental sync.
+- **`final_sync_at`** — Timestamp of the last successful sync for this app, or `None` if never synced. Use it to fetch only **new or updated** records (e.g. `WHERE updated_at > final_sync_at`) for incremental sync.
 - **Return** — A 2-tuple:
   - **`list_of_document_dicts`** — List of raw document dicts (see shape below). Can be empty.
   - **`is_chunked`** — `True` if each dict is already a final chunk (no further splitting). `False` if documents are whole-document and the pipeline should chunk them (e.g. with `RecursiveCharacterTextSplitter`).

@@ -9,9 +9,9 @@ import pytest
 
 
 @pytest.fixture
-def sync_type():
-    """Default sync_type for tests."""
-    return "test_type"
+def app_id():
+    """Default app_id for sync_to_pinecone tests (stored as str(app_id) in DB)."""
+    return 1
 
 
 @pytest.fixture
