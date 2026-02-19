@@ -210,6 +210,217 @@ class GitHubAPIClient:
                 logger.error("Request error on POST %s: %s", endpoint, e)
                 raise
 
+    def rest_put(
+        self, endpoint: str, json_data: Optional[dict] = None
+    ) -> dict:
+        """PUT to REST API with rate limit and connection error handling."""
+        self._check_rate_limit()
+        url = f"{self.rest_base_url}{endpoint}"
+        json_data = json_data or {}
+
+        for attempt in range(self.max_retries):
+            try:
+                response = self.session.put(url, json=json_data, timeout=30)
+
+                if response.status_code == 403:
+                    if "X-RateLimit-Remaining" in response.headers:
+                        remaining = int(
+                            response.headers["X-RateLimit-Remaining"]
+                        )
+                        if remaining == 0:
+                            reset_time = int(
+                                response.headers["X-RateLimit-Reset"]
+                            )
+                            wait_time = (
+                                reset_time - int(time.time()) + 10
+                            )
+                            self._handle_rate_limit(wait_time)
+                            return self.rest_put(endpoint, json_data)
+
+                response.raise_for_status()
+                if "X-RateLimit-Remaining" in response.headers:
+                    self.rate_limit_remaining = int(
+                        response.headers["X-RateLimit-Remaining"]
+                    )
+                    self.rate_limit_reset_time = int(
+                        response.headers["X-RateLimit-Reset"]
+                    )
+                return response.json()
+
+            except (ConnectionError, ProtocolError, Timeout) as e:
+                if attempt < self.max_retries - 1:
+                    wait_time = self.retry_delay * (2**attempt)
+                    logger.warning(
+                        "Connection error on PUT %s (attempt %s/%s): %s",
+                        endpoint,
+                        attempt + 1,
+                        self.max_retries,
+                        e,
+                    )
+                    time.sleep(wait_time)
+                else:
+                    raise ConnectionException(
+                        f"Connection error after {self.max_retries} retries for PUT {endpoint}: {e}"
+                    )
+            except requests.exceptions.HTTPError as e:
+                logger.error(
+                    "HTTP error on PUT %s: %s - %s",
+                    endpoint,
+                    getattr(e.response, "status_code", None),
+                    e,
+                )
+                raise
+            except RequestException as e:
+                logger.error("Request error on PUT %s: %s", endpoint, e)
+                raise
+
+    def rest_delete(
+        self, endpoint: str, json_data: Optional[dict] = None
+    ) -> Optional[dict]:
+        """DELETE to REST API (JSON body). Returns response JSON or None for 204."""
+        self._check_rate_limit()
+        url = f"{self.rest_base_url}{endpoint}"
+        json_data = json_data or {}
+
+        for attempt in range(self.max_retries):
+            try:
+                response = self.session.delete(
+                    url, json=json_data, timeout=30
+                )
+
+                if response.status_code == 403:
+                    if "X-RateLimit-Remaining" in response.headers:
+                        remaining = int(
+                            response.headers["X-RateLimit-Remaining"]
+                        )
+                        if remaining == 0:
+                            reset_time = int(
+                                response.headers["X-RateLimit-Reset"]
+                            )
+                            wait_time = (
+                                reset_time - int(time.time()) + 10
+                            )
+                            self._handle_rate_limit(wait_time)
+                            return self.rest_delete(endpoint, json_data)
+
+                response.raise_for_status()
+                if "X-RateLimit-Remaining" in response.headers:
+                    self.rate_limit_remaining = int(
+                        response.headers["X-RateLimit-Remaining"]
+                    )
+                    self.rate_limit_reset_time = int(
+                        response.headers["X-RateLimit-Reset"]
+                    )
+                if response.status_code == 204:
+                    return None
+                return response.json()
+
+            except (ConnectionError, ProtocolError, Timeout) as e:
+                if attempt < self.max_retries - 1:
+                    wait_time = self.retry_delay * (2**attempt)
+                    logger.warning(
+                        "Connection error on DELETE %s (attempt %s/%s): %s",
+                        endpoint,
+                        attempt + 1,
+                        self.max_retries,
+                        e,
+                    )
+                    time.sleep(wait_time)
+                else:
+                    raise ConnectionException(
+                        f"Connection error after {self.max_retries} retries for DELETE {endpoint}: {e}"
+                    )
+            except requests.exceptions.HTTPError as e:
+                logger.error(
+                    "HTTP error on DELETE %s: %s - %s",
+                    endpoint,
+                    getattr(e.response, "status_code", None),
+                    e,
+                )
+                raise
+            except RequestException as e:
+                logger.error("Request error on DELETE %s: %s", endpoint, e)
+                raise
+
+    def get_file_sha(
+        self, owner: str, repo: str, path: str, ref: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Get the SHA of a file (for update/delete). Returns None if path is a dir or missing.
+        """
+        params = {} if not ref else {"ref": ref}
+        try:
+            data = self.rest_request(
+                f"/repos/{owner}/{repo}/contents/{path}", params=params
+            )
+        except requests.exceptions.HTTPError as e:
+            if getattr(e.response, "status_code", None) == 404:
+                return None
+            raise
+        if isinstance(data, list):
+            return None
+        return data.get("sha")
+
+    def create_or_update_file(
+        self,
+        owner: str,
+        repo: str,
+        path: str,
+        content_base64: str,
+        message: str,
+        branch: str = "main",
+        sha: Optional[str] = None,
+    ) -> dict:
+        """
+        Create or update a file via Contents API. Use client from get_github_client(use='write').
+        """
+        payload = {
+            "message": message,
+            "content": content_base64,
+            "branch": branch,
+        }
+        if sha:
+            payload["sha"] = sha
+        return self.rest_put(
+            f"/repos/{owner}/{repo}/contents/{path}", json_data=payload
+        )
+
+    def delete_file(
+        self,
+        owner: str,
+        repo: str,
+        path: str,
+        message: str,
+        branch: str = "main",
+    ) -> Optional[dict]:
+        """
+        Delete a file via Contents API. Returns response or None for 204.
+        """
+        sha = self.get_file_sha(owner, repo, path, ref=branch)
+        if not sha:
+            return None
+        return self.rest_delete(
+            f"/repos/{owner}/{repo}/contents/{path}",
+            json_data={"message": message, "sha": sha, "branch": branch},
+        )
+
+    def list_contents(
+        self,
+        owner: str,
+        repo: str,
+        path: str = "",
+        ref: Optional[str] = None,
+    ):
+        """
+        List directory contents. Returns API response (list or single file dict).
+        ref: branch/tag (default: default branch).
+        """
+        params = {} if not ref else {"ref": ref}
+        return self.rest_request(
+            f"/repos/{owner}/{repo}/contents/{path}" if path else f"/repos/{owner}/{repo}/contents",
+            params=params,
+        )
+
     def get_file_content(
         self, owner: str, repo: str, path: str, ref: Optional[str] = None
     ) -> tuple[bytes, Optional[str]]:
