@@ -15,8 +15,7 @@ from pathlib import Path
 from config.workspace import get_workspace_path
 
 _APP_SLUG = "boost_mailing_list_tracker"
-_RAW_APP_SLUG = "raw"
-_RAW_APP_NAME = "boost_mailing_list_app"
+_RAW_APP_SLUG = f"raw/{_APP_SLUG}"
 
 
 def get_workspace_root() -> Path:
@@ -42,7 +41,7 @@ def get_list_dir(list_name: str) -> Path:
 
 def get_raw_dir(list_name: str) -> Path:
     """Return workspace/raw/boost_mailing_list_app/<list_name>/; creates if missing. Raw scraped data is kept (not removed)."""
-    raw_root = get_workspace_path(_RAW_APP_SLUG) / _RAW_APP_NAME
+    raw_root = get_workspace_path(_RAW_APP_SLUG)
     safe_name = _safe_msg_id(list_name) or "unknown"
     path = raw_root / safe_name
     path.mkdir(parents=True, exist_ok=True)

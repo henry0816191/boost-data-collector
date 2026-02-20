@@ -114,7 +114,7 @@ def test_preprocesser_retries_failed_ids_even_if_old(
     )
     assert len(docs) == 1
     assert docs[0]["metadata"]["doc_id"] == "<retry@example.com>"
-    assert docs[0]["metadata"]["ids"] == "<retry@example.com>"
+    assert docs[0]["metadata"]["table_ids"] == retry_msg.pk
 
 
 @pytest.mark.django_db
@@ -174,17 +174,18 @@ def test_preprocesser_document_shape_and_metadata_fields(
     assert target["content"] != ""
     assert "metadata" in target
     assert target["metadata"]["doc_id"] == "<shape@example.com>"
-    assert target["metadata"]["ids"] == "<shape@example.com>"
+    assert target["metadata"]["table_ids"] == msg.pk
     assert target["metadata"]["type"] == "mailing"
     assert target["metadata"]["thread_id"] == "thread-1"
     assert target["metadata"]["parent_id"] == "<parent@example.com>"
     assert target["metadata"]["author"] == mailing_list_profile.display_name
     assert target["metadata"]["subject"] == "Shape subject"
+    assert target["metadata"]["list_name"] == default_list_name
     assert target["metadata"]["timestamp"] == int(sample_sent_at.timestamp())
-    # New preprocessor keeps ids for retry tracking while preserving old style.
-    assert target["metadata"]["ids"] == "<shape@example.com>"
+    # table_ids should be DB identity (not msg_id string).
+    assert target["metadata"]["table_ids"] == msg.pk
+    assert "ids" not in target["metadata"]
     assert "msg_id" not in target["metadata"]
-    assert "list_name" not in target["metadata"]
     assert "source" not in target["metadata"]
     assert "sender_id" not in target["metadata"]
     assert "Subject: Shape subject" in target["content"]

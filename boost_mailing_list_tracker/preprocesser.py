@@ -52,7 +52,7 @@ def _build_document_content(message: MailingListMessage) -> str:
         parts.append(f"List: {message.list_name}")
     if message.sent_at:
         parts.append(f"Sent At: {message.sent_at.isoformat()}")
-
+    
     body = (message.content or "").strip()
     if body:
         parts.append("")
@@ -118,7 +118,8 @@ def preprocess_mailing_list_for_pinecone(
             "author": sender_name,
             "timestamp": int(message.sent_at.timestamp()),
             "parent_id": message.parent_id or "",
-            "ids": msg_id,
+            # ids should reference DB row identity for sync bookkeeping.
+            "table_ids": message.pk,
             "list_name": message.list_name or "",
         }
 

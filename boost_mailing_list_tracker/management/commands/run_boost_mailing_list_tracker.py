@@ -10,23 +10,57 @@ See docs/Workflow.md and docs/Workspace.md.
 
 import json
 import logging
+import os
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.utils.dateparse import parse_datetime
 
 from boost_mailing_list_tracker.fetcher import BOOST_LIST_URLS, fetch_all_emails
 from boost_mailing_list_tracker.models import MailingListMessage
+from boost_mailing_list_tracker.preprocesser import preprocess_mailing_list_for_pinecone
 from boost_mailing_list_tracker.services import get_or_create_mailing_list_message
 from boost_mailing_list_tracker.workspace import (
+    get_raw_json_path,
     get_message_json_path,
     iter_existing_message_jsons,
 )
-from cppa_user_tracker.services import (
-    add_email,
-    get_or_create_mailing_list_profile_by_email,
-)
+from cppa_user_tracker.services import get_or_create_mailing_list_profile
 
 logger = logging.getLogger(__name__)
+PINECONE_NAMESPACE_ENV_KEY = "BOOST_MAILING_LIST_PINECONE_NAMESPACE"
+
+def _run_pinecone_sync(app_id: str, namespace: str) -> None:
+    """
+    Trigger cppa-pinecone-sync command if available.
+    """
+    if not app_id:
+        logger.warning("Pinecone sync skipped: --pinecone-app-id is empty.")
+        return
+    if not namespace:
+        logger.warning(
+            "Pinecone sync skipped: namespace is empty (set --pinecone-namespace or %s).",
+            PINECONE_NAMESPACE_ENV_KEY,
+        )
+        return
+
+    try:
+        call_command(
+            "run_cppa_pinecone_sync",
+            app_id=app_id,
+            namespace=namespace,
+            preprocess_fn=preprocess_mailing_list_for_pinecone,
+        )
+        logger.info(
+            "run_boost_mailing_list_tracker: pinecone sync completed (app_id=%s, namespace=%s)",
+            app_id,
+            namespace,
+        )
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning(
+            "Pinecone sync skipped/failed (run_cppa_pinecone_sync unavailable or errored): %s",
+            exc,
+        )
 
 
 def _persist_email(email_data: dict) -> tuple[bool, bool]:
@@ -43,8 +77,8 @@ def _persist_email(email_data: dict) -> tuple[bool, bool]:
 
     sender_name = email_data.get("sender_name", "") or ""
     sender_address = email_data.get("sender_address", "") or ""
-    profile, _ = get_or_create_mailing_list_profile_by_email(
-        email_address=sender_address,
+    profile, _ = get_or_create_mailing_list_profile(
+        email=sender_address,
         display_name=sender_name,
     )
 
@@ -102,11 +136,25 @@ class Command(BaseCommand):
             action="store_true",
             help="Fetch and report counts but do not write to DB or workspace.",
         )
+        parser.add_argument(
+            "--pinecone-app-id",
+            type=str,
+            default="",
+            help="App ID passed to run_cppa_pinecone_sync (usually provided by workflow).",
+        )
+        parser.add_argument(
+            "--pinecone-namespace",
+            type=str,
+            default=os.getenv(PINECONE_NAMESPACE_ENV_KEY, ""),
+            help=f"Pinecone namespace for sync. Default from env {PINECONE_NAMESPACE_ENV_KEY}.",
+        )
 
     def handle(self, *args, **options):
         start_date = options["start_date"]
         end_date = options["end_date"]
         dry_run = options["dry_run"]
+        pinecone_app_id = (options.get("pinecone_app_id") or "").strip()
+        pinecone_namespace = (options.get("pinecone_namespace") or "").strip()
 
         logger.info(
             "run_boost_mailing_list_tracker: starting (start_date=%s, end_date=%s, dry_run=%s)",
@@ -133,7 +181,7 @@ class Command(BaseCommand):
                         total_existing,
                     )
 
-            # Phase 2: fetch from API, write JSON, persist to DB, remove file
+            # Phase 2: fetch from API
             self.stdout.write("Fetching emails from Boost mailing list archives...")
             emails = fetch_all_emails(start_date=start_date, end_date=end_date)
 
@@ -152,6 +200,7 @@ class Command(BaseCommand):
                 )
                 return
 
+            # Phase 3: process new JSONs in workspace
             created_count = 0
             skipped_count = 0
 
@@ -161,6 +210,16 @@ class Command(BaseCommand):
                 if not msg_id:
                     skipped_count += 1
                     continue
+
+                # Provisional raw archive for Phase 3:
+                # workspace/raw/boost_mailing_list_tracker/<list_name>/<msg_id>.json
+                # Keep these files (do not delete).
+                raw_path = get_raw_json_path(list_name, msg_id)
+                raw_path.parent.mkdir(parents=True, exist_ok=True)
+                raw_path.write_text(
+                    json.dumps(email_data, indent=2, default=str),
+                    encoding="utf-8",
+                )
 
                 # Write to workspace (like github_activity_tracker: save JSON then persist then remove)
                 json_path = get_message_json_path(list_name, msg_id)
@@ -187,6 +246,11 @@ class Command(BaseCommand):
                 "run_boost_mailing_list_tracker: finished; created=%d, skipped=%d",
                 created_count,
                 skipped_count,
+            )
+            # Phase 4: upsert to Pinecone as final processing.
+            _run_pinecone_sync(
+                app_id=pinecone_app_id,
+                namespace=pinecone_namespace,
             )
 
         except Exception as e:
