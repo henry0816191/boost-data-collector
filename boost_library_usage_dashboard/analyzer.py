@@ -264,7 +264,7 @@ class BoostUsageDashboardAnalyzer:
         repos_by_year: dict[str, int] = {}
         for repo in self.repo_info:
             year = (repo.get(time_field, "") or "")[:4]
-            if year:
+            if year and repo.get("affect_from_boost"):
                 repos_by_year[year] = repos_by_year.get(year, 0) + 1
         return repos_by_year
 
