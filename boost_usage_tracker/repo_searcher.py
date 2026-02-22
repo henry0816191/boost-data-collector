@@ -15,12 +15,10 @@ from github_ops.client import GitHubAPIClient
 logger = logging.getLogger(__name__)
 
 # Default second date range when splitting "created" (GitHub API limit)
-CREATION_START_DEFAULT = datetime(2008, 4, 1, tzinfo=timezone.utc)
-CREATION_INTERVAL_DAYS = 60  # chunk size for "created" range generation
+CREATION_START_DEFAULT = datetime(2018, 4, 1, tzinfo=timezone.utc)
+CREATION_INTERVAL_DAYS = 360  # chunk size for "created" range generation
 
 PER_PAGE = 100
-SEARCH_DELAY = 2.0  # seconds between search-API calls
-
 
 @dataclass
 class RepoSearchResult:
@@ -56,14 +54,12 @@ def _extract_repo_metadata(item: dict[str, Any]) -> RepoSearchResult:
 def _search_repos_by_query(
     client: GitHubAPIClient,
     query: str,
-    max_results: int = 0,
 ) -> list[RepoSearchResult]:
     """Search GitHub repositories with *query* (paginated, up to 1 000 results)."""
     repos: list[RepoSearchResult] = []
     page = 1
 
     while True:
-        time.sleep(SEARCH_DELAY)
         try:
             data = client.rest_request(
                 "/search/repositories",
@@ -88,9 +84,6 @@ def _search_repos_by_query(
             if meta.full_name:
                 repos.append(meta)
 
-        if 0 < max_results <= len(repos):
-            repos = repos[:max_results]
-            break
         if len(items) < PER_PAGE or page >= 10:
             break
         page += 1
@@ -139,7 +132,7 @@ def _process_date_range(
             f"..{second_range[1].strftime('%Y-%m-%d')}"
         )
 
-    time.sleep(SEARCH_DELAY)
+    # time.sleep(SEARCH_DELAY)
     try:
         probe = client.rest_request(
             "/search/repositories",
