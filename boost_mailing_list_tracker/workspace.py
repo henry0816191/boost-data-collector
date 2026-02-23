@@ -67,10 +67,10 @@ def get_message_json_path(list_name: str, msg_id: str) -> Path:
 
 def iter_existing_message_jsons(list_name: str):
     """Yield path for each messages/*.json under workspace/.../<list_name>/."""
-    messages_dir = get_workspace_root() / _safe_msg_id(list_name) / "messages"
+    messages_dir = get_workspace_root() / _safe_msg_id(list_name)
     if not messages_dir.is_dir():
         return
-    for path in messages_dir.glob("*.json"):
+    for path in messages_dir.rglob("*.json"):
         yield path
 
 
