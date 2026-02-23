@@ -45,7 +45,7 @@ class BoostUsageDashboardAnalyzer:
         self.stars_min_threshold = STARS_MIN_THRESHOLD
 
         self.version_info = list(BoostVersion.objects.all().order_by("version"))  # pylint: disable=no-member
-        self.version_name_list = [v.version for v in self.version_info]
+        self.version_name_list = [v.version.replace("boost-", "") for v in self.version_info]
         self.version_by_id = {v.id: v for v in self.version_info}
 
         self.repo_info: list[dict[str, Any]] = []
@@ -108,6 +108,8 @@ class BoostUsageDashboardAnalyzer:
         by_file_usage = self._calculate_library_metrics_by_file_usage(recent_years=5)
         by_repository = self._calculate_library_metrics_by_repository()
 
+        # libs = BoostLibrary.objects.select_related("repo").all().order_by("name")  # pylint: disable=no-member
+
         latest_version_id = self.version_info[-1].id if self.version_info else None
         libs_qs = BoostLibrary.objects.select_related("repo")  # pylint: disable=no-member
         if latest_version_id is not None:
@@ -115,6 +117,7 @@ class BoostUsageDashboardAnalyzer:
         else:
             libs_qs = libs_qs.none()
         libs = libs_qs.distinct().order_by("name")
+        logger.debug(f"Loaded {len(libs)} libraries. Latest version: {latest_version_id}")
         created_versions = {
             row["library_id"]: row["version__version"]
             for row in BoostLibraryVersion.objects.values("library_id").annotate(  # pylint: disable=no-member

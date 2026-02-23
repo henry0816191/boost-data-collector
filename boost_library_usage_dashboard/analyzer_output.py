@@ -10,10 +10,22 @@ from .analyzer_libraries import collect_libraries_page_data
 
 def _version_key(version: str) -> tuple[int, ...]:
     """Parse dotted numeric version (e.g. 1.84.0) for sorting/filtering."""
-    try:
-        return tuple(int(part) for part in str(version).split("."))
-    except ValueError:
-        return (0,)
+    if not version:
+        return (0, 0, 0)
+    parts = str(version).split(".")
+    out: list[int] = []
+    for part in parts[:3]:
+        number = "".join(c for c in part if c.isdigit())
+        out.append(int(number) if number else 0)
+    while len(out) < 3:
+        out.append(0)
+    return tuple(out)
+
+
+def _created_at_key(created_at: str) -> tuple[int, str]:
+    """Sort by version created date; unknown dates go last."""
+    value = str(created_at or "").strip()
+    return (1, "") if not value else (0, value)
 
 
 def collect_top_repositories_for_dashboard(repo_info: list[dict[str, Any]]) -> dict[str, Any]:
@@ -56,14 +68,22 @@ def collect_dashboard_data(analyzer: Any, stats: dict[str, Any]) -> None:
     dashboard_data["repos_by_year"] = stats["repos_by_year"]
     version_counts = stats["version_related_stats"]["distribution_by_version"]
     min_chart_version = "1.34.0"
-    dashboard_data["repos_by_version"] = sorted(
-        [
-            (version, confirmed + guessed)
-            for version, _, confirmed, guessed in version_counts
-            if _version_key(version) >= _version_key(min_chart_version)
-        ],
-        key=lambda x: _version_key(x[0]),
+    repos_by_version_rows: list[tuple[str, str, int]] = []
+    min_key = _version_key(min_chart_version)
+    for row in version_counts:
+        if not isinstance(row, (list, tuple)) or len(row) < 4:
+            continue
+        version = str(row[0] or "")
+        created_at = str(row[1] or "")
+        confirmed = int(row[2] or 0)
+        guessed = int(row[3] or 0)
+        if _version_key(version) >= min_key:
+            repos_by_version_rows.append((version, created_at, confirmed + guessed))
+
+    repos_by_version_rows.sort(
+        key=lambda x: (_created_at_key(x[1]), _version_key(x[0]))
     )
+    dashboard_data["repos_by_version"] = [(version, count) for version, _, count in repos_by_version_rows]
     dashboard_data["repos_by_year_boost_rate"] = stats["repos_by_year_boost_rate"]
     dashboard_data["language_comparison_data"] = stats["language_comparison_data"]
     dashboard_data["metrics_by_library"] = analyzer._filter_and_sort_libraries(  # noqa: SLF001  # pylint: disable=protected-access
