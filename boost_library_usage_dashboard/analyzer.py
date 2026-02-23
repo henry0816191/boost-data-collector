@@ -64,6 +64,7 @@ class BoostUsageDashboardAnalyzer:
             row["repo_id"]: row["usage_count"]
             for row in BoostUsage.objects.filter(  # pylint: disable=no-member
                 excepted_at__isnull=True,
+                repo__is_boost_used=True,
                 repo__githubrepository_ptr__stars__gte=self.stars_min_threshold,
             )
             .values("repo_id")
@@ -75,7 +76,10 @@ class BoostUsageDashboardAnalyzer:
                 "githubrepository_ptr",
                 "githubrepository_ptr__owner_account",
             )
-            .filter(githubrepository_ptr__stars__gte=self.stars_min_threshold)
+            .filter(
+                is_boost_used=True,
+                githubrepository_ptr__stars__gte=self.stars_min_threshold,
+            )
             .order_by("githubrepository_ptr__id")
         )
         for ext_repo in repos:
