@@ -16,6 +16,7 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.utils.dateparse import parse_datetime
 
+from boost_mailing_list_tracker.email_formatter import format_email
 from boost_mailing_list_tracker.fetcher import BOOST_LIST_URLS, fetch_all_emails
 from boost_mailing_list_tracker.models import MailingListMessage
 from boost_mailing_list_tracker.preprocesser import preprocess_mailing_list_for_pinecone
@@ -104,8 +105,10 @@ def _process_existing_workspace_json(list_name: str) -> int:
     for path in iter_existing_message_jsons(list_name):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            _persist_email(data)
-            path.unlink() 
+            formatted_data = format_email(data)
+            for formatted_email in formatted_data:
+                _persist_email(formatted_email)
+            path.unlink()
             count += 1
         except Exception as e:
             logger.exception("Failed to process %s: %s", path, e)

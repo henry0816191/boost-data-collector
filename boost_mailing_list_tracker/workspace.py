@@ -71,6 +71,8 @@ def iter_existing_message_jsons(list_name: str):
     if not messages_dir.is_dir():
         return
     for path in messages_dir.rglob("*.json"):
+        if path.name.startswith("."):
+            continue
         yield path
 
 
