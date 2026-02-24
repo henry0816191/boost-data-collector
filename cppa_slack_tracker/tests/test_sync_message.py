@@ -47,12 +47,12 @@ class TestMessagesByDay:
         assert result[date(2025, 1, 1)][0]["text"] == "hi"
 
     def test_message_created_and_edited_different_days_appears_twice(self):
-        # Created 2025-01-01, edited 2025-01-03
+        # Created 2025-01-01, edited 2025-01-03 (edited_ts = 2025-01-03 00:00 UTC)
         messages = [
             {
                 "ts": "1735689600",  # 2025-01-01 00:00 UTC
                 "text": "original",
-                "edited": {"ts": "1735948800"},  # 2025-01-03 00:00 UTC
+                "edited": {"ts": "1735862400"},  # 2025-01-03 00:00 UTC
             },
         ]
         start = date(2025, 1, 1)

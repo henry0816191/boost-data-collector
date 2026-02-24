@@ -49,9 +49,7 @@ def get_or_create_identity(
     """Get or create an Identity by display_name. If exists, updates description from defaults."""
     lookup = {"display_name": display_name}
     defaults = defaults or {"description": description}
-    identity, created = Identity.objects.get_or_create(
-        defaults=defaults, **lookup
-    )
+    identity, created = Identity.objects.get_or_create(defaults=defaults, **lookup)
     if (
         not created
         and "description" in defaults
@@ -261,9 +259,7 @@ def add_or_update_slack_user(user_data: dict[str, Any]) -> SlackUser:
         raise ValueError("Slack user ID ('id') is required")
     profile = user_data.get("profile") or {}
     username = (user_data.get("name") or "").strip()
-    display_name = (
-        user_data.get("real_name") or user_data.get("name") or ""
-    ).strip()
+    display_name = (user_data.get("real_name") or user_data.get("name") or "").strip()
     avatar_url = (profile.get("image_72") or "").strip()
     user, _ = SlackUser.objects.update_or_create(
         slack_user_id=user_id,
@@ -301,9 +297,7 @@ def get_or_create_unknown_github_account(
     ).first()
     if existing is not None:
         if email_str and not existing.emails.filter(email=email_str).exists():
-            add_email(
-                existing, email_str, is_primary=not existing.emails.exists()
-            )
+            add_email(existing, email_str, is_primary=not existing.emails.exists())
         return existing, False
     next_id = _get_next_negative_github_account_id()
     account = get_or_create_github_account(
