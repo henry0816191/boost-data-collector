@@ -102,6 +102,18 @@ class SlackAPIClient:
         """Get channel info by ID."""
         return self._request("GET", "conversations.info", params={"channel": channel})
 
+    def conversations_members(
+        self,
+        channel: str,
+        limit: int = 200,
+        cursor: Optional[str] = None,
+    ) -> dict:
+        """List member IDs in a channel. Returns members array and response_metadata.next_cursor."""
+        params = {"channel": channel, "limit": min(limit, 1000)}
+        if cursor:
+            params["cursor"] = cursor
+        return self._request("GET", "conversations.members", params=params)
+
     def conversations_history(
         self,
         channel: str,
@@ -123,6 +135,28 @@ class SlackAPIClient:
     def users_info(self, user: str) -> dict:
         """Get user info by ID."""
         return self._request("GET", "users.info", params={"user": user})
+
+    def users_list(
+        self,
+        limit: int = 200,
+        cursor: Optional[str] = None,
+        include_deleted: bool = False,
+    ) -> dict:
+        """List users in the workspace. Returns members with profile, etc."""
+        params = {"limit": min(limit, 1000)}
+        if cursor:
+            params["cursor"] = cursor
+        if include_deleted:
+            params["include_deleted"] = "true"
+        return self._request("GET", "users.list", params=params)
+
+    def team_info(self) -> dict:
+        """Get workspace/team info. Returns team dict with id, name, etc. Requires team:read scope."""
+        return self._request("GET", "team.info")
+
+    def auth_test(self) -> dict:
+        """Check auth and get bot/team info. Returns team (name), team_id, url, etc. No extra scope."""
+        return self._request("GET", "auth.test")
 
     def files_info(
         self,
