@@ -23,22 +23,32 @@ logger = logging.getLogger(__name__)
 
 def _merge_list_by_id(existing_list: list, new_list: list, id_key: str = "id") -> list:
     """Merge two lists of dicts by id; new wins for same id. Preserve order: existing then new (by id)."""
+    safe_existing = (
+        [x for x in existing_list if isinstance(x, dict)]
+        if isinstance(existing_list, list)
+        else []
+    )
+    safe_new = (
+        [x for x in new_list if isinstance(x, dict)]
+        if isinstance(new_list, list)
+        else []
+    )
     by_id: dict = {}
-    for item in existing_list or []:
+    for item in safe_existing:
         kid = item.get(id_key)
         if kid is not None:
             by_id[kid] = item
-    for item in new_list or []:
+    for item in safe_new:
         kid = item.get(id_key)
         if kid is not None:
             by_id[kid] = item
     # Order: existing order for pre-existing ids, then new ids in new order
     order_ids = list(
         dict.fromkeys(
-            [x.get(id_key) for x in (existing_list or []) if x.get(id_key) is not None]
+            [x.get(id_key) for x in safe_existing if x.get(id_key) is not None]
         )
     )
-    for x in new_list or []:
+    for x in safe_new:
         kid = x.get(id_key)
         if kid is not None and kid not in order_ids:
             order_ids.append(kid)
@@ -87,7 +97,7 @@ def save_commit_raw_source(owner: str, repo: str, commit_data: dict) -> None:
 
 def save_issue_raw_source(owner: str, repo: str, issue_data: dict) -> None:
     """Load existing issue JSON if present, merge comments by id, then write."""
-    raw = issue_data.get("number") or issue_data.get("issue_info", {}).get("number")
+    raw = issue_data.get("number") or (issue_data.get("issue_info") or {}).get("number")
     if raw is None:
         return
     if isinstance(raw, int):
@@ -129,7 +139,7 @@ def save_issue_raw_source(owner: str, repo: str, issue_data: dict) -> None:
 
 def save_pr_raw_source(owner: str, repo: str, pr_data: dict) -> None:
     """Load existing PR JSON if present, merge comments and reviews by id, then write."""
-    raw = pr_data.get("number") or pr_data.get("pr_info", {}).get("number")
+    raw = pr_data.get("number") or (pr_data.get("pr_info") or {}).get("number")
     if raw is None:
         return
     if isinstance(raw, int):
