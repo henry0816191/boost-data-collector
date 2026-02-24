@@ -9,6 +9,7 @@ cppa_slack_tracker.sync (sync_user, sync_channel, sync_channel_user, sync_messag
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional
@@ -25,6 +26,8 @@ from cppa_slack_tracker.sync import (
     sync_team,
     sync_users,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_date(date_str: Optional[str]) -> Optional[datetime]:
@@ -276,14 +279,28 @@ class Command(BaseCommand):
                     f"Loaded {len(all_loaded)} message(s) from --messages-json; saving to DB..."
                 )
                 channel_by_id = {c.channel_id: c for c in channels}
+                load_failures = 0
                 for msg in all_loaded:
                     ch_id = msg.get("channel")
                     channel = channel_by_id.get(ch_id) if ch_id else None
                     if channel:
                         try:
                             save_slack_message(channel, msg)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            msg_ts = msg.get("ts", msg.get("client_msg_id", "?"))
+                            logger.exception(
+                                "Failed to save message from --messages-json: channel_id=%s ts=%s: %s",
+                                ch_id,
+                                msg_ts,
+                                e,
+                            )
+                            load_failures += 1
+                if load_failures:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"{load_failures} message(s) failed to import from --messages-json."
+                        )
+                    )
 
         start_d = start_dt.date() if start_dt is not None else None
         end_d = end_dt.date() if end_dt is not None else None

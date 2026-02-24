@@ -52,7 +52,7 @@ class SlackChannel(models.Model):
         related_name="channels",
         db_column="team_id",
     )
-    channel_id = models.CharField(max_length=50, unique=True, db_index=True)
+    channel_id = models.CharField(max_length=50, db_index=True)
     channel_name = models.CharField(max_length=255, db_index=True)
     channel_type = models.CharField(
         max_length=50,
@@ -75,6 +75,12 @@ class SlackChannel(models.Model):
     class Meta:
         verbose_name = "Slack Channel"
         verbose_name_plural = "Slack Channels"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["team", "channel_id"],
+                name="unique_team_channel_id",
+            ),
+        ]
 
     def __str__(self):
         return f"#{self.channel_name} ({self.channel_id})"

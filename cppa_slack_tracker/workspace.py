@@ -36,7 +36,7 @@ def _slug(name: str) -> str:
 
 
 def get_users_json_path(team_slug: str) -> Path:
-    """Return workspace path: workspace/cppa_user_tracker/<team_slug>/users.json."""
+    """Return workspace path: workspace/cppa_slack_tracker/<team_slug>/users.json."""
     return get_workspace_path(_APP_SLUG) / _slug(team_slug) / "users.json"
 
 

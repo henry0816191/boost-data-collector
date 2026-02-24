@@ -209,6 +209,7 @@ def _message_text_for_subtype(
     """Return message text for me_message; None for unknown."""
     if subtype == "me_message":
         return f"<@{slack_message.get('user')}> {slack_message.get('text', '')}"
+    return None
 
 
 @transaction.atomic
