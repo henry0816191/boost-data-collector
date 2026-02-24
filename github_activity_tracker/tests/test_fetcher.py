@@ -189,8 +189,9 @@ def test_fetch_issues_from_github_yields_issue_dicts():
     """fetch_issues_from_github yields issue dicts (excluding PRs)."""
     client = MagicMock()
     # No "pull_request" key = plain issue (fetcher filters by "pull_request" in i)
+    # Must include updated_at/created_at or fetcher skips the issue
     client.rest_request.side_effect = [
-        [{"number": 1, "title": "Issue 1"}],
+        [{"number": 1, "title": "Issue 1", "updated_at": "2024-06-01T00:00:00Z"}],
         [],  # comments for issue 1
     ]
     items = list(fetch_issues_from_github(client, "o", "r"))

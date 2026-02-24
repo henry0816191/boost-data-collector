@@ -238,13 +238,13 @@ def fetch_issues_from_github(
 
         for issue in issues:
             updated_str = issue.get("updated_at") or issue.get("created_at")
-            if updated_str:
-                try:
-                    issue_dt = datetime.fromisoformat(
-                        updated_str.replace("Z", "+00:00")
-                    )
-                except Exception as e:
-                    logger.debug(f"Failed to parse issue date '{updated_str}': {e}")
+            if not updated_str:
+                continue
+            try:
+                issue_dt = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
+            except Exception as e:
+                logger.debug(f"Failed to parse issue date '{updated_str}': {e}")
+                continue
 
             if start_time:
                 start_time_aware = (

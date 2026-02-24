@@ -163,7 +163,7 @@ def sync_issues(
             json_path = get_issue_json_path(owner, repo_name, issue_number)
             json_path.parent.mkdir(parents=True, exist_ok=True)
             json_path.write_text(
-                json.dumps(issue_data, indent=2, default=str), encoding="utf-8"
+                json.dumps(issue_data, indent=0, default=str), encoding="utf-8"
             )
             _process_issue_data(repo, issue_data)
             save_issue_raw_source(owner, repo_name, issue_data)

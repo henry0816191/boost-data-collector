@@ -84,7 +84,18 @@ def save_commit_raw_source(owner: str, repo: str, commit_data: dict) -> None:
 
 def save_issue_raw_source(owner: str, repo: str, issue_data: dict) -> None:
     """Load existing issue JSON if present, merge comments by id, then write."""
-    path = get_raw_source_issue_path(owner, repo, issue_data.get("number", 0))
+    raw = issue_data.get("number") or issue_data.get("issue_info", {}).get("number")
+    if raw is None:
+        return
+    if isinstance(raw, int):
+        number = raw
+    elif isinstance(raw, str) and raw.isdigit():
+        number = int(raw)
+    else:
+        return
+    if number <= 0:
+        return
+    path = get_raw_source_issue_path(owner, repo, number)
     if not path.name or path.name == ".json":
         return
     existing: dict = {}
@@ -99,7 +110,18 @@ def save_issue_raw_source(owner: str, repo: str, issue_data: dict) -> None:
 
 def save_pr_raw_source(owner: str, repo: str, pr_data: dict) -> None:
     """Load existing PR JSON if present, merge comments and reviews by id, then write."""
-    path = get_raw_source_pr_path(owner, repo, pr_data.get("number", 0))
+    raw = pr_data.get("number") or pr_data.get("pr_info", {}).get("number")
+    if raw is None:
+        return
+    if isinstance(raw, int):
+        number = raw
+    elif isinstance(raw, str) and raw.isdigit():
+        number = int(raw)
+    else:
+        return
+    if number <= 0:
+        return
+    path = get_raw_source_pr_path(owner, repo, number)
     if not path.name or path.name == ".json":
         return
     existing: dict = {}

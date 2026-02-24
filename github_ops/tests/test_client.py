@@ -185,7 +185,8 @@ def test_rest_request_retries_on_502_then_succeeds():
     resp_200 = MagicMock(status_code=200, headers={}, json=lambda: {"id": 1})
     resp_200.raise_for_status = MagicMock()
     client.session.get = MagicMock(side_effect=[resp_502, resp_200])
-    out = client.rest_request("/repos/foo/bar")
+    with patch("github_ops.client.time.sleep"):
+        out = client.rest_request("/repos/foo/bar")
     assert out == {"id": 1}
     assert client.session.get.call_count == 2
 
@@ -202,8 +203,9 @@ def test_rest_request_502_after_max_retries_raises():
         side_effect=req.exceptions.HTTPError("Bad Gateway", response=resp_502)
     )
     client.session.get = MagicMock(return_value=resp_502)
-    with pytest.raises(req.exceptions.HTTPError):
-        client.rest_request("/repos/foo/bar")
+    with patch("github_ops.client.time.sleep"):
+        with pytest.raises(req.exceptions.HTTPError):
+            client.rest_request("/repos/foo/bar")
     assert client.session.get.call_count == 2
 
 

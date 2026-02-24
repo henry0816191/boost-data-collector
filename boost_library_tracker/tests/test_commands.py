@@ -12,29 +12,63 @@ CMD_NAME = "run_boost_library_tracker"
 
 
 @pytest.mark.django_db
-def test_run_boost_library_tracker_invalid_from_date_writes_error_and_returns():
-    """With invalid --from-date, command writes error to stderr and returns without raising."""
-    out = StringIO()
-    err = StringIO()
-    call_command(
-        CMD_NAME,
-        "--from-date=not-a-date",
-        "--task=github_activity",
-        stdout=out,
-        stderr=err,
-    )
-    assert "Invalid" in err.getvalue() or "from-date" in err.getvalue().lower()
+def test_run_boost_library_tracker_invalid_from_date_warns_and_continues_with_none():
+    """With invalid --from-date, command proceeds and passes start_date=None to task (downstream None handling)."""
+    mock_client = MagicMock()
+    mock_client.get_file_content.return_value = (b"", "utf-8")
+    mock_account = MagicMock()
+    mock_account.username = "boostorg"
+    with patch(
+        "boost_library_tracker.management.commands.run_boost_library_tracker.get_github_client",
+        return_value=mock_client,
+    ), patch(
+        "boost_library_tracker.management.commands.run_boost_library_tracker.get_or_create_owner_account",
+        return_value=mock_account,
+    ), patch(
+        "boost_library_tracker.management.commands.run_boost_library_tracker.sync_github",
+    ), patch(
+        "boost_library_tracker.management.commands.run_boost_library_tracker.task_fetch_github_activity",
+    ) as task_mock:
+        call_command(
+            CMD_NAME,
+            "--from-date=not-a-date",
+            "--task=github_activity",
+            "--dry-run",
+            stdout=StringIO(),
+            stderr=StringIO(),
+        )
+    task_mock.assert_called_once()
+    assert task_mock.call_args[1].get("start_date") is None
 
 
 @pytest.mark.django_db
-def test_run_boost_library_tracker_invalid_to_date_writes_error_and_returns():
-    """With invalid --to-date, command writes error to stderr and returns without raising."""
-    out = StringIO()
-    err = StringIO()
-    call_command(
-        CMD_NAME, "--to-date=invalid", "--task=github_activity", stdout=out, stderr=err
-    )
-    assert "Invalid" in err.getvalue() or "to-date" in err.getvalue().lower()
+def test_run_boost_library_tracker_invalid_to_date_warns_and_continues_with_none():
+    """With invalid --to-date, command proceeds and passes end_date=None to task (downstream None handling)."""
+    mock_client = MagicMock()
+    mock_client.get_file_content.return_value = (b"", "utf-8")
+    mock_account = MagicMock()
+    mock_account.username = "boostorg"
+    with patch(
+        "boost_library_tracker.management.commands.run_boost_library_tracker.get_github_client",
+        return_value=mock_client,
+    ), patch(
+        "boost_library_tracker.management.commands.run_boost_library_tracker.get_or_create_owner_account",
+        return_value=mock_account,
+    ), patch(
+        "boost_library_tracker.management.commands.run_boost_library_tracker.sync_github",
+    ), patch(
+        "boost_library_tracker.management.commands.run_boost_library_tracker.task_fetch_github_activity",
+    ) as task_mock:
+        call_command(
+            CMD_NAME,
+            "--to-date=invalid",
+            "--task=github_activity",
+            "--dry-run",
+            stdout=StringIO(),
+            stderr=StringIO(),
+        )
+    task_mock.assert_called_once()
+    assert task_mock.call_args[1].get("end_date") is None
 
 
 @pytest.mark.django_db

@@ -72,7 +72,7 @@ def task_fetch_github_activity(
         self.stdout.write(f"  From: {start_date.isoformat()}")
     if end_date:
         self.stdout.write(f"  To: {end_date.isoformat()}")
-    else:
+    elif start_date:
         self.stdout.write("  To: now")
     if from_library:
         self.stdout.write(f"  From library: {from_library} (and all after)")
@@ -219,14 +219,22 @@ class Command(BaseCommand):
             try:
                 start_date = datetime.fromisoformat(options["from_date"])
             except ValueError as e:
-                self.stderr.write(self.style.ERROR(f"Invalid --from-date format: {e}"))
-                return
+                self.stderr.write(
+                    self.style.WARNING(f"Invalid --from-date format: {e}")
+                )
+                start_date = None
         if options.get("to_date"):
             try:
                 end_date = datetime.fromisoformat(options["to_date"])
             except ValueError as e:
-                self.stderr.write(self.style.ERROR(f"Invalid --to-date format: {e}"))
-                return
+                self.stderr.write(self.style.WARNING(f"Invalid --to-date format: {e}"))
+                end_date = None
+
+        if start_date and end_date and start_date > end_date:
+            raise CommandError(
+                f"Invalid date range: start_date ({start_date.isoformat()}) must be before "
+                f"or equal to end_date ({end_date.isoformat()})."
+            )
 
         from_library = (options.get("from_library") or "").strip() or None
         logger.debug(
