@@ -1,6 +1,5 @@
 """Tests for operations.slack_ops.client (SlackAPIClient)."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from operations.slack_ops.client import SlackAPIClient
@@ -26,7 +25,9 @@ def test_conversations_list_calls_request_with_params():
     """conversations_list calls _request with GET and correct params."""
     c = SlackAPIClient("t")
     c._request = MagicMock(return_value={"ok": True, "channels": []})
-    c.conversations_list(types="public_channel", exclude_archived=True, limit=100, cursor="x")
+    c.conversations_list(
+        types="public_channel", exclude_archived=True, limit=100, cursor="x"
+    )
     c._request.assert_called_once()
     assert c._request.call_args[0][0] == "GET"
     assert c._request.call_args[0][1] == "conversations.list"
@@ -53,7 +54,9 @@ def test_conversations_info_calls_request():
     c = SlackAPIClient("t")
     c._request = MagicMock(return_value={"ok": True, "channel": {"id": "C1"}})
     c.conversations_info("C1")
-    c._request.assert_called_once_with("GET", "conversations.info", params={"channel": "C1"})
+    c._request.assert_called_once_with(
+        "GET", "conversations.info", params={"channel": "C1"}
+    )
 
 
 def test_users_info_calls_request():
@@ -69,7 +72,9 @@ def test_files_info_calls_request():
     c = SlackAPIClient("t")
     c._request = MagicMock(return_value={"ok": True, "file": {"id": "F1"}})
     c.files_info("F1")
-    c._request.assert_called_once_with("GET", "files.info", params={"file": "F1"}, timeout=30)
+    c._request.assert_called_once_with(
+        "GET", "files.info", params={"file": "F1"}, timeout=30
+    )
 
 
 def test_request_get_success_returns_json():

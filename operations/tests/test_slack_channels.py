@@ -1,6 +1,5 @@
 """Tests for operations.slack_ops.channels."""
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from operations.slack_ops.channels import (
@@ -46,33 +45,52 @@ def test_parse_list_env_skips_empty_parts():
 
 def test_channel_matches_policy_blocklist_by_name():
     """_channel_matches_policy returns False when channel name is in blocklist."""
-    assert _channel_matches_policy("C1", "secret", allowlist=set(), blocklist={"secret"}) is False
+    assert (
+        _channel_matches_policy("C1", "secret", allowlist=set(), blocklist={"secret"})
+        is False
+    )
 
 
 def test_channel_matches_policy_blocklist_by_id():
     """_channel_matches_policy returns False when channel id is in blocklist."""
-    assert _channel_matches_policy("c1", "general", allowlist=set(), blocklist={"c1"}) is False
+    assert (
+        _channel_matches_policy("c1", "general", allowlist=set(), blocklist={"c1"})
+        is False
+    )
 
 
 def test_channel_matches_policy_empty_lists_allows():
     """_channel_matches_policy returns True when allowlist and blocklist are empty."""
-    assert _channel_matches_policy("C1", "any", allowlist=set(), blocklist=set()) is True
+    assert (
+        _channel_matches_policy("C1", "any", allowlist=set(), blocklist=set()) is True
+    )
 
 
 def test_channel_matches_policy_allowlist_match():
     """_channel_matches_policy returns True when name or id in allowlist."""
-    assert _channel_matches_policy("C1", "general", allowlist={"general"}, blocklist=set()) is True
-    assert _channel_matches_policy("c1", "other", allowlist={"c1"}, blocklist=set()) is True
+    assert (
+        _channel_matches_policy("C1", "general", allowlist={"general"}, blocklist=set())
+        is True
+    )
+    assert (
+        _channel_matches_policy("c1", "other", allowlist={"c1"}, blocklist=set())
+        is True
+    )
 
 
 def test_channel_matches_policy_allowlist_no_match():
     """_channel_matches_policy returns False when allowlist set but channel not in it."""
-    assert _channel_matches_policy("C1", "other", allowlist={"general"}, blocklist=set()) is False
+    assert (
+        _channel_matches_policy("C1", "other", allowlist={"general"}, blocklist=set())
+        is False
+    )
 
 
 def test_channel_matches_policy_blocklist_takes_precedence():
     """_channel_matches_policy returns False if in both allowlist and blocklist (block wins)."""
-    assert _channel_matches_policy("C1", "ch", allowlist={"ch"}, blocklist={"ch"}) is False
+    assert (
+        _channel_matches_policy("C1", "ch", allowlist={"ch"}, blocklist={"ch"}) is False
+    )
 
 
 # --- _get_channel_join_config ---
@@ -99,12 +117,15 @@ def test_get_channel_join_config_defaults():
 
 def test_get_channel_join_config_parses_allowlist_blocklist():
     """_get_channel_join_config parses CHANNEL_ALLOWLIST and CHANNEL_BLOCKLIST."""
-    with patch("os.environ.get", side_effect=lambda k, d=None: {
-        "CHANNEL_JOIN_INTERVAL_MINUTES": "30",
-        "CHANNEL_JOIN_PUBLIC_ONLY": "true",
-        "CHANNEL_ALLOWLIST": "ch1, ch2",
-        "CHANNEL_BLOCKLIST": "blocked",
-    }.get(k, d)):
+    with patch(
+        "os.environ.get",
+        side_effect=lambda k, d=None: {
+            "CHANNEL_JOIN_INTERVAL_MINUTES": "30",
+            "CHANNEL_JOIN_PUBLIC_ONLY": "true",
+            "CHANNEL_ALLOWLIST": "ch1, ch2",
+            "CHANNEL_BLOCKLIST": "blocked",
+        }.get(k, d),
+    ):
         config = _get_channel_join_config()
     assert config["allowlist"] == {"ch1", "ch2"}
     assert config["blocklist"] == {"blocked"}
@@ -117,8 +138,16 @@ def test_channel_list_uses_client_and_paginates():
     """channel_list calls client.conversations_list and paginates until no cursor."""
     mock_client = MagicMock(spec=SlackAPIClient)
     mock_client.conversations_list.side_effect = [
-        {"ok": True, "channels": [{"id": "C1", "name": "general"}], "response_metadata": {"next_cursor": "cur1"}},
-        {"ok": True, "channels": [{"id": "C2", "name": "random"}], "response_metadata": {}},
+        {
+            "ok": True,
+            "channels": [{"id": "C1", "name": "general"}],
+            "response_metadata": {"next_cursor": "cur1"},
+        },
+        {
+            "ok": True,
+            "channels": [{"id": "C2", "name": "random"}],
+            "response_metadata": {},
+        },
     ]
     out = channel_list(client=mock_client)
     assert len(out) == 2
@@ -162,12 +191,15 @@ def test_run_channel_join_check_joins_allowed_skips_policy():
         "response_metadata": {},
     }
     mock_client.conversations_join.side_effect = [{"ok": True}, {"ok": True}]
-    with patch("operations.slack_ops.channels._get_channel_join_config", return_value={
-        "allowlist": set(),
-        "blocklist": {"secret"},
-        "public_only": True,
-        "interval_minutes": 15,
-    }):
+    with patch(
+        "operations.slack_ops.channels._get_channel_join_config",
+        return_value={
+            "allowlist": set(),
+            "blocklist": {"secret"},
+            "public_only": True,
+            "interval_minutes": 15,
+        },
+    ):
         result = run_channel_join_check(client=mock_client)
     assert "C1" in result["joined"]
     assert "C2" in result["skipped_policy"]
@@ -182,13 +214,19 @@ def test_run_channel_join_check_reports_failed_join():
         "channels": [{"id": "C1", "name": "general", "is_member": False}],
         "response_metadata": {},
     }
-    mock_client.conversations_join.return_value = {"ok": False, "error": "method_not_supported_for_channel_type"}
-    with patch("operations.slack_ops.channels._get_channel_join_config", return_value={
-        "allowlist": set(),
-        "blocklist": set(),
-        "public_only": True,
-        "interval_minutes": 15,
-    }):
+    mock_client.conversations_join.return_value = {
+        "ok": False,
+        "error": "method_not_supported_for_channel_type",
+    }
+    with patch(
+        "operations.slack_ops.channels._get_channel_join_config",
+        return_value={
+            "allowlist": set(),
+            "blocklist": set(),
+            "public_only": True,
+            "interval_minutes": 15,
+        },
+    ):
         result = run_channel_join_check(client=mock_client)
     assert result["joined"] == []
     assert len(result["failed"]) == 1
@@ -207,12 +245,15 @@ def test_run_channel_join_check_only_considers_non_member():
         ],
         "response_metadata": {},
     }
-    with patch("operations.slack_ops.channels._get_channel_join_config", return_value={
-        "allowlist": set(),
-        "blocklist": set(),
-        "public_only": True,
-        "interval_minutes": 15,
-    }):
+    with patch(
+        "operations.slack_ops.channels._get_channel_join_config",
+        return_value={
+            "allowlist": set(),
+            "blocklist": set(),
+            "public_only": True,
+            "interval_minutes": 15,
+        },
+    ):
         result = run_channel_join_check(client=mock_client)
     mock_client.conversations_join.assert_called_once_with("C2")
     assert result["joined"] == ["C2"]

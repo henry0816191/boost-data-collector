@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 from cppa_slack_transcript_tracker.utils.slack_listener import (
     save_event_to_file,
     SlackListener,
-    DATA_FOLDER,
 )
 
 
@@ -15,7 +14,10 @@ def test_save_event_to_file_creates_file(tmp_path):
     """save_event_to_file writes JSON to data folder and returns filepath."""
     with patch.dict("os.environ", {}, clear=False):
         with patch("os.makedirs"):
-            with patch("cppa_slack_transcript_tracker.utils.slack_listener.DATA_FOLDER", str(tmp_path)):
+            with patch(
+                "cppa_slack_transcript_tracker.utils.slack_listener.DATA_FOLDER",
+                str(tmp_path),
+            ):
                 body = {"event": {"ts": "12345.67", "type": "message"}}
                 filepath = save_event_to_file("message", body)
     assert filepath is not None
@@ -28,7 +30,10 @@ def test_save_event_to_file_creates_file(tmp_path):
 def test_save_event_to_file_uses_event_ts_when_no_ts(tmp_path):
     """save_event_to_file uses event_ts when ts is missing."""
     with patch("os.makedirs"):
-        with patch("cppa_slack_transcript_tracker.utils.slack_listener.DATA_FOLDER", str(tmp_path)):
+        with patch(
+            "cppa_slack_transcript_tracker.utils.slack_listener.DATA_FOLDER",
+            str(tmp_path),
+        ):
             body = {"event": {"event_ts": "99999.11", "type": "message"}}
             filepath = save_event_to_file("message", body)
     assert "99999" in filepath or "99999_11" in filepath
@@ -85,10 +90,16 @@ def test_slack_listener_extract_file_id_from_event():
 
 def test_slack_listener_init_requires_bot_and_app_token():
     """SlackListener raises ValueError when bot or app token is missing."""
-    with patch("cppa_slack_transcript_tracker.utils.slack_listener.get_slack_bot_token", side_effect=ValueError("SLACK_BOT_TOKEN is not set")):
+    with patch(
+        "cppa_slack_transcript_tracker.utils.slack_listener.get_slack_bot_token",
+        side_effect=ValueError("SLACK_BOT_TOKEN is not set"),
+    ):
         with pytest.raises(ValueError, match="SLACK_BOT_TOKEN"):
             SlackListener(bot_token=None, app_token="xapp-t")
-    with patch("cppa_slack_transcript_tracker.utils.slack_listener.get_slack_app_token", side_effect=ValueError("SLACK_APP_TOKEN is not set")):
+    with patch(
+        "cppa_slack_transcript_tracker.utils.slack_listener.get_slack_app_token",
+        side_effect=ValueError("SLACK_APP_TOKEN is not set"),
+    ):
         with pytest.raises(ValueError, match="SLACK_APP_TOKEN"):
             SlackListener(bot_token="xoxb-t", app_token=None)
 

@@ -5,6 +5,7 @@ Extracts xoxc and xoxd tokens from Slack workspace
 
 import json
 import logging
+import re
 import time
 
 from selenium import webdriver
@@ -14,6 +15,44 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 _global_driver = None
+
+# Selenium Grid hub URL: http(s)://host:port/wd/hub (path must be /wd/hub)
+SELENIUM_HUB_URL_PATTERN = re.compile(
+    r"^https?://[^/]+/wd/hub/?$",
+    re.IGNORECASE,
+)
+
+
+def _validate_selenium_hub_url(url: str) -> str:
+    """Validate SELENIUM_HUB_URL format. Raises ValueError if invalid."""
+    if not url or not isinstance(url, str):
+        raise ValueError("SELENIUM_HUB_URL must be a non-empty string")
+    url = url.strip()
+    if not SELENIUM_HUB_URL_PATTERN.match(url):
+        raise ValueError(
+            "SELENIUM_HUB_URL must match http(s)://host:port/wd/hub (e.g. http://localhost:4444/wd/hub), got: %s"
+            % (url[:100],)
+        )
+    return url.rstrip("/") or url
+
+
+# Chrome profile path: absolute or relative path, no null bytes or control chars
+CHROME_PROFILE_PATH_PATTERN = re.compile(r"^[a-zA-Z0-9/_. \-\\]+$")
+
+
+def _validate_chrome_profile_path(path: str) -> str:
+    """Validate CHROME_PROFILE_PATH format. Raises ValueError if invalid."""
+    if not path or not isinstance(path, str):
+        raise ValueError("CHROME_PROFILE_PATH must be a non-empty string")
+    path = path.strip()
+    if "\x00" in path:
+        raise ValueError("CHROME_PROFILE_PATH must not contain null bytes")
+    if not CHROME_PROFILE_PATH_PATTERN.match(path):
+        raise ValueError(
+            "CHROME_PROFILE_PATH must contain only path characters (letters, digits, /, _, ., -, space), got: %s"
+            % (path[:100],)
+        )
+    return path
 
 
 def extract_slack_tokens(driver, team_id):
@@ -94,14 +133,13 @@ def get_all_team_ids(driver):
 
 def check_docker_selenium_connection():
     """Check if Docker Selenium container is accessible."""
-    try:
-        selenium_hub_url = getattr(
-            settings, "SELENIUM_HUB_URL", "http://localhost:4444/wd/hub"
-        )
-        import socket
-        import urllib.error
-        import urllib.request
+    import socket
+    import urllib.error
+    import urllib.request
 
+    try:
+        raw_url = getattr(settings, "SELENIUM_HUB_URL", "http://localhost:4444/wd/hub")
+        selenium_hub_url = _validate_selenium_hub_url(raw_url)
         base_url = selenium_hub_url.replace("/wd/hub", "")
         status_url = f"{base_url}/status"
         try:
@@ -145,12 +183,12 @@ def connect_to_chrome():
                 logger.debug(
                     "Existing driver connection invalid, creating new connection"
                 )
-        selenium_hub_url = getattr(
-            settings, "SELENIUM_HUB_URL", "http://localhost:4444/wd/hub"
-        )
-        chrome_profile_path = getattr(
+        raw_url = getattr(settings, "SELENIUM_HUB_URL", "http://localhost:4444/wd/hub")
+        selenium_hub_url = _validate_selenium_hub_url(raw_url)
+        raw_profile_path = getattr(
             settings, "CHROME_PROFILE_PATH", "/home/seluser/chrome_profile"
         )
+        chrome_profile_path = _validate_chrome_profile_path(raw_profile_path)
         options = Options()
         options.add_argument(f"user-data-dir={chrome_profile_path}")
         options.add_argument("--no-sandbox")

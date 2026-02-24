@@ -39,26 +39,23 @@ class Command(BaseCommand):
 
         if options["dry_run"]:
             if bot_token:
-                self.stdout.write(self.style.SUCCESS("SLACK_BOT_TOKEN is set"))
+                logger.info("SLACK_BOT_TOKEN is set")
             else:
-                self.stdout.write(self.style.WARNING("SLACK_BOT_TOKEN is not set"))
+                logger.warning("SLACK_BOT_TOKEN is not set")
             if app_token:
-                self.stdout.write(self.style.SUCCESS("SLACK_APP_TOKEN is set"))
+                logger.info("SLACK_APP_TOKEN is set")
             else:
-                self.stdout.write(self.style.WARNING("SLACK_APP_TOKEN is not set"))
-            self.stdout.write("Would start Slack Event Listener (Socket Mode).")
+                logger.warning("SLACK_APP_TOKEN is not set")
+            logger.info("Would start Slack Event Listener (Socket Mode).")
             return
 
-        self.stdout.write("Starting CPPA Slack Transcript Tracker (in-app runner)...")
-        logger.debug("run_cppa_slack_transcript_tracker: starting in-app runner")
+        logger.info("Starting CPPA Slack Transcript Tracker (in-app runner)...")
         try:
             from cppa_slack_transcript_tracker.runner import run_slack_huddle
 
             run_slack_huddle()
         except KeyboardInterrupt:
-            self.stdout.write("Stopped by user (Ctrl+C).")
-            logger.debug("run_cppa_slack_transcript_tracker: stopped by user")
+            logger.info("Stopped by user (Ctrl+C).")
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f"Error running handler: {e}"))
             logger.exception("run_cppa_slack_transcript_tracker: %s", e)
             raise
