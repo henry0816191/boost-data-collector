@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Optional, Protocol
 
+from django.db import transaction
 from django.db.models import Min
 
 from .models import (
@@ -23,6 +24,7 @@ from .models import (
     GitHubAccount,
     GitHubAccountType,
     MailingListProfile,
+    SlackUser,
     DiscordProfile,
 )
 
@@ -47,7 +49,9 @@ def get_or_create_identity(
     """Get or create an Identity by display_name. If exists, updates description from defaults."""
     lookup = {"display_name": display_name}
     defaults = defaults or {"description": description}
-    identity, created = Identity.objects.get_or_create(defaults=defaults, **lookup)
+    identity, created = Identity.objects.get_or_create(
+        defaults=defaults, **lookup
+    )
     if (
         not created
         and "description" in defaults
@@ -244,6 +248,41 @@ def _get_next_negative_github_account_id() -> int:
     return (min_id - 1) if min_id is not None else -1
 
 
+@transaction.atomic
+def add_or_update_slack_user(user_data: dict[str, Any]) -> SlackUser:
+    """Add or update a SlackUser from Slack API user data. Returns the SlackUser.
+
+    Creates an Email linked to the user if profile.email is provided and not already
+    present. Does not create or link an Identity (that is handled separately).
+    Raises ValueError if user_data has no 'id'.
+    """
+    user_id = (user_data.get("id") or "").strip()
+    if not user_id:
+        raise ValueError("Slack user ID ('id') is required")
+    profile = user_data.get("profile") or {}
+    username = (user_data.get("name") or "").strip()
+    display_name = (
+        user_data.get("real_name") or user_data.get("name") or ""
+    ).strip()
+    avatar_url = (profile.get("image_72") or "").strip()
+    user, _ = SlackUser.objects.update_or_create(
+        slack_user_id=user_id,
+        defaults={
+            "username": username,
+            "display_name": display_name,
+            "avatar_url": avatar_url,
+        },
+    )
+    email_str = (profile.get("email") or "").strip()
+    if email_str and not user.emails.filter(email=email_str).exists():
+        add_email(
+            user,
+            email_str,
+            is_primary=not user.emails.filter(is_active=True).exists(),
+        )
+    return user
+
+
 def get_or_create_unknown_github_account(
     name: Optional[str] = None,
     email: str = "",
@@ -262,7 +301,9 @@ def get_or_create_unknown_github_account(
     ).first()
     if existing is not None:
         if email_str and not existing.emails.filter(email=email_str).exists():
-            add_email(existing, email_str, is_primary=not existing.emails.exists())
+            add_email(
+                existing, email_str, is_primary=not existing.emails.exists()
+            )
         return existing, False
     next_id = _get_next_negative_github_account_id()
     account = get_or_create_github_account(

@@ -121,7 +121,9 @@ def upload_file(
     """
     local_file_path = Path(local_file_path)
     if not local_file_path.is_file():
-        logger.error("Local file not found or is a directory: %s", local_file_path)
+        logger.error(
+            "Local file not found or is a directory: %s", local_file_path
+        )
         return None
     if client is None:
         client = get_github_client(use="write")
