@@ -21,7 +21,7 @@ def _get_client():
 
 
 def fetch_user_list(
-    team_id: str,
+    _team_id: str,
     *,
     include_deleted: bool = True,
     client=None,
@@ -108,7 +108,7 @@ def fetch_team_info(
 
 
 def fetch_channel_list(
-    team_id: str,
+    _team_id: str,
     *,
     types: str = "public_channel",
     exclude_archived: bool = False,

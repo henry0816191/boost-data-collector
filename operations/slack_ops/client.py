@@ -156,7 +156,7 @@ class SlackAPIClient:
 
     def auth_test(self) -> dict:
         """Check auth and get bot/team info. Returns team (name), team_id, url, etc. No extra scope."""
-        return self._request("GET", "auth.test")
+        return self._request("POST", "auth.test")
 
     def files_info(
         self,

@@ -236,7 +236,7 @@ class Command(BaseCommand):
         """Load message dicts from a JSON file or from JSON files in a directory."""
         messages = []
         if os.path.isfile(path):
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
                 messages.extend(data)
@@ -245,7 +245,7 @@ class Command(BaseCommand):
         elif os.path.isdir(path):
             for name in sorted(os.listdir(path)):
                 if name.endswith(".json"):
-                    with open(os.path.join(path, name), "r") as f:
+                    with open(os.path.join(path, name), "r", encoding="utf-8") as f:
                         data = json.load(f)
                     if isinstance(data, list):
                         messages.extend(data)

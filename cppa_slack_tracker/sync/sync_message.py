@@ -103,8 +103,8 @@ def _process_workspace_jsons(channel: SlackChannel) -> tuple[int, int]:
                     logger.debug("Skip message %s: %s", msg.get("ts"), e)
                     error_count += 1
             path.unlink()
-        except Exception as e:
-            logger.exception("Failed to process %s: %s", path, e)
+        except Exception:
+            logger.exception("Failed to process %s", path)
     return success_count, error_count
 
 
@@ -212,8 +212,8 @@ def sync_messages(
                     logger.debug("Skip message %s: %s", msg.get("ts"), e)
                     error_count += 1
             workspace_path.unlink()
-        except Exception as e:
-            logger.exception("Failed to process/remove %s: %s", workspace_path, e)
+        except Exception:
+            logger.exception("Failed to process/remove %s", workspace_path)
 
         d += timedelta(days=1)
 

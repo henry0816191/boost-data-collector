@@ -108,11 +108,14 @@ def sample_slack_user_data():
 
 @pytest.fixture
 def sample_slack_channel_data():
-    """Return sample Slack channel API data."""
+    """Return sample Slack channel API data (mirrors Slack API: is_channel, is_private, etc.)."""
     return {
         "id": "C87654321",
         "name": "random",
-        "type": "public_channel",
+        "is_channel": True,
+        "is_private": False,
+        "is_im": False,
+        "is_mpim": False,
         "purpose": {
             "value": "Random discussions",
         },

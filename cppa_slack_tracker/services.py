@@ -10,6 +10,7 @@ See docs/Contributing.md for the project-wide rule.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -26,6 +27,8 @@ from .models import (
     SlackMessage,
     SlackTeam,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # Slack message subtypes to ignore
@@ -96,7 +99,9 @@ def _get_or_fetch_slack_user(user_id: str) -> SlackUser:
 
 # --- SlackTeam ---
 @transaction.atomic
-def get_or_create_slack_team(team_data: dict[str, Any]) -> tuple[SlackTeam, bool]:
+def get_or_create_slack_team(
+    team_data: dict[str, Any],
+) -> tuple[SlackTeam, bool]:
     """Get or create a Slack team (workspace). Requires team_data['team_id']. Returns (SlackTeam, created)."""
     if not team_data.get("team_id"):
         raise ValueError("Slack team ID is required")
@@ -131,7 +136,19 @@ def get_or_create_slack_channel(
     elif slack_channel.get("topic"):
         description = slack_channel["topic"].get("value") or ""
     channel_name = slack_channel.get("name", slack_channel["id"])
-    channel_type = slack_channel.get("type", "public_channel")
+    if slack_channel.get("is_im"):
+        channel_type = "im"
+    elif slack_channel.get("is_mpim"):
+        channel_type = "mpim"
+    elif slack_channel.get("is_private"):
+        channel_type = "private_channel"
+    elif slack_channel.get("is_channel"):
+        channel_type = "public_channel"
+    else:
+        channel_type = slack_channel.get("type", "public_channel")
+    if channel_type != "public_channel":
+        logger.warning(f"Skipping non-public channel: {slack_channel['id']}")
+        return None, False
     channel, created = SlackChannel.objects.get_or_create(
         team=team,
         channel_id=slack_channel["id"],
