@@ -247,10 +247,20 @@ def fetch_issues_from_github(
                     logger.debug(f"Failed to parse issue date '{updated_str}': {e}")
 
             if start_time:
-                if issue_dt < start_time:
+                start_time_aware = (
+                    start_time.replace(tzinfo=timezone.utc)
+                    if start_time.tzinfo is None
+                    else start_time
+                )
+                if issue_dt < start_time_aware:
                     continue
             if end_time:
-                if issue_dt > end_time:
+                end_time_aware = (
+                    end_time.replace(tzinfo=timezone.utc)
+                    if end_time.tzinfo is None
+                    else end_time
+                )
+                if issue_dt > end_time_aware:
                     continue
 
             issue_number = issue.get("number")

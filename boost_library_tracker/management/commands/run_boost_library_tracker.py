@@ -64,8 +64,8 @@ def task_fetch_github_activity(
         dry_run: If True, only show what would be done.
         start_date: Start date for sync (default: auto from DB).
         end_date: End date for sync (default: now).
-        from_library: If set, sync only from this submodule onward (skip main repo and
-            submodules before it). Library name = repo name (e.g. 'build', 'algorithm').
+        from_library: If set, start at this repo (including main when 'boost') and sync it and all after.
+            Use 'boost' for main repo or a submodule name (e.g. 'build', 'algorithm'). Default: sync all.
     """
     self.stdout.write("Task 1: Fetch GitHub activity (main repo + submodules)...")
     if start_date:
@@ -112,7 +112,7 @@ def task_fetch_github_activity(
     except Exception as e:
         logger.warning("Could not fetch .gitmodules: %s; syncing main repo only", e)
 
-    # If --from-library is set, start only from that submodule onward
+    # If --from-library is set, start at this repo (including main if NAME is 'boost') and all after
     if from_library:
         from_name = from_library.strip()
         idx = None
@@ -123,7 +123,7 @@ def task_fetch_github_activity(
         if idx is None:
             raise CommandError(
                 f"Library '{from_name}' not found in repo list (main + submodules). "
-                "Check the name (e.g. 'build', 'algorithm')."
+                "Use main repo 'boost' or a submodule name (e.g. 'build', 'algorithm')."
             )
         repos_to_sync = repos_to_sync[idx:]
         self.stdout.write(
@@ -204,8 +204,8 @@ class Command(BaseCommand):
             type=str,
             default=None,
             metavar="NAME",
-            help="Start from this submodule onward (repo name, e.g. 'build', 'algorithm'). "
-            "Skips main repo and submodules before this one. Default: sync all from scratch.",
+            help="Start at this repo (including the main repo when NAME is 'boost') and sync it and all after. "
+            "Use 'boost' for main repo or a submodule name (e.g. 'build', 'algorithm'). Default: sync all.",
         )
 
     def handle(self, *args, **options):
