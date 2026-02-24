@@ -242,7 +242,7 @@ def fetch_issues_from_github(
                 continue
             try:
                 issue_dt = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
-            except Exception as e:
+            except (ValueError, TypeError) as e:
                 logger.debug(f"Failed to parse issue date '{updated_str}': {e}")
                 continue
 

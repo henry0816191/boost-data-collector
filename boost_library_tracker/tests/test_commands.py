@@ -38,7 +38,9 @@ def test_run_boost_library_tracker_invalid_from_date_warns_and_continues_with_no
             stderr=StringIO(),
         )
     task_mock.assert_called_once()
-    assert task_mock.call_args[1].get("start_date") is None
+    kwargs = task_mock.call_args[1]
+    assert "start_date" in kwargs
+    assert kwargs["start_date"] is None
 
 
 @pytest.mark.django_db
@@ -68,7 +70,9 @@ def test_run_boost_library_tracker_invalid_to_date_warns_and_continues_with_none
             stderr=StringIO(),
         )
     task_mock.assert_called_once()
-    assert task_mock.call_args[1].get("end_date") is None
+    kwargs = task_mock.call_args[1]
+    assert "end_date" in kwargs
+    assert kwargs["end_date"] is None
 
 
 @pytest.mark.django_db
@@ -163,7 +167,9 @@ def test_run_boost_library_tracker_passes_from_date_to_date_to_task():
         )
         task_mock.assert_called_once()
         call_kw = task_mock.call_args[1]
-        assert call_kw.get("start_date") is not None
-        assert call_kw.get("end_date") is not None
+        assert "start_date" in call_kw
+        assert "end_date" in call_kw
+        assert call_kw["start_date"] is not None
+        assert call_kw["end_date"] is not None
         assert call_kw["start_date"].isoformat().startswith("2024-01-01")
         assert call_kw["end_date"].isoformat().startswith("2024-06-30")

@@ -106,7 +106,15 @@ def save_issue_raw_source(owner: str, repo: str, issue_data: dict) -> None:
         raw_text = None
         try:
             raw_text = path.read_text(encoding="utf-8")
-            existing = json.loads(raw_text)
+            parsed = json.loads(raw_text)
+            if isinstance(parsed, dict):
+                existing = parsed
+            else:
+                logger.warning(
+                    "Existing issue JSON at %s is not an object; treating as empty",
+                    path,
+                )
+                existing = {}
         except Exception:
             snippet = raw_text[:200] if raw_text else "(read failed or empty)"
             logger.exception(
@@ -140,7 +148,15 @@ def save_pr_raw_source(owner: str, repo: str, pr_data: dict) -> None:
         raw_text = None
         try:
             raw_text = path.read_text(encoding="utf-8")
-            existing = json.loads(raw_text)
+            parsed = json.loads(raw_text)
+            if isinstance(parsed, dict):
+                existing = parsed
+            else:
+                logger.warning(
+                    "Existing PR JSON at %s is not an object; treating as empty",
+                    path,
+                )
+                existing = {}
         except Exception:
             snippet = raw_text[:200] if raw_text else "(read failed or empty)"
             logger.exception(

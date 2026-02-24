@@ -117,6 +117,8 @@ def test_fetch_commits_from_github_skips_commit_on_502_503_504():
     import requests as req
 
     client = MagicMock()
+    # API returns commits (e.g. newest first); fetcher iterates reversed(), so first
+    # full-commit fetch is for the last in this list (def456), second for abc123.
     client.rest_request.side_effect = [
         [
             {
@@ -129,11 +131,11 @@ def test_fetch_commits_from_github_skips_commit_on_502_503_504():
             },
         ],
         req.exceptions.HTTPError("Bad Gateway", response=MagicMock(status_code=502)),
-        {"sha": "def456", "commit": {"message": "msg2"}, "stats": {"additions": 2}},
+        {"sha": "abc123", "commit": {"message": "msg1"}, "stats": {"additions": 1}},
     ]
     items = list(fetch_commits_from_github(client, "o", "r"))
     assert len(items) == 1
-    assert items[0]["sha"] == "def456"
+    assert items[0]["sha"] == "abc123"
 
 
 def test_fetch_commits_from_github_reraises_non_server_error_http():
