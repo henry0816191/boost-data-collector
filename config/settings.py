@@ -39,8 +39,10 @@ INSTALLED_APPS = [
     "workflow",
     "cppa_user_tracker",
     "github_ops",
+    "operations",
     "github_activity_tracker",
     "boost_library_tracker",
+    "cppa_slack_transcript_tracker",
     "discord_activity_tracker",
 ]
 
@@ -124,6 +126,7 @@ WORKSPACE_DIR = Path(
 _WORKSPACE_APP_SLUGS = (
     "github_activity_tracker",
     "boost_library_tracker",
+    "cppa_slack_transcript_tracker",
     "discord_activity_tracker",
     "shared",
 )
@@ -145,6 +148,48 @@ if not GITHUB_TOKENS_SCRAPING and GITHUB_TOKEN:
 GITHUB_TOKEN_WRITE = (
     env("GITHUB_TOKEN_WRITE", default="") or ""
 ).strip() or GITHUB_TOKEN
+# Optional: GitHub repo for Slack huddle transcript uploads
+GITHUB_SLACK_HUDDLE_REPO_OWNER = (
+    env("GITHUB_SLACK_HUDDLE_REPO_OWNER", default="") or ""
+).strip()
+GITHUB_SLACK_HUDDLE_REPO_NAME = (
+    env("GITHUB_SLACK_HUDDLE_REPO_NAME", default="") or ""
+).strip()
+
+# Slack (bot + app token for operations.slack_ops and cppa_slack_transcript_tracker)
+SLACK_BOT_TOKEN = (env("SLACK_BOT_TOKEN", default="") or "").strip()
+SLACK_APP_TOKEN = (env("SLACK_APP_TOKEN", default="") or "").strip()
+# Optional: for cppa_slack_transcript_tracker (huddle transcript, token extraction)
+SLACK_TEAM_ID = (env("SLACK_TEAM_ID", default="") or "").strip()
+# Internal session tokens (xoxc/xoxd) are ToS-sensitive; only read when explicitly opted in.
+_allow_internal_slack_tokens = (
+    env("ALLOW_INTERNAL_SLACK_TOKENS", default="") or ""
+).strip().lower() == "true"
+_xoxc_raw = (env("SLACK_XOXC_TOKEN", default="") or "").strip()
+_xoxd_raw = (env("SLACK_XOXD_TOKEN", default="") or "").strip()
+if _allow_internal_slack_tokens:
+    SLACK_XOXC_TOKEN = _xoxc_raw
+    SLACK_XOXD_TOKEN = _xoxd_raw
+else:
+    SLACK_XOXC_TOKEN = ""
+    SLACK_XOXD_TOKEN = ""
+    if _xoxc_raw or _xoxd_raw:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "SLACK_XOXC_TOKEN/SLACK_XOXD_TOKEN are set but ignored: "
+            "internal session tokens require ALLOW_INTERNAL_SLACK_TOKENS=true after compliance review."
+        )
+# Selenium/Chrome for Slack token extraction (cppa_slack_transcript_tracker)
+SELENIUM_HUB_URL = (
+    env("SELENIUM_HUB_URL", default="http://localhost:4444/wd/hub") or ""
+).strip()
+_DEFAULT_CHROME_PROFILE = str(
+    WORKSPACE_DIR / "cppa_slack_transcript_tracker" / "chrome_profile"
+)
+CHROME_PROFILE_PATH = (
+    env("CHROME_PROFILE_PATH", default=_DEFAULT_CHROME_PROFILE) or ""
+).strip()
 
 # Discord configuration (for discord_activity_tracker)
 DISCORD_TOKEN = (env("DISCORD_TOKEN", default="") or "").strip()
