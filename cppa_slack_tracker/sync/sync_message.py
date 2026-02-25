@@ -202,10 +202,17 @@ def sync_messages(
         workspace_path = get_message_json_path(team_slug, channel_slug, date_str)
         raw_path = get_raw_message_json_path(team_slug, channel_slug, date_str)
         payload = json.dumps(messages, indent=2, default=str)
-        workspace_path.parent.mkdir(parents=True, exist_ok=True)
-        raw_path.parent.mkdir(parents=True, exist_ok=True)
-        workspace_path.write_text(payload, encoding="utf-8")
-        raw_path.write_text(payload, encoding="utf-8")
+        try:
+            workspace_path.parent.mkdir(parents=True, exist_ok=True)
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
+            workspace_path.write_text(payload, encoding="utf-8")
+            raw_path.write_text(payload, encoding="utf-8")
+        except OSError:
+            logger.exception(
+                "Failed to write JSON for channel_id=%s date=%s", channel_id, date_str
+            )
+            d += timedelta(days=1)
+            continue
         logger.debug(
             "Wrote %s and %s (%s messages)",
             workspace_path,
