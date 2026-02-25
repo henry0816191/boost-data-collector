@@ -52,6 +52,7 @@ CSV_LIBRARY_NAME_TO_REAL_NAME = {
 
 
 def _norm(s: str) -> str:
+    """Return the string stripped of leading/trailing whitespace, or empty string if None."""
     return (s or "").strip()
 
 
@@ -66,7 +67,11 @@ def _read_csv_rows(csv_path: Path):
     with open(csv_path, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            row_lower = {k.strip().lower().replace(" ", "_"): v for k, v in row.items()}
+            row_lower = {
+                k.strip().lower().replace(" ", "_"): v
+                for k, v in row.items()
+                if k is not None
+            }
             library_name = _norm(row_lower.get("library_name"))
             file_name = _norm(row_lower.get("file_name"))
             if not library_name:
@@ -89,6 +94,7 @@ def _link_file_for_path(
             filename__icontains=path.replace("include", "")
         ).values_list("filename", flat=True)
         support_filenames = [str(f) for f in support_files if f is not None]
+        stats["files_not_found"] += 1
         if support_filenames:
             error_rows.append(
                 {
@@ -109,13 +115,14 @@ def _link_file_for_path(
                     "supported_files": "",
                 }
             )
-            stats["files_not_found"] += 1
         return
     get_or_create_boost_file(github_file, library)
     stats["files_added"] += 1
 
 
 class Command(BaseCommand):
+    """Link existing GitHubFile rows to BoostLibrary via BoostFile using a CSV of library_name, file_name."""
+
     help = (
         "Link existing GitHubFile to BoostLibrary via BoostFile. CSV: library_name, file_name. "
         "Finds repo from BoostLibrary table by library_name. Writes missing-library and missing-file rows to an error CSV."

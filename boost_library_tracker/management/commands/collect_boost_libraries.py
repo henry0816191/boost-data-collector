@@ -225,6 +225,12 @@ class Command(BaseCommand):
         refs_arg = options.get("refs")
         ref_arg = options.get("ref")
         process_all = options.get("process_all", False)
+        new_only_flag = options.get("new_only", False)
+        if process_all and new_only_flag:
+            self.stdout.write(
+                self.style.ERROR("Use either --all or --new-only, not both.")
+            )
+            return
 
         refs_list = None
         if refs_arg:
@@ -238,7 +244,7 @@ class Command(BaseCommand):
             self._process_refs(refs_list)
             return
 
-        new_only = not process_all
+        new_only = new_only_flag or not process_all
         self.stdout.write("Fetching all releases from boostorg/boost...")
         releases = _fetch_releases(client)
         if not releases:

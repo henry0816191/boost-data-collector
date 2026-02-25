@@ -241,6 +241,8 @@ def task_library_tracker(self, dry_run: bool = False) -> None:
 
 
 class Command(BaseCommand):
+    """Run the Boost Library Tracker pipeline: GitHub sync, collect/import if new releases, library tracker."""
+
     help = (
         "Run Boost Library Tracker: (1) GitHub activity for boostorg/boost + submodules; "
         "(2) if new releases exist, collect_boost_libraries and import_boost_dependencies; "
@@ -343,7 +345,7 @@ class Command(BaseCommand):
                 )
             if not task_filter or task_filter == "collect_and_import_if_new":
                 task_collect_and_import_if_new_releases(self, dry_run=dry_run)
-            if not task_filter or task_filter == "collect_libraries":
+            if task_filter == "collect_libraries":
                 task_collect_libraries(self, ref=ref, dry_run=dry_run)
             if not task_filter or task_filter == "library_tracker":
                 task_library_tracker(self, dry_run=dry_run)

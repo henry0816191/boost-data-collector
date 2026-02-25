@@ -116,28 +116,42 @@ def get_or_create_boost_version(
 def get_or_create_boost_library_version(
     library: BoostLibrary,
     version: BoostVersion,
-    cpp_version: str = "",
-    description: str = "",
-    key: str = "",
-    documentation: str = "",
+    cpp_version: str | None = None,
+    description: str | None = None,
+    key: str | None = None,
+    documentation: str | None = None,
 ) -> tuple[BoostLibraryVersion, bool]:
-    """Get or create BoostLibraryVersion for library + version. If exists, updates cpp_version, description, key, documentation."""
+    """Get or create BoostLibraryVersion for library + version. If exists, updates only fields that are provided (not None)."""
+    defaults = {}
+    if cpp_version is not None:
+        defaults["cpp_version"] = cpp_version
+    if description is not None:
+        defaults["description"] = description
+    if key is not None:
+        defaults["key"] = key
+    if documentation is not None:
+        defaults["documentation"] = documentation
     obj, created = BoostLibraryVersion.objects.get_or_create(
         library=library,
         version=version,
-        defaults={
-            "cpp_version": cpp_version,
-            "description": description,
-            "key": key,
-            "documentation": documentation,
-        },
+        defaults=defaults,
     )
     if not created:
-        obj.cpp_version = cpp_version
-        obj.description = description
-        obj.key = key
-        obj.documentation = documentation
-        obj.save(update_fields=["cpp_version", "description", "key", "documentation"])
+        update_fields = []
+        if cpp_version is not None:
+            obj.cpp_version = cpp_version
+            update_fields.append("cpp_version")
+        if description is not None:
+            obj.description = description
+            update_fields.append("description")
+        if key is not None:
+            obj.key = key
+            update_fields.append("key")
+        if documentation is not None:
+            obj.documentation = documentation
+            update_fields.append("documentation")
+        if update_fields:
+            obj.save(update_fields=update_fields)
     return obj, created
 
 

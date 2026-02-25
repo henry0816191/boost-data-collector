@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 BOOST_REPO_URL = "https://github.com/boostorg/boost"
 BOOST_TAG_RE = re.compile(r"^boost-([0-9]+)\.([0-9]+)\.0$")
-MIN_BOOST_MINOR_VERSION = 81  # Ignore tags with minor version <= 80 (e.g. boost-1.80.0)
+MIN_BOOST_MINOR_VERSION = 15  # Ignore tags with minor version <= 15 (e.g. boost-1.15.0)
 DEPS_LINE_RE = re.compile(r"^([^\s]+)\s+->\s+(.*)$")
 
 
@@ -198,12 +198,10 @@ def _build_boostdep(clone_dir: Path) -> bool:
     is_win = sys.platform == "win32"
     try:
         if is_win:
-            # Run .bat via cmd; cd /d ensures correct drive and dir so bootstrap.bat and .\build.bat resolve
-            clone_str = str(clone_dir.resolve())
-            if " " in clone_str:
-                clone_str = f'"{clone_str}"'
+            # Run .bat via cmd; cwd ensures bootstrap.bat is run in clone_dir (no path interpolation)
             proc = subprocess.run(
-                ["cmd", "/c", f"cd /d {clone_str} && bootstrap.bat"],
+                ["cmd", "/c", "bootstrap.bat"],
+                cwd=clone_dir,
                 capture_output=True,
                 text=True,
             )
@@ -217,9 +215,8 @@ def _build_boostdep(clone_dir: Path) -> bool:
                 return False
         else:
             subprocess.run(
-                ["./bootstrap.sh"],
+                ["bash", "bootstrap.sh"],
                 cwd=clone_dir,
-                shell=True,
                 check=True,
                 capture_output=True,
                 text=True,
@@ -349,24 +346,38 @@ def _normalize_boostdep_name_to_db_candidates(name: str) -> list[str]:
     return candidates
 
 
-def _library_by_name(name: str) -> BoostLibrary | None:
+def _build_library_cache() -> dict[str, BoostLibrary]:
+    """Pre-load all BoostLibrary rows keyed by name for fast lookups in hot loops."""
+    return {lib.name: lib for lib in BoostLibrary.objects.all()}
+
+
+def _library_by_name(
+    name: str, cache: dict[str, BoostLibrary] | None = None
+) -> BoostLibrary | None:
     """
     Return first BoostLibrary matching boostdep identifier (any repo).
     Tries exact name, override map, then normalizations so boostdep 'numeric~conversion'
     matches DB 'Numeric Conversion', 'min_max' can match 'Min-Max', etc.
+    If cache is provided, use it to avoid repeated DB queries; otherwise query the DB.
     """
     seen: set[str] = set()
     for candidate in _normalize_boostdep_name_to_db_candidates(name):
         if candidate in seen:
             continue
         seen.add(candidate)
-        lib = BoostLibrary.objects.filter(name=candidate).first()
-        if lib is not None:
-            return lib
+        if cache is not None:
+            if candidate in cache:
+                return cache[candidate]
+        else:
+            lib = BoostLibrary.objects.filter(name=candidate).first()
+            if lib is not None:
+                return lib
     return None
 
 
 class Command(BaseCommand):
+    """Import Boost dependency data by running boostdep in the boost clone; populates BoostDependency."""
+
     help = (
         "Import dependency data by running boostdep in the boost clone (no output file). "
         "Clones boost into raw dir if not present, then populates BoostDependency."
@@ -457,6 +468,7 @@ class Command(BaseCommand):
             "skipped_no_library": 0,
         }
         missing_library_names: set[str] = set()
+        lib_cache = _build_library_cache()
 
         for version_tag, deps_list in sections:
             version_obj, _ = BoostVersion.objects.get_or_create(
@@ -465,13 +477,13 @@ class Command(BaseCommand):
             )
 
             for client_name, dep_names in deps_list:
-                client_lib = _library_by_name(client_name)
+                client_lib = _library_by_name(client_name, cache=lib_cache)
                 if not client_lib:
                     stats["skipped_no_library"] += 1
                     missing_library_names.add(client_name)
                     continue
                 for dep_name in dep_names:
-                    dep_lib = _library_by_name(dep_name)
+                    dep_lib = _library_by_name(dep_name, cache=lib_cache)
                     if not dep_lib:
                         stats["skipped_no_library"] += 1
                         missing_library_names.add(dep_name)

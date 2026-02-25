@@ -11,6 +11,22 @@ import re
 GITMODULES_PATH_PREFIX = "path = "
 
 
+def _to_str_list(value: list | str | None) -> list[str]:
+    """Return list of non-empty stripped strings; wrap non-list in a list, then clean items."""
+    if isinstance(value, list):
+        raw_items = value
+    elif value:
+        raw_items = [value]
+    else:
+        return []
+    cleaned: list[str] = []
+    for item in raw_items:
+        item_str = str(item).strip() if item is not None else ""
+        if item_str:
+            cleaned.append(item_str)
+    return cleaned
+
+
 def parse_gitmodules_lib_submodules(gitmodules_content: str) -> list[tuple[str, str]]:
     """
     Parse .gitmodules content and return list of (submodule_name, path)
@@ -43,7 +59,10 @@ def parse_libraries_json_library_names(
     Root library: key == submodule_name -> use key. Sub-library: use name.
     """
     if isinstance(content, bytes):
-        content = content.decode("utf-8")
+        try:
+            content = content.decode("utf-8")
+        except UnicodeDecodeError:
+            return []
     try:
         raw = json.loads(content)
     except json.JSONDecodeError:
@@ -76,7 +95,10 @@ def parse_libraries_json_full(content: str | bytes, submodule_name: str) -> list
     authors, maintainers, category, cxxstd.
     """
     if isinstance(content, bytes):
-        content = content.decode("utf-8")
+        try:
+            content = content.decode("utf-8")
+        except UnicodeDecodeError:
+            return []
     try:
         raw = json.loads(content)
     except json.JSONDecodeError:
@@ -100,19 +122,13 @@ def parse_libraries_json_full(content: str | bytes, submodule_name: str) -> list
 
         lib_name = key if key == submodule_name else name
 
-        description = obj.get("description", "")
+        description = str(obj.get("description") or "")
         documentation = str(obj.get("documentation") or "")
-        authors = obj.get("authors", [])
-        maintainers = obj.get("maintainers", [])
-        category = obj.get("category", [])
-        cxxstd = obj.get("cxxstd", "")
+        cxxstd = str(obj.get("cxxstd") or "")
 
-        if not isinstance(authors, list):
-            authors = [authors] if authors else []
-        if not isinstance(maintainers, list):
-            maintainers = [maintainers] if maintainers else []
-        if not isinstance(category, list):
-            category = [category] if category else []
+        authors = _to_str_list(obj.get("authors", []))
+        maintainers = _to_str_list(obj.get("maintainers", []))
+        category = _to_str_list(obj.get("category", []))
 
         results.append(
             {

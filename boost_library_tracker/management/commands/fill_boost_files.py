@@ -16,7 +16,6 @@ import logging
 from django.core.management.base import BaseCommand
 
 from boost_library_tracker.models import (
-    BoostFile,
     BoostLibrary,
     BoostLibraryRepository,
 )
@@ -35,6 +34,8 @@ def _normalize_name(s: str) -> str:
 
 
 class Command(BaseCommand):
+    """Link unlinked repo files to the single library per repo; write missing files to CSV."""
+
     help = (
         "Link unlinked repo files to the one library: single-library repos use it; "
         "math repo with many libraries uses the library named Math."
@@ -98,14 +99,11 @@ class Command(BaseCommand):
         boost_repos_with_library_ids = list(
             BoostLibrary.objects.values_list("repo_id", flat=True).distinct()
         )
-        files_with_library_ids = set(
-            BoostFile.objects.values_list("github_file_id", flat=True)
-        )
         files_without_library = (
             GitHubFile.objects.filter(
                 repo_id__in=boost_repos_with_library_ids, is_deleted=False
             )
-            .exclude(pk__in=files_with_library_ids)
+            .filter(boost_file__isnull=True)
             .select_related("repo")
             .order_by("repo_id", "filename")
         )
