@@ -50,7 +50,7 @@ class Migration(migrations.Migration):
             name='SlackMessage',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('ts', models.CharField(db_index=True, help_text='Slack message timestamp (unique identifier)', max_length=50, unique=True)),
+                ('ts', models.CharField(db_index=True, help_text='Slack message timestamp (unique per channel)', max_length=50)),
                 ('message', models.TextField()),
                 ('thread_ts', models.CharField(blank=True, db_index=True, help_text='Thread timestamp if this is a threaded message', max_length=50, null=True)),
                 ('slack_message_created_at', models.DateTimeField(db_index=True)),
