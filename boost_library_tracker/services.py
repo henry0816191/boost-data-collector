@@ -151,7 +151,7 @@ def get_or_create_boost_library_version(
             obj.documentation = documentation
             update_fields.append("documentation")
         if update_fields:
-            obj.save(update_fields=update_fields)
+            obj.save(update_fields=[*update_fields, "updated_at"])
     return obj, created
 
 

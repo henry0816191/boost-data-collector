@@ -90,9 +90,12 @@ def _link_file_for_path(
         return
     github_file = repo.files.filter(filename=path).first()
     if github_file is None:
-        support_files = repo.files.filter(
-            filename__icontains=path.replace("include", "")
-        ).values_list("filename", flat=True)
+        search_path = (
+            path.removeprefix("include/") if path.startswith("include/") else path
+        )
+        support_files = repo.files.filter(filename__icontains=search_path).values_list(
+            "filename", flat=True
+        )
         support_filenames = [str(f) for f in support_files if f is not None]
         stats["files_not_found"] += 1
         if support_filenames:
