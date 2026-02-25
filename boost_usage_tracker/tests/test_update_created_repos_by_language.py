@@ -80,4 +80,3 @@ def test_update_created_repos_by_language_upserts_rows():
     )
     assert all(r.all_repos == 130 for r in rows)
     assert all(r.significant_repos == 13 for r in rows)
-
