@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 
 def sync_repos(repo: GitHubRepository) -> None:
     """Sync this repo's metadata (and repo languages, repo licenses) from GitHub to the database."""
-    logger.info(f"sync_repos: starting for repo id={repo.pk} ({repo.repo_name})")
+    logger.info(
+        f"sync_repos: starting for repo id={repo.pk} ({repo.repo_name})"
+    )
 
     try:
         client = get_github_client()
@@ -33,8 +35,8 @@ def sync_repos(repo: GitHubRepository) -> None:
         repo_data = client.get_repository_info(owner, repo_name)
 
         # Update repo fields (stars, forks, description, dates)
-        repo.stars = repo_data.get("stargazers_count", 0)
-        repo.forks = repo_data.get("forks_count", 0)
+        repo.stars = repo_data.get("stargazers_count") or 0
+        repo.forks = repo_data.get("forks_count") or 0
         repo.description = repo_data.get("description") or ""
         repo.repo_pushed_at = parse_datetime(repo_data.get("pushed_at"))
         repo.repo_created_at = parse_datetime(repo_data.get("created_at"))
@@ -54,5 +56,7 @@ def sync_repos(repo: GitHubRepository) -> None:
         logger.error(f"sync_repos: failed for repo id={repo.pk}: {e}")
         raise
     except Exception as e:
-        logger.exception(f"sync_repos: unexpected error for repo id={repo.pk}: {e}")
+        logger.exception(
+            f"sync_repos: unexpected error for repo id={repo.pk}: {e}"
+        )
         raise
