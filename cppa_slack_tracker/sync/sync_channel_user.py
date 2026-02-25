@@ -47,7 +47,8 @@ def sync_channel_members(channel: SlackChannel) -> bool:
                 members_from_file = data
             else:
                 logger.warning(
-                    "Unexpected format in %s (not a list); removing file", members_path
+                    "Unexpected format in %s (not a list); removing file",
+                    members_path,
                 )
                 try:
                     members_path.unlink()
@@ -61,23 +62,26 @@ def sync_channel_members(channel: SlackChannel) -> bool:
                 logger.warning("Failed to remove %s: %s", members_path, unlink_e)
 
         if members_from_file is not None:
-            try:
-                member_ids = [m for m in members_from_file if isinstance(m, str)]
-                if len(member_ids) != len(members_from_file):
-                    raise ValueError(
-                        f"Invalid members payload in {members_path}: expected list[str]"
-                    )
-                _process_channel_members(channel, member_ids)
-            except Exception as e:
+            member_ids = [m for m in members_from_file if isinstance(m, str)]
+            if len(member_ids) != len(members_from_file):
                 logger.warning(
-                    "Failed to sync members for %s: %s", channel.channel_id, e
+                    "Invalid members payload in %s: expected list[str]; removing file",
+                    members_path,
                 )
-                return False
+            else:
+                try:
+                    _process_channel_members(channel, member_ids)
+                except Exception as e:
+                    logger.warning(
+                        "Failed to sync members for %s: %s",
+                        channel.channel_id,
+                        e,
+                    )
+
             try:
                 members_path.unlink()
             except OSError as e:
-                logger.warning("Failed to remove %s: %s", members_path, e)
-            return True
+                logger.exception("Failed to remove %s: %s", members_path, e)
 
     # No members.json or load failed: fetch from API
     try:
@@ -85,7 +89,9 @@ def sync_channel_members(channel: SlackChannel) -> bool:
         _process_channel_members(channel, member_ids)
         return True
     except Exception as e:
-        logger.warning("Failed to fetch/sync members for %s: %s", channel.channel_id, e)
+        logger.exception(
+            "Failed to fetch/sync members for %s: %s", channel.channel_id, e
+        )
         return False
 
 

@@ -88,7 +88,8 @@ def fetch_team_info(
     if data.get("ok"):
         team = data.get("team")
         if team and (team.get("name") or team.get("id")):
-            return team
+            if not team_id or team.get("id") == team_id:
+                return team
     logger.debug(
         "team.info failed or no name: %s; trying auth.test",
         data.get("error", "no team name"),

@@ -178,7 +178,16 @@ def sync_messages(
     channel_id = channel.channel_id
 
     # Step 4: fetch all messages for the range, then divide per day
-    all_messages = fetch_messages(channel_id, start_date, end_date)
+    try:
+        all_messages = fetch_messages(channel_id, start_date, end_date)
+    except Exception:
+        logger.exception(
+            "Failed to fetch messages for channel_id=%s (%s..%s)",
+            channel_id,
+            start_date,
+            end_date,
+        )
+        return success_count, error_count
     messages_by_day = _messages_by_day(all_messages, start_date, end_date)
 
     # Step 5: for each day with messages, write workspace + raw → process → remove workspace
@@ -198,7 +207,10 @@ def sync_messages(
         workspace_path.write_text(payload, encoding="utf-8")
         raw_path.write_text(payload, encoding="utf-8")
         logger.debug(
-            "Wrote %s and %s (%s messages)", workspace_path, raw_path, len(messages)
+            "Wrote %s and %s (%s messages)",
+            workspace_path,
+            raw_path,
+            len(messages),
         )
 
         try:

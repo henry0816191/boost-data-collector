@@ -123,8 +123,8 @@ def get_or_create_slack_channel(
     slack_channel: dict[str, Any],
     team: SlackTeam,
     creator_user_id: Optional[str] = None,
-) -> tuple[SlackChannel, bool]:
-    """Get or create a Slack channel. Requires slack_channel['id']. Returns (SlackChannel, created)."""
+) -> tuple[Optional[SlackChannel], bool]:
+    """Get or create a Slack channel. Returns (channel, created); channel is None when skipped."""
     if not slack_channel.get("id"):
         raise ValueError("Slack channel ID is required")
     creator = None
