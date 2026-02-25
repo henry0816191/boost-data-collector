@@ -1,0 +1,39 @@
+# Pre-commit hooks: run with `pre-commit run -a`
+# CI runs this; fix issues locally with `pre-commit run -a`
+# Use "python3" so pre-commit finds your Python on Windows (no python3.12 on PATH).
+# CI can override with PRE_COMMIT_DEFAULT_LANGUAGE_VERSION=python3.12 if needed.
+default_language_version:
+  python: python3
+
+exclude: .*migrations\/.*|staticfiles\/.*|\.test_artifacts\/.*|htmlcov\/.*
+
+repos:
+  - repo: https://github.com/adamchainz/django-upgrade
+    rev: "1.27.0"
+    hooks:
+      - id: django-upgrade
+        args: [--target-version, "4.2"]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+  - repo: https://github.com/ambv/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.8.2
+    hooks:
+      - id: ruff
+        args: [--fix]
+  - repo: https://github.com/rtts/djhtml
+    rev: 3.0.7
+    hooks:
+      - id: djhtml
+        entry: djhtml --tabwidth 2
+        files: .*/templates/.*\.html$
+        alias: autoformat

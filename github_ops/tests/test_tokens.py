@@ -26,9 +26,7 @@ def test_get_github_token_scraping_from_env_when_settings_empty():
     """get_github_token(use='scraping') uses os.environ GITHUB_TOKEN when settings not set."""
     with patch.object(settings, "GITHUB_TOKEN", None):
         with patch.object(settings, "GITHUB_TOKENS_SCRAPING", None):
-            with patch.dict(
-                "os.environ", {"GITHUB_TOKEN": "env_token"}, clear=False
-            ):
+            with patch.dict("os.environ", {"GITHUB_TOKEN": "env_token"}, clear=False):
                 assert get_github_token(use="scraping") == "env_token"
 
 
@@ -37,9 +35,7 @@ def test_get_github_token_scraping_from_tokens_list_round_robin():
     """get_github_token(use='scraping') round-robins when GITHUB_TOKENS_SCRAPING is a list."""
     # Reset the module-level cycle so behaviour is deterministic
     with patch.object(tokens_module, "_scraping_token_cycle", None):
-        with patch.object(
-            settings, "GITHUB_TOKENS_SCRAPING", ["token_a", "token_b"]
-        ):
+        with patch.object(settings, "GITHUB_TOKENS_SCRAPING", ["token_a", "token_b"]):
             first = get_github_token(use="scraping")
             second = get_github_token(use="scraping")
             third = get_github_token(use="scraping")
@@ -92,9 +88,7 @@ def test_get_github_token_write_from_env():
     """get_github_token(use='write') uses os.environ GITHUB_TOKEN when settings empty."""
     with patch.object(settings, "GITHUB_TOKEN_WRITE", None):
         with patch.object(settings, "GITHUB_TOKEN", None):
-            with patch.dict(
-                "os.environ", {"GITHUB_TOKEN": "env_write"}, clear=False
-            ):
+            with patch.dict("os.environ", {"GITHUB_TOKEN": "env_write"}, clear=False):
                 assert get_github_token(use="write") == "env_write"
 
 

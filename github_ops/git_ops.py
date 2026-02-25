@@ -1,9 +1,11 @@
 """
-Git and content operations for GitHub: clone, push, fetch one file.
+Git and content operations for GitHub: clone, push, fetch one file, upload file.
 All apps use this module (and github_ops.client) for GitHub operations.
 """
+
 from __future__ import annotations
 
+import base64
 import logging
 import re
 import subprocess
@@ -44,7 +46,11 @@ def clone_repo(
     if "github.com" not in url_or_slug and "/" in url_or_slug:
         url_or_slug = f"https://github.com/{url_or_slug}"
     clone_url = _url_with_token(
-        url_or_slug if url_or_slug.endswith(".git") else url_or_slug.rstrip("/") + ".git",
+        (
+            url_or_slug
+            if url_or_slug.endswith(".git")
+            else url_or_slug.rstrip("/") + ".git"
+        ),
         token,
     )
     cmd = ["git", "clone", clone_url, str(dest_dir)]
@@ -97,3 +103,50 @@ def fetch_file_content(
         client = get_github_client(use="scraping")
     content, _ = client.get_file_content(owner, repo, path, ref=ref)
     return content
+
+
+def upload_file(
+    owner: str,
+    repo: str,
+    dest_path: str,
+    local_file_path: str | Path,
+    commit_message: Optional[str] = None,
+    branch: str = "main",
+    *,
+    client: Optional[GitHubAPIClient] = None,
+) -> Optional[dict]:
+    """
+    Upload a local file to a GitHub repo via Contents API (create or update).
+    Uses write token. Returns API response dict or None on failure.
+    """
+    local_file_path = Path(local_file_path)
+    if not local_file_path.is_file():
+        logger.error("Local file not found or is a directory: %s", local_file_path)
+        return None
+    if client is None:
+        client = get_github_client(use="write")
+    content = local_file_path.read_bytes()
+    content_base64 = base64.b64encode(content).decode("utf-8")
+    if commit_message is None:
+        commit_message = f"Add {local_file_path.name}"
+    sha = client.get_file_sha(owner, repo, dest_path, ref=branch)
+    try:
+        return client.create_or_update_file(
+            owner,
+            repo,
+            dest_path,
+            content_base64,
+            commit_message,
+            branch=branch,
+            sha=sha,
+        )
+    except Exception as e:
+        logger.exception(
+            "Upload file %s to %s/%s/%s failed: %s",
+            local_file_path,
+            owner,
+            repo,
+            dest_path,
+            e,
+        )
+        return None

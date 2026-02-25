@@ -99,12 +99,8 @@ class GitHubRepository(models.Model):
     forks = models.IntegerField(default=0)
     description = models.TextField(blank=True)
     repo_pushed_at = models.DateTimeField(null=True, blank=True, db_index=True)
-    repo_created_at = models.DateTimeField(
-        null=True, blank=True, db_index=True
-    )
-    repo_updated_at = models.DateTimeField(
-        null=True, blank=True, db_index=True
-    )
+    repo_created_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    repo_updated_at = models.DateTimeField(null=True, blank=True, db_index=True)
     licenses = models.ManyToManyField(
         License,
         related_name="repos",
@@ -278,15 +274,9 @@ class Issue(models.Model):
         choices=IssueStateReason.choices,
         blank=True,
     )
-    issue_created_at = models.DateTimeField(
-        null=True, blank=True, db_index=True
-    )
-    issue_updated_at = models.DateTimeField(
-        null=True, blank=True, db_index=True
-    )
-    issue_closed_at = models.DateTimeField(
-        null=True, blank=True, db_index=True
-    )
+    issue_created_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    issue_updated_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    issue_closed_at = models.DateTimeField(null=True, blank=True, db_index=True)
     assignees = models.ManyToManyField(
         "cppa_user_tracker.GitHubAccount",
         related_name="assigned_issues",
@@ -414,12 +404,8 @@ class PullRequestReview(models.Model):
     pr_review_id = models.BigIntegerField(unique=True, db_index=True)
     body = models.TextField(blank=True)
     in_reply_to_id = models.BigIntegerField(null=True, blank=True)
-    pr_review_created_at = models.DateTimeField(
-        null=True, blank=True, db_index=True
-    )
-    pr_review_updated_at = models.DateTimeField(
-        null=True, blank=True, db_index=True
-    )
+    pr_review_created_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    pr_review_updated_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         db_table = "github_activity_tracker_pullrequestreview"
@@ -442,12 +428,8 @@ class PullRequestComment(models.Model):
     )
     pr_comment_id = models.BigIntegerField(unique=True, db_index=True)
     body = models.TextField(blank=True)
-    pr_comment_created_at = models.DateTimeField(
-        null=True, blank=True, db_index=True
-    )
-    pr_comment_updated_at = models.DateTimeField(
-        null=True, blank=True, db_index=True
-    )
+    pr_comment_created_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    pr_comment_updated_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     class Meta:
         db_table = "github_activity_tracker_pullrequestcomment"

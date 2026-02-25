@@ -1,4 +1,5 @@
 """Minimal view tests (admin is the only app-served URL). Uses django-test-plus tp fixture."""
+
 import pytest
 
 
@@ -23,4 +24,9 @@ def test_admin_login_page_contains_login_form(tp):
     tp.response_200()
     content = tp.last_response.content.decode("utf-8").lower()
     # Django admin login page has either a login form with username/password or "log in" text
-    assert "log in" in content or "username" in content or "password" in content or "csrf" in content
+    assert (
+        "log in" in content
+        or "username" in content
+        or "password" in content
+        or "csrf" in content
+    )

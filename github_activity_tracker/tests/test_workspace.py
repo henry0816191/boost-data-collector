@@ -11,6 +11,14 @@ from github_activity_tracker.workspace import (
     get_issue_json_path,
     get_prs_dir,
     get_pr_json_path,
+    get_raw_source_commits_dir,
+    get_raw_source_commit_path,
+    get_raw_source_issue_path,
+    get_raw_source_issues_dir,
+    get_raw_source_pr_path,
+    get_raw_source_prs_dir,
+    get_raw_source_repo_dir,
+    get_raw_source_root,
     get_repo_dir,
     get_workspace_root,
     iter_existing_commit_jsons,
@@ -32,7 +40,6 @@ def mock_workspace_path(tmp_path):
 
 def test_get_workspace_root_returns_path(mock_workspace_path):
     """get_workspace_root returns Path from get_workspace_path(app_slug)."""
-    from github_activity_tracker.workspace import get_workspace_root
 
     root = get_workspace_root()
     assert root == mock_workspace_path
@@ -71,7 +78,7 @@ def test_get_repo_dir_returns_owner_repo_path(mock_workspace_path):
 
 def test_get_repo_dir_creates_parents(mock_workspace_path):
     """get_repo_dir creates parent directories."""
-    path = get_repo_dir("org", "repo")
+    get_repo_dir("org", "repo")
     assert (mock_workspace_path / "org" / "repo").exists()
 
 
@@ -160,14 +167,7 @@ def test_get_prs_dir_idempotent(mock_workspace_path):
 def test_get_commit_json_path_returns_commits_sha_json(mock_workspace_path):
     """get_commit_json_path returns .../commits/<sha>.json."""
     path = get_commit_json_path("owner", "repo", "abc123def")
-    assert (
-        path
-        == mock_workspace_path
-        / "owner"
-        / "repo"
-        / "commits"
-        / "abc123def.json"
-    )
+    assert path == mock_workspace_path / "owner" / "repo" / "commits" / "abc123def.json"
 
 
 def test_get_commit_json_path_does_not_create_file(mock_workspace_path):
@@ -190,9 +190,7 @@ def test_get_commit_json_path_consistent(mock_workspace_path):
 def test_get_issue_json_path_returns_issues_num_json(mock_workspace_path):
     """get_issue_json_path returns .../issues/<number>.json."""
     path = get_issue_json_path("owner", "repo", 42)
-    assert (
-        path == mock_workspace_path / "owner" / "repo" / "issues" / "42.json"
-    )
+    assert path == mock_workspace_path / "owner" / "repo" / "issues" / "42.json"
 
 
 def test_get_issue_json_path_integer_number(mock_workspace_path):
@@ -320,3 +318,102 @@ def test_iter_existing_pr_jsons_ignores_non_json(mock_workspace_path):
     paths = list(iter_existing_pr_jsons("o", "r"))
     assert len(paths) == 1
     assert paths[0].name == "4.json"
+
+
+# --- Raw source (workspace/raw/github_activity_tracker) ---
+
+
+@pytest.fixture
+def mock_raw_workspace_path(tmp_path):
+    """Patch get_workspace_path so raw source root is tmp_path/raw/github_activity_tracker."""
+    with patch("github_activity_tracker.workspace.get_workspace_path") as m:
+        m.side_effect = lambda slug: tmp_path / slug
+        yield tmp_path / "raw"
+
+
+def test_get_raw_source_root_returns_path_and_creates_dir(mock_raw_workspace_path):
+    """get_raw_source_root returns .../raw/github_activity_tracker/ and creates dirs."""
+    root = get_raw_source_root()
+    assert root == mock_raw_workspace_path / "github_activity_tracker"
+    assert root.is_dir()
+
+
+def test_get_raw_source_repo_dir_returns_owner_repo_subdir(mock_raw_workspace_path):
+    """get_raw_source_repo_dir returns .../github_activity_tracker/<owner>/<repo>/."""
+    path = get_raw_source_repo_dir("boostorg", "boost")
+    assert (
+        path
+        == mock_raw_workspace_path / "github_activity_tracker" / "boostorg" / "boost"
+    )
+    assert path.is_dir()
+
+
+def test_get_raw_source_commits_dir_returns_commits_subdir(mock_raw_workspace_path):
+    """get_raw_source_commits_dir returns .../<owner>/<repo>/commits/."""
+    path = get_raw_source_commits_dir("o", "r")
+    assert (
+        path
+        == mock_raw_workspace_path / "github_activity_tracker" / "o" / "r" / "commits"
+    )
+    assert path.is_dir()
+
+
+def test_get_raw_source_issues_dir_returns_issues_subdir(mock_raw_workspace_path):
+    """get_raw_source_issues_dir returns .../<owner>/<repo>/issues/."""
+    path = get_raw_source_issues_dir("o", "r")
+    assert (
+        path
+        == mock_raw_workspace_path / "github_activity_tracker" / "o" / "r" / "issues"
+    )
+    assert path.is_dir()
+
+
+def test_get_raw_source_prs_dir_returns_prs_subdir(mock_raw_workspace_path):
+    """get_raw_source_prs_dir returns .../<owner>/<repo>/prs/."""
+    path = get_raw_source_prs_dir("o", "r")
+    assert (
+        path == mock_raw_workspace_path / "github_activity_tracker" / "o" / "r" / "prs"
+    )
+    assert path.is_dir()
+
+
+def test_get_raw_source_commit_path_returns_sha_json(mock_raw_workspace_path):
+    """get_raw_source_commit_path returns .../commits/<sha>.json."""
+    path = get_raw_source_commit_path("owner", "repo", "abc123def")
+    assert (
+        path
+        == mock_raw_workspace_path
+        / "github_activity_tracker"
+        / "owner"
+        / "repo"
+        / "commits"
+        / "abc123def.json"
+    )
+
+
+def test_get_raw_source_issue_path_returns_number_json(mock_raw_workspace_path):
+    """get_raw_source_issue_path returns .../issues/<number>.json."""
+    path = get_raw_source_issue_path("owner", "repo", 42)
+    assert (
+        path
+        == mock_raw_workspace_path
+        / "github_activity_tracker"
+        / "owner"
+        / "repo"
+        / "issues"
+        / "42.json"
+    )
+
+
+def test_get_raw_source_pr_path_returns_number_json(mock_raw_workspace_path):
+    """get_raw_source_pr_path returns .../prs/<number>.json."""
+    path = get_raw_source_pr_path("owner", "repo", 7)
+    assert (
+        path
+        == mock_raw_workspace_path
+        / "github_activity_tracker"
+        / "owner"
+        / "repo"
+        / "prs"
+        / "7.json"
+    )

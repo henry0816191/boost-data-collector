@@ -19,7 +19,7 @@ The main task runs once per day at a set time (e.g. Celery Beat, cron, or manual
 - Framework - Django. One Django project with multiple Django apps; all apps share the same settings and database.
 - ORM - Django ORM. All data access goes through Django models and the ORM; migrations are used for schema changes.
 - Database - PostgreSQL. The project uses one PostgreSQL database (e.g. `boost_dashboard`); there are no separate databases or schema-based isolation per app.
-- Task scheduling - Celery and Celery Beat run the main task once per day at a set time; Redis (or RabbitMQ) is the message broker. You can also run the workflow by hand via `python manage.py run_all_collectors` instead of Celery.
+- Task scheduling - Celery and Celery Beat run the main task once per day at **1:00 AM PST** (America/Los_Angeles) via the `workflow.tasks.run_all_collectors_task` task; Redis is the message broker. You can also run the workflow by hand via `python manage.py run_all_collectors` instead of Celery. Start the worker with `celery -A config worker -l info` and the scheduler with `celery -A config beat -l info`.
 - Configuration - Django settings (e.g. `settings.py`); environment variables for database URL, credentials, and API keys (e.g. via `django-environ` or `python-decouple`).
 - Structure - One Django project (e.g. `config/` or project root with `manage.py`, `settings.py`). Multiple Django apps (see table below); each app can expose management commands in `management/commands/`. All apps are in `INSTALLED_APPS` and use the shared database.
 

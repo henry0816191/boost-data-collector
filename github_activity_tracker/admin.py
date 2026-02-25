@@ -33,7 +33,14 @@ class LicenseAdmin(ModelAdmin):
 
 @admin.register(GitHubRepository)
 class GitHubRepositoryAdmin(ModelAdmin):
-    list_display = ("id", "owner_account", "repo_name", "stars", "forks", "repo_pushed_at")
+    list_display = (
+        "id",
+        "owner_account",
+        "repo_name",
+        "stars",
+        "forks",
+        "repo_pushed_at",
+    )
     list_filter = ("repo_created_at",)
     search_fields = ("repo_name", "description")
     raw_id_fields = ("owner_account",)
@@ -63,14 +70,31 @@ class GitHubFileAdmin(ModelAdmin):
 
 @admin.register(GitCommitFileChange)
 class GitCommitFileChangeAdmin(ModelAdmin):
-    list_display = ("id", "commit", "github_file", "status", "additions", "deletions", "created_at")
+    list_display = (
+        "id",
+        "commit",
+        "github_file",
+        "status",
+        "additions",
+        "deletions",
+        "created_at",
+    )
     list_filter = ("status",)
     raw_id_fields = ("commit", "github_file")
 
 
 @admin.register(Issue)
 class IssueAdmin(ModelAdmin):
-    list_display = ("id", "repo", "account", "issue_number", "issue_id", "title", "state", "issue_created_at")
+    list_display = (
+        "id",
+        "repo",
+        "account",
+        "issue_number",
+        "issue_id",
+        "title",
+        "state",
+        "issue_created_at",
+    )
     list_filter = ("state", "state_reason")
     search_fields = ("title", "body")
     raw_id_fields = ("repo", "account")
@@ -79,7 +103,13 @@ class IssueAdmin(ModelAdmin):
 
 @admin.register(IssueComment)
 class IssueCommentAdmin(ModelAdmin):
-    list_display = ("id", "issue", "account", "issue_comment_id", "issue_comment_created_at")
+    list_display = (
+        "id",
+        "issue",
+        "account",
+        "issue_comment_id",
+        "issue_comment_created_at",
+    )
     raw_id_fields = ("issue", "account")
 
 
@@ -92,7 +122,17 @@ class IssueLabelAdmin(ModelAdmin):
 
 @admin.register(PullRequest)
 class PullRequestAdmin(ModelAdmin):
-    list_display = ("id", "repo", "account", "pr_number", "pr_id", "title", "state", "pr_created_at", "pr_merged_at")
+    list_display = (
+        "id",
+        "repo",
+        "account",
+        "pr_number",
+        "pr_id",
+        "title",
+        "state",
+        "pr_created_at",
+        "pr_merged_at",
+    )
     list_filter = ("state",)
     search_fields = ("title", "body")
     raw_id_fields = ("repo", "account")

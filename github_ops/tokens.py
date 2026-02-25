@@ -1,6 +1,7 @@
 """
 GitHub token resolution: get token or API client by use case (scraping, push, write).
 """
+
 from __future__ import annotations
 
 import itertools
@@ -50,9 +51,7 @@ def get_github_token(
                 "GITHUB_TOKEN", ""
             )
         if not token:
-            raise ValueError(
-                "No write token: set GITHUB_TOKEN_WRITE or GITHUB_TOKEN."
-            )
+            raise ValueError("No write token: set GITHUB_TOKEN_WRITE or GITHUB_TOKEN.")
         return (token or "").strip()
     raise ValueError(
         f"Unknown use: {use!r}. Use 'scraping', 'push', 'create_pr', or 'write'."

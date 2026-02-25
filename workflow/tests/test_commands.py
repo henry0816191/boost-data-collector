@@ -1,4 +1,5 @@
 """Tests for workflow management commands."""
+
 import pytest
 from io import StringIO
 from unittest.mock import patch, MagicMock
@@ -11,7 +12,9 @@ from django.core.management.base import CommandError
 def test_run_all_collectors_command_exists(workflow_cmd_name):
     """run_all_collectors is registered and runnable; SystemExit is expected when tokens missing."""
     commands = get_commands()
-    assert workflow_cmd_name in commands, f"Command {workflow_cmd_name!r} should be registered"
+    assert (
+        workflow_cmd_name in commands
+    ), f"Command {workflow_cmd_name!r} should be registered"
 
     out = StringIO()
     err = StringIO()
@@ -69,7 +72,7 @@ def test_run_all_collectors_stop_on_failure(workflow_cmd_name):
                 stdout=out,
                 stderr=err,
             )
-    # COLLECTOR_COMMANDS has one command; we should have called it only once.
+    # COLLECTOR_COMMANDS has two commands; with --stop-on-failure, only the first should run.
     assert call_command_mock.call_count == 1
 
 

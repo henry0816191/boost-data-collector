@@ -11,8 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from cppa_user_tracker.services import (
     get_or_create_github_account,
@@ -24,8 +23,10 @@ from github_activity_tracker.workspace import (
     get_commit_json_path,
     iter_existing_commit_jsons,
 )
+from django.utils import timezone
 from github_ops import get_github_client
 from github_ops.client import ConnectionException, RateLimitException
+from .raw_source import save_commit_raw_source
 from github_activity_tracker.sync.utils import (
     parse_datetime,
     parse_github_user,
@@ -99,10 +100,9 @@ def _process_commit_data(repo: GitHubRepository, commit_data: dict) -> None:
 
     commit_hash = commit_data.get("sha")
     comment = commit_data.get("commit", {}).get("message", "")
-    commit_date_str = (
-        commit_data.get("commit", {}).get("author", {}).get("date")
-        or commit_data.get("commit", {}).get("committer", {}).get("date")
-    )
+    commit_date_str = commit_data.get("commit", {}).get("author", {}).get(
+        "date"
+    ) or commit_data.get("commit", {}).get("committer", {}).get("date")
     commit_at = parse_datetime(commit_date_str)
 
     commit_obj, _ = services.create_or_update_commit(
@@ -125,6 +125,7 @@ def _process_existing_commit_jsons(repo: GitHubRepository) -> int:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             _process_commit_data(repo, data)
+            save_commit_raw_source(owner, repo_name, data)
             path.unlink()
             count += 1
         except Exception as e:
@@ -132,8 +133,18 @@ def _process_existing_commit_jsons(repo: GitHubRepository) -> int:
     return count
 
 
-def sync_commits(repo: GitHubRepository) -> None:
-    """1) Process existing workspace JSONs; 2) Fetch from GitHub, save as JSON, persist to DB, remove file."""
+def sync_commits(
+    repo: GitHubRepository,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+) -> None:
+    """1) Process existing workspace JSONs; 2) Fetch from GitHub, save as JSON, persist to DB, remove file.
+
+    Args:
+        repo: Repository to sync.
+        start_date: Override start date (default: last commit date + 1s, or None if no commits).
+        end_date: Override end date (default: now).
+    """
     logger.info("sync_commits: starting for repo id=%s (%s)", repo.pk, repo.repo_name)
 
     owner = repo.owner_account.username
@@ -143,16 +154,19 @@ def sync_commits(repo: GitHubRepository) -> None:
         # Phase 1: process existing JSON files
         n_existing = _process_existing_commit_jsons(repo)
         if n_existing:
-            logger.info("sync_commits: processed %s existing commit JSON(s)", n_existing)
+            logger.info(
+                "sync_commits: processed %s existing commit JSON(s)",
+                n_existing,
+            )
 
         # Phase 2: fetch from GitHub, write JSON, persist to DB, remove file
         client = get_github_client()
-        last_commit = repo.commits.order_by("-commit_at").first()
-        if last_commit:
-            start_date = last_commit.commit_at + timedelta(seconds=1)
-        else:
-            start_date = None
-        end_date = datetime.now()
+        if start_date is None:
+            last_commit = repo.commits.order_by("-commit_at").first()
+            if last_commit:
+                start_date = last_commit.commit_at + timedelta(seconds=1)
+        if end_date is None:
+            end_date = timezone.now()
 
         count = 0
         for commit_data in fetcher.fetch_commits_from_github(
@@ -164,9 +178,11 @@ def sync_commits(repo: GitHubRepository) -> None:
             json_path = get_commit_json_path(owner, repo_name, sha)
             json_path.parent.mkdir(parents=True, exist_ok=True)
             json_path.write_text(
-                json.dumps(commit_data, indent=2, default=str), encoding="utf-8"
+                json.dumps(commit_data, indent=2, default=str),
+                encoding="utf-8",
             )
             _process_commit_data(repo, commit_data)
+            save_commit_raw_source(owner, repo_name, commit_data)
             json_path.unlink()
             count += 1
 
@@ -181,5 +197,7 @@ def sync_commits(repo: GitHubRepository) -> None:
         logger.error("sync_commits: failed for repo id=%s: %s", repo.pk, e)
         raise
     except Exception as e:
-        logger.exception("sync_commits: unexpected error for repo id=%s: %s", repo.pk, e)
+        logger.exception(
+            "sync_commits: unexpected error for repo id=%s: %s", repo.pk, e
+        )
         raise

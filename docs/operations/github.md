@@ -44,7 +44,7 @@ push("/tmp/boost", remote="origin", branch="my-branch")
 
 ## 2. API client (read + write)
 
-**Module:** `github_ops.client.GitHubAPIClient`  
+**Module:** `github_ops.client.GitHubAPIClient`
 **Obtain client:** `github_ops.get_github_client(use=...)` or `from github_ops import get_github_client`
 
 | Method | Token use | Description |

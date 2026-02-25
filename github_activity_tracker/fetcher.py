@@ -2,12 +2,15 @@
 Fetch data from GitHub API.
 Adapted from BoostDataCollector/github/fetch.py.
 """
+
 from __future__ import annotations
 
 import logging
 import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Iterator, Optional
+
+import requests
 
 if TYPE_CHECKING:
     from github_ops.client import GitHubAPIClient
@@ -67,10 +70,9 @@ def fetch_commits_from_github(
         logger.debug(f"Fetched {len(commits)} commits from page {page}")
 
         for commit in reversed(commits):
-            commit_date_str = (
-                commit.get("commit", {}).get("author", {}).get("date")
-                or commit.get("commit", {}).get("committer", {}).get("date")
-            )
+            commit_date_str = commit.get("commit", {}).get("author", {}).get(
+                "date"
+            ) or commit.get("commit", {}).get("committer", {}).get("date")
             if commit_date_str:
                 try:
                     commit_dt = datetime.fromisoformat(
@@ -99,10 +101,23 @@ def fetch_commits_from_github(
                         f"Failed to parse commit date '{commit_date_str}': {e}"
                     )
 
-            # Fetch full commit with stats
-            commit_with_stats = client.rest_request(
-                f"/repos/{owner}/{repo}/commits/{commit['sha']}"
-            )
+            # Fetch full commit with stats (skip on persistent server errors so sync continues)
+            try:
+                commit_with_stats = client.rest_request(
+                    f"/repos/{owner}/{repo}/commits/{commit['sha']}"
+                )
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code in (502, 503, 504):
+                    logger.warning(
+                        "Skipping commit %s for %s/%s after HTTP %s: %s",
+                        commit["sha"][:7],
+                        owner,
+                        repo,
+                        e.response.status_code,
+                        e,
+                    )
+                    continue
+                raise
             yield commit_with_stats
 
         if len(commits) < per_page:
@@ -219,19 +234,34 @@ def fetch_issues_from_github(
 
         # Filter out PRs (issues endpoint returns both issues and PRs)
         issues = [i for i in issues if "pull_request" not in i]
-        logger.debug(
-            f"Fetched {len(issues)} issues (excluding PRs) from page {page}"
-        )
+        logger.debug(f"Fetched {len(issues)} issues (excluding PRs) from page {page}")
 
         for issue in issues:
             updated_str = issue.get("updated_at") or issue.get("created_at")
-            if updated_str:
-                try:
-                    issue_dt = datetime.fromisoformat(
-                        updated_str.replace("Z", "+00:00")
-                    )
-                except Exception as e:
-                    logger.debug(f"Failed to parse issue date '{updated_str}': {e}")
+            if not updated_str:
+                continue
+            try:
+                issue_dt = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Failed to parse issue date '{updated_str}': {e}")
+                continue
+
+            if start_time:
+                start_time_aware = (
+                    start_time.replace(tzinfo=timezone.utc)
+                    if start_time.tzinfo is None
+                    else start_time
+                )
+                if issue_dt < start_time_aware:
+                    continue
+            if end_time:
+                end_time_aware = (
+                    end_time.replace(tzinfo=timezone.utc)
+                    if end_time.tzinfo is None
+                    else end_time
+                )
+                if issue_dt > end_time_aware:
+                    continue
 
             issue_number = issue.get("number")
             if issue_number:

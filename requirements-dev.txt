@@ -1,8 +1,14 @@
+# Include production dependencies
+-r requirements.txt
+
 # Test stack (see docs/testing or project testing summary)
 pytest>=7.4
 pytest-django>=4.5
 django-test-plus>=2.2
 model-bakery>=0.17
+
+# Lint / format (pre-commit runs these via .pre-commit-config.yaml)
+pre-commit>=3.6
 
 # Optional: coverage, HTTP mocking, fake data
 pytest-cov>=4.1

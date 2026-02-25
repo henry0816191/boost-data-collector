@@ -1,6 +1,6 @@
 # boost_library_tracker.services
 
-**Module path:** `boost_library_tracker.services`  
+**Module path:** `boost_library_tracker.services`
 **Description:** Boost libraries, versions, dependencies, categories, and maintainer/author roles. Single place for all writes to boost_library_tracker models.
 
 **Type notation:** Model types refer to `boost_library_tracker.models`. Cross-app: `GitHubRepository`, `GitHubFile` are from `github_activity_tracker.models`; `GitHubAccount` is from `cppa_user_tracker.models`.

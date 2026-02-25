@@ -1,6 +1,7 @@
 """
 Sync utilities: parse user/datetime for GitHub data. GitHub client/tokens live in github_ops.
 """
+
 from __future__ import annotations
 
 import logging
@@ -12,7 +13,12 @@ from github_ops import get_github_client, get_github_token
 logger = logging.getLogger(__name__)
 
 # Re-export for backward compatibility; prefer "from github_ops import ..."
-__all__ = ["get_github_client", "get_github_token", "parse_github_user", "parse_datetime"]
+__all__ = [
+    "get_github_client",
+    "get_github_token",
+    "parse_github_user",
+    "parse_datetime",
+]
 
 
 def parse_github_user(user_dict: Optional[dict]) -> dict:
