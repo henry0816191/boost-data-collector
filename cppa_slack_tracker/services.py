@@ -253,7 +253,17 @@ def save_slack_message(
     channel: SlackChannel,
     slack_message: dict[str, Any],
 ) -> Optional[SlackMessage]:
-    """Save or update a Slack message. Returns None if the message is ignored (e.g. join/leave). Raises ValueError for unknown subtype, missing user, or missing ts."""
+    """
+    Save or update a Slack message from a Slack API payload.
+
+    Returns None when the message is ignored: subtype is in the ignore list
+    (e.g. bot_message, channel_topic), or it is channel_join/channel_leave
+    (membership is recorded first), or it is the "A file was commented on"
+    placeholder with no user. Otherwise creates or updates a SlackMessage
+    and returns it.
+
+    Raises ValueError if user is required but missing, or if ts is missing.
+    """
     subtype = slack_message.get("subtype")
     if subtype in SUBTYPE_IGNORE:
         return None

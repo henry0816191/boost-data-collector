@@ -13,6 +13,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='slackmessage',
             name='ts',
-            field=models.CharField(db_index=True, help_text='Slack message timestamp (unique identifier)', max_length=50),
+            field=models.CharField(db_index=True, help_text='Slack message timestamp (unique per channel)', max_length=50),
         ),
     ]

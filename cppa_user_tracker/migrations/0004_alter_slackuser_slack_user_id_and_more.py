@@ -92,6 +92,17 @@ def noop(_apps, _schema_editor):
 
 
 class Migration(migrations.Migration):
+    """
+    Dedupe SlackUser by slack_user_id, add unique constraint on slack_user_id,
+    and normalize migration state for table names.
+
+    The AlterModelTable(..., table=None) operations sync migration state to
+    Django's default table names (app_label_modelname). Physical table names
+    are unchanged: 0001/0002/0003 already created tables with those same
+    names (e.g. cppa_user_tracker_baseprofile). No RENAME is executed; this
+    avoids state drift with the current models, which do not set db_table.
+    Run after RunPython dedupe so the unique constraint can be applied safely.
+    """
 
     dependencies = [
         ("cppa_user_tracker", "0003_discordprofile_alter_baseprofile_type"),

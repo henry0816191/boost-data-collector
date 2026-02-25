@@ -82,22 +82,22 @@ class Command(BaseCommand):
         parser.add_argument(
             "--sync-users",
             action="store_true",
-            help="Sync Slack users only",
+            help="Sync Slack users",
         )
         parser.add_argument(
             "--sync-channels",
             action="store_true",
-            help="Sync Slack channels only",
+            help="Sync Slack channels",
         )
         parser.add_argument(
             "--sync-channel-users",
             action="store_true",
-            help="Sync channel memberships only",
+            help="Sync channel memberships",
         )
         parser.add_argument(
             "--sync-messages",
             action="store_true",
-            help="Sync Slack messages only",
+            help="Sync Slack messages",
         )
         parser.add_argument(
             "--dry-run",
@@ -121,6 +121,10 @@ class Command(BaseCommand):
 
         team = sync_team(team_id)
 
+        # Run the requested sync(s). Each of --sync-users, --sync-channels,
+        # --sync-channel-users, and --sync-messages runs its corresponding sync
+        # when set; multiple flags can be combined. If none are set, default to
+        # syncing messages only.
         if options.get("sync_users"):
             self.sync_users(options, team)
         if options.get("sync_channels"):
@@ -130,7 +134,6 @@ class Command(BaseCommand):
         if options.get("sync_messages"):
             self.sync_messages(options, team)
 
-        # No action flag: run sync messages only
         if (
             not options.get("sync_users")
             and not options.get("sync_channels")
@@ -228,8 +231,9 @@ class Command(BaseCommand):
             try:
                 return [SlackChannel.objects.get(team=team, channel_id=channel_id)]
             except SlackChannel.DoesNotExist:
-                raise CommandError(
-                    f"Channel {channel_id} not found. Sync channels first."
+                logger.warning(
+                    "Channel %s not found. Syncing all channels in team.",
+                    channel_id,
                 )
         return list(SlackChannel.objects.filter(team=team).order_by("channel_id"))
 
@@ -285,7 +289,8 @@ class Command(BaseCommand):
                     if not isinstance(msg, dict):
                         load_failures += 1
                         logger.warning(
-                            "Skipping non-dict payload from --messages-json: %r", msg
+                            "Skipping non-dict payload from --messages-json: %r",
+                            msg,
                         )
                         continue
                     ch_id = msg.get("channel")
@@ -293,13 +298,12 @@ class Command(BaseCommand):
                     if channel:
                         try:
                             save_slack_message(channel, msg)
-                        except Exception as e:
+                        except Exception:
                             msg_ts = msg.get("ts", msg.get("client_msg_id", "?"))
                             logger.exception(
-                                "Failed to save message from --messages-json: channel_id=%s ts=%s: %s",
+                                "Failed to save message from --messages-json: channel_id=%s ts=%s",
                                 ch_id,
                                 msg_ts,
-                                e,
                             )
                             load_failures += 1
                 if load_failures:
