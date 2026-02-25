@@ -62,10 +62,12 @@ def sync_channel_members(channel: SlackChannel) -> bool:
                 logger.warning("Failed to remove %s: %s", members_path, unlink_e)
 
         if members_from_file is not None:
-            member_ids = [m for m in members_from_file if isinstance(m, str)]
+            member_ids = [
+                m.strip() for m in members_from_file if isinstance(m, str) and m.strip()
+            ]
             if len(member_ids) != len(members_from_file):
                 logger.warning(
-                    "Invalid members payload in %s: expected list[str]; removing file",
+                    "Invalid members payload in %s: expected non-empty list[str]; removing file",
                     members_path,
                 )
             else:

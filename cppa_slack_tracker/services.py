@@ -273,22 +273,30 @@ def save_slack_message(
     if subtype in SUBTYPE_IGNORE:
         return None
     if subtype == "channel_join":
+        event_ts = slack_message.get("ts")
+        if not event_ts:
+            logger.warning("Skipping channel_join without ts")
+            return None
         if slack_message.get("user"):
             user = _get_or_fetch_slack_user(slack_message["user"])
             add_channel_membership_change(
                 channel,
                 user.slack_user_id,
-                slack_message.get("ts", ""),
+                event_ts,
                 True,
             )
         return None
     if subtype == "channel_leave":
+        event_ts = slack_message.get("ts")
+        if not event_ts:
+            logger.warning("Skipping channel_leave without ts")
+            return None
         if slack_message.get("user"):
             user = _get_or_fetch_slack_user(slack_message["user"])
             add_channel_membership_change(
                 channel,
                 user.slack_user_id,
-                slack_message.get("ts", ""),
+                event_ts,
                 False,
             )
         return None
@@ -298,8 +306,9 @@ def save_slack_message(
     if subtype == "file_comment":
         user = _get_or_fetch_slack_user(slack_message.get("user", "") or "-1")
         text = slack_message.get("text", "")
-        if slack_message.get("comment"):
-            text += f"\nComment: {slack_message.get('comment', {}).get('comment', '')}"
+        comment = slack_message.get("comment")
+        if isinstance(comment, dict):
+            text += f"\nComment: {comment.get('comment', '')}"
     elif subtype:
         text = _message_text_for_subtype(slack_message, subtype) or ""
     else:

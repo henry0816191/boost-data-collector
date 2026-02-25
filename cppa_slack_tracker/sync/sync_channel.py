@@ -158,10 +158,15 @@ def sync_channels(
         )
         return success_count, error_count + 1
     for ch in channels:
+        if not isinstance(ch, dict):
+            logger.warning("Skipping malformed channel payload: %r", ch)
+            error_count += 1
+            continue
         try:
             if _process_channel_info(ch, team):
                 success_count += 1
         except Exception as e:
-            logger.warning("Failed to sync channel %s: %s", ch.get("id"), e)
+            ch_id = ch.get("id") if isinstance(ch, dict) else None
+            logger.warning("Failed to sync channel %s: %s", ch_id, e)
             error_count += 1
     return success_count, error_count

@@ -31,6 +31,17 @@ def _validate_date_str(date_str: str) -> str:
     return date_str
 
 
+def _is_daily_message_json(path: Path) -> bool:
+    """True if path is a .json file whose stem is YYYY-MM-DD."""
+    if path.suffix != ".json":
+        return False
+    try:
+        datetime.strptime(path.stem, "%Y-%m-%d")
+    except ValueError:
+        return False
+    return True
+
+
 def get_workspace_root() -> Path:
     """Return this app's workspace directory (e.g. workspace/cppa_slack_tracker/)."""
     return get_workspace_path(_APP_SLUG)
@@ -120,11 +131,7 @@ def iter_existing_message_jsons(
         if not base.is_dir():
             return
         for path in sorted(base.glob("*.json")):
-            if (
-                path.name.endswith(".json")
-                and len(path.stem) == 10
-                and path.stem[:4].isdigit()
-            ):
+            if _is_daily_message_json(path):
                 yield path
         return
     if team_slug:
@@ -134,11 +141,7 @@ def iter_existing_message_jsons(
         for channel_dir in sorted(base.iterdir()):
             if channel_dir.is_dir():
                 for path in sorted(channel_dir.glob("*.json")):
-                    if (
-                        path.name.endswith(".json")
-                        and len(path.stem) == 10
-                        and path.stem[:4].isdigit()
-                    ):
+                    if _is_daily_message_json(path):
                         yield path
         return
     for team_dir in sorted(root.iterdir()):
@@ -147,9 +150,5 @@ def iter_existing_message_jsons(
         for channel_dir in sorted(team_dir.iterdir()):
             if channel_dir.is_dir():
                 for path in sorted(channel_dir.glob("*.json")):
-                    if (
-                        path.name.endswith(".json")
-                        and len(path.stem) == 10
-                        and path.stem[:4].isdigit()
-                    ):
+                    if _is_daily_message_json(path):
                         yield path
