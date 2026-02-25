@@ -93,11 +93,15 @@ def _fetch_releases(client: GitHubAPIClient) -> list[dict]:
     return releases
 
 
-def _collect_libraries_for_version(boost_version, ref: str) -> tuple[int, int]:
+def _collect_libraries_for_version(
+    boost_version, ref: str, *, dry_run: bool = False
+) -> tuple[int, int]:
     """
     Fetch .gitmodules from boostorg/boost at ref, then for each lib submodule
     fetch meta/libraries.json from raw URL and create BoostLibraryVersion records
     with full metadata (description, authors, maintainers, categories, cxxstd).
+
+    When dry_run is True, no DB writes; returns (would_process_count, submodules_processed).
 
     Returns (library_versions_created, submodules_processed).
     """
@@ -134,6 +138,9 @@ def _collect_libraries_for_version(boost_version, ref: str) -> tuple[int, int]:
         lib_data_list = parse_libraries_json_full(raw, submodule_name)
 
         for lib_data in lib_data_list:
+            if dry_run:
+                created_total += 1
+                continue
             lib_name = lib_data["name"]
             description = lib_data["description"]
             key = lib_data.get("key", "")
@@ -214,6 +221,11 @@ class Command(BaseCommand):
             type=int,
             help="Limit number of versions to process (processes newest first)",
         )
+        parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Fetch and report what would be done; no DB writes.",
+        )
 
     def handle(self, *args, **options):
         try:
@@ -224,6 +236,10 @@ class Command(BaseCommand):
         if not token:
             self.stdout.write(self.style.ERROR("No GitHub token available"))
             return
+
+        dry_run = options.get("dry_run", False)
+        if dry_run:
+            self.stdout.write("Dry run: no DB writes.")
 
         client = GitHubAPIClient(token)
         limit = options.get("limit")
@@ -246,7 +262,7 @@ class Command(BaseCommand):
             refs_list = [_normalize_ref(ref_arg.strip())]
 
         if refs_list:
-            self._process_refs(refs_list)
+            self._process_refs(refs_list, dry_run=dry_run)
             return
 
         new_only = new_only_flag or not process_all
@@ -289,6 +305,19 @@ class Command(BaseCommand):
                 except Exception as e:
                     logger.warning(f"Could not parse date {published_at_str}: {e}")
 
+            if dry_run:
+                lib_created, submodules = _collect_libraries_for_version(
+                    None, tag_name, dry_run=True
+                )
+                total_lib_versions_created += lib_created
+                version_exists = BoostVersion.objects.filter(version=tag_name).exists()
+                if not version_exists:
+                    total_versions_created += 1
+                    self.stdout.write(f"Would create BoostVersion: {tag_name}")
+                self.stdout.write(
+                    f"  {tag_name}: {lib_created} library versions from {submodules} submodules"
+                )
+                continue
             try:
                 with transaction.atomic():
                     version_obj, created = get_or_create_boost_version(
@@ -313,14 +342,15 @@ class Command(BaseCommand):
                     )
                 )
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"\nDone: {total_versions_created} versions, "
-                f"{total_lib_versions_created} library versions created."
-            )
+        summary = (
+            f"\nDone: {total_versions_created} versions, "
+            f"{total_lib_versions_created} library versions created."
         )
+        if dry_run:
+            summary = summary.replace("created.", "would be created (dry run).")
+        self.stdout.write(self.style.SUCCESS(summary))
 
-    def _process_refs(self, refs_list: list[str]) -> None:
+    def _process_refs(self, refs_list: list[str], *, dry_run: bool = False) -> None:
         """Process a list of refs; each ref in its own transaction. BoostVersion is
         committed only after library collection succeeds, so a failed run leaves no
         version row and can be retried.
@@ -329,6 +359,19 @@ class Command(BaseCommand):
         total_lib_versions_created = 0
         for ref in refs_list:
             self.stdout.write(f"Collecting libraries for ref: {ref}")
+            if dry_run:
+                lib_created, submodules = _collect_libraries_for_version(
+                    None, ref, dry_run=True
+                )
+                total_lib_versions_created += lib_created
+                version_exists = BoostVersion.objects.filter(version=ref).exists()
+                if not version_exists:
+                    total_versions_created += 1
+                    self.stdout.write(f"Would create BoostVersion: {ref}")
+                self.stdout.write(
+                    f"  {ref}: {lib_created} library versions from {submodules} submodules"
+                )
+                continue
             try:
                 with transaction.atomic():
                     version_obj, created = get_or_create_boost_version(ref)
@@ -350,9 +393,10 @@ class Command(BaseCommand):
                     )
                 )
                 continue
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"\nDone: {total_versions_created} versions, "
-                f"{total_lib_versions_created} library versions created."
-            )
+        summary = (
+            f"\nDone: {total_versions_created} versions, "
+            f"{total_lib_versions_created} library versions created."
         )
+        if dry_run:
+            summary = summary.replace("created.", "would be created (dry run).")
+        self.stdout.write(self.style.SUCCESS(summary))
