@@ -1,6 +1,6 @@
 # boost_usage_tracker.services
 
-**Module path:** `boost_usage_tracker.services`  
+**Module path:** `boost_usage_tracker.services`
 **Description:** External repositories that use Boost, BoostUsage records, and temporary missing-header records. Single place for all writes to boost_usage_tracker models.
 
 **Type notation:** Model types refer to `boost_usage_tracker.models`. Cross-app: `GitHubRepository`, `GitHubFile` are from `github_activity_tracker.models`; `BoostFile` is from `boost_library_tracker.models`.
