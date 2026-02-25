@@ -105,7 +105,7 @@ class BoostLibraryRoleRelationshipAdmin(ModelAdmin):
 
 @admin.register(BoostLibraryCategoryRelationship)
 class BoostLibraryCategoryRelationshipAdmin(ModelAdmin):
-    """Admin for BoostLibraryCategoryRelationship (library–category link)."""
+    """Admin for BoostLibraryCategoryRelationship (library-category link)."""
 
     list_display = ("id", "library", "category", "created_at", "updated_at")
     raw_id_fields = ("library", "category")

@@ -146,7 +146,7 @@ class Command(BaseCommand):
             help="Only read CSV and report what would be done; do not write to DB.",
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *_args, **options):
         csv_path = options["csv_file"]
         errors_path = options.get("errors")
         dry_run = options["dry_run"]
@@ -175,8 +175,8 @@ class Command(BaseCommand):
             file_name = row["file_name"]
             real_name = _resolve_library_name(library_name)
 
-            library = BoostLibrary.objects.filter(name=real_name).first()
-            if not library:
+            matches = list(BoostLibrary.objects.filter(name=real_name)[:2])
+            if not matches:
                 stats["skipped_no_library"] += 1
                 if stats["skipped_no_library"] <= 3:
                     logger.debug("No BoostLibrary with name=%s", library_name)
@@ -190,6 +190,19 @@ class Command(BaseCommand):
                     }
                 )
                 continue
+            if len(matches) > 1:
+                stats["skipped_no_library"] += 1
+                error_rows.append(
+                    {
+                        "library_name": library_name,
+                        "file_name": file_name,
+                        "path_not_found": "",
+                        "library_not_found": f"{library_name} (ambiguous)",
+                        "supported_files": "",
+                    }
+                )
+                continue
+            library = matches[0]
 
             repo = library.repo
 

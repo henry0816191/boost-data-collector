@@ -106,7 +106,11 @@ def _collect_libraries_for_version(boost_version, ref: str) -> tuple[int, int]:
     if not content:
         logger.warning(f"Could not fetch .gitmodules for {ref}")
         return 0, 0
-    gitmodules_text = content.decode("utf-8")
+    try:
+        gitmodules_text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        logger.warning("Could not decode .gitmodules for %s", ref)
+        return 0, 0
     lib_submodules = parse_gitmodules_lib_submodules(gitmodules_text)
 
     created_total = 0
@@ -117,7 +121,8 @@ def _collect_libraries_for_version(boost_version, ref: str) -> tuple[int, int]:
         ).first()
         if not boost_repo:
             logger.debug(
-                "Skipping submodule %s: no BoostLibraryRepository", submodule_name
+                "Skipping submodule %s: no BoostLibraryRepository",
+                submodule_name,
             )
             continue
 
@@ -344,7 +349,7 @@ class Command(BaseCommand):
                         f"Failed ref {ref} (rolled back, retry later): {e}"
                     )
                 )
-                raise
+                continue
         self.stdout.write(
             self.style.SUCCESS(
                 f"\nDone: {total_versions_created} versions, "

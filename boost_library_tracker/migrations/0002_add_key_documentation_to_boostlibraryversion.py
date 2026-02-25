@@ -13,11 +13,13 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='boostlibraryversion',
             name='documentation',
-            field=models.CharField(blank=True, max_length=255),
+            field=models.CharField(blank=True, default='', max_length=255),
+            preserve_default=False,
         ),
         migrations.AddField(
             model_name='boostlibraryversion',
             name='key',
-            field=models.CharField(blank=True, db_index=True, max_length=255),
+            field=models.CharField(blank=True, db_index=True, default='', max_length=255),
+            preserve_default=False,
         ),
     ]

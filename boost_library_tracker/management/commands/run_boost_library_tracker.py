@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 import requests
 from django.core.management import call_command
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
 from cppa_user_tracker.services import get_or_create_owner_account
 from github_activity_tracker.services import (
@@ -318,10 +318,14 @@ class Command(BaseCommand):
             end_date = end_date.astimezone(timezone.utc).replace(tzinfo=None)
 
         if start_date and end_date and start_date > end_date:
-            raise CommandError(
-                f"Invalid date range: start_date ({start_date.isoformat()}) must be before "
-                f"or equal to end_date ({end_date.isoformat()})."
+            self.stderr.write(
+                self.style.WARNING(
+                    f"Invalid date range: start_date ({start_date.isoformat()}) is after "
+                    f"end_date ({end_date.isoformat()}); falling back to defaults."
+                )
             )
+            start_date = None
+            end_date = None
 
         from_library = (options.get("from_library") or "").strip() or None
         logger.debug(
