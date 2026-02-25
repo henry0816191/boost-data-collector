@@ -99,7 +99,7 @@ class SlackMessage(models.Model):
     ts = models.CharField(
         max_length=50,
         db_index=True,
-        help_text="Slack message timestamp (unique identifier)",
+        help_text="Slack message timestamp (unique per channel)",
     )
     user = models.ForeignKey(
         SlackUser,
