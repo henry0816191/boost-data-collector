@@ -6,10 +6,6 @@ from datetime import datetime, timezone
 from github_activity_tracker import services
 from github_activity_tracker.models import (
     CreatedReposByLanguage,
-    GitCommit,
-    GitHubFile,
-    GitHubRepository,
-    Issue,
     IssueLabel,
     PullRequestLabel,
     RepoLanguage,

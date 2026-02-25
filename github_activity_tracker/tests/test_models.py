@@ -6,8 +6,6 @@ from django.db import IntegrityError
 from github_activity_tracker.models import (
     CreatedReposByLanguage,
     GitHubRepository,
-    Language,
-    License,
 )
 
 

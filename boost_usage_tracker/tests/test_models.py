@@ -7,7 +7,6 @@ Covers models in detail including edge cases and boundaries:
 
 import pytest
 from django.db import IntegrityError, transaction
-from model_bakery import baker
 
 from boost_usage_tracker.models import (
     BoostExternalRepository,

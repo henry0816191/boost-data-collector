@@ -17,7 +17,6 @@ from typing import Optional
 
 from .models import (
     CreatedReposByLanguage,
-    FileChangeStatus,
     GitCommit,
     GitCommitFileChange,
     GitHubFile,
