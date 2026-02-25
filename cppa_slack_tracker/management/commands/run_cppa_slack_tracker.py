@@ -123,19 +123,21 @@ class Command(BaseCommand):
 
         if options.get("sync_users"):
             self.sync_users(options, team)
-            return
         if options.get("sync_channels"):
             self.sync_channels(options, team)
-            return
         if options.get("sync_channel_users"):
             self.sync_channel_users(options, team)
-            return
         if options.get("sync_messages"):
             self.sync_messages(options, team)
-            return
 
         # No action flag: run sync messages only
-        self.sync_messages(options, team)
+        if (
+            not options.get("sync_users")
+            and not options.get("sync_channels")
+            and not options.get("sync_channel_users")
+            and not options.get("sync_messages")
+        ):
+            self.sync_messages(options, team)
 
     def _print_dry_run(self, options, team_id: str) -> None:
         """Print what would be synced when --dry-run is set."""

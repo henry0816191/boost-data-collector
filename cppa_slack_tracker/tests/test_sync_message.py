@@ -90,7 +90,9 @@ class TestMessagesByDay:
 class TestSyncMessages:
     """Tests for sync_messages (with mocked fetch)."""
 
-    def test_sync_messages_skips_days_with_zero_messages(self, sample_slack_channel):
+    def test_sync_messages_skips_days_with_zero_messages(
+        self, sample_slack_channel, tmp_path
+    ):
         """When fetch returns no messages, no JSON files are created."""
         from cppa_slack_tracker.sync.sync_message import sync_messages
         from cppa_slack_tracker.workspace import (
@@ -103,15 +105,21 @@ class TestSyncMessages:
         team_slug = sample_slack_channel.team.team_name
         channel_slug = sample_slack_channel.channel_name
 
+        app_workspace = tmp_path / "workspace" / "cppa_slack_tracker"
+        app_workspace.mkdir(parents=True, exist_ok=True)
         with patch(
+            "cppa_slack_tracker.workspace.get_workspace_path",
+            return_value=app_workspace,
+        ), patch("cppa_slack_tracker.workspace.settings") as m_settings, patch(
             "cppa_slack_tracker.sync.sync_message.fetch_messages",
-            return_value=[],  # no messages
+            return_value=[],
         ):
+            m_settings.WORKSPACE_DIR = tmp_path / "workspace"
+            m_settings.RAW_DIR = None
             sync_messages(sample_slack_channel, start_date=start, end_date=end)
-
-        for d in [date(2026, 1, 1), date(2026, 1, 2), date(2026, 1, 3)]:
-            date_str = d.strftime("%Y-%m-%d")
-            wp = get_message_json_path(team_slug, channel_slug, date_str)
-            rp = get_raw_message_json_path(team_slug, channel_slug, date_str)
-            assert not wp.exists(), f"Workspace file should not exist: {wp}"
-            assert not rp.exists(), f"Raw file should not exist: {rp}"
+            for d in [date(2026, 1, 1), date(2026, 1, 2), date(2026, 1, 3)]:
+                date_str = d.strftime("%Y-%m-%d")
+                wp = get_message_json_path(team_slug, channel_slug, date_str)
+                rp = get_raw_message_json_path(team_slug, channel_slug, date_str)
+                assert not wp.exists(), f"Workspace file should not exist: {wp}"
+                assert not rp.exists(), f"Raw file should not exist: {rp}"

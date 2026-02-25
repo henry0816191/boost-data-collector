@@ -62,10 +62,12 @@ def sync_channel_members(channel: SlackChannel) -> bool:
 
         if members_from_file is not None:
             try:
-                _process_channel_members(
-                    channel,
-                    [m for m in members_from_file if isinstance(m, str)],
-                )
+                member_ids = [m for m in members_from_file if isinstance(m, str)]
+                if len(member_ids) != len(members_from_file):
+                    raise ValueError(
+                        f"Invalid members payload in {members_path}: expected list[str]"
+                    )
+                _process_channel_members(channel, member_ids)
             except Exception as e:
                 logger.warning(
                     "Failed to sync members for %s: %s", channel.channel_id, e

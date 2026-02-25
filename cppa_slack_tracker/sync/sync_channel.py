@@ -47,12 +47,14 @@ def sync_team(team_id: str, team_name: Optional[str] = None) -> SlackTeam:
 def _process_channel_info(ch: dict, team: SlackTeam) -> bool:
     """
     Process one channel: get_or_create_slack_channel. Returns True if synced,
-    False if skipped (missing id). Raises on error.
+    False if skipped (missing id or non-public channel). Raises on error.
     """
     if not ch.get("id"):
         return False
-    get_or_create_slack_channel(ch, team, creator_user_id=ch.get("creator"))
-    return True
+    channel, _ = get_or_create_slack_channel(
+        ch, team, creator_user_id=ch.get("creator")
+    )
+    return channel is not None
 
 
 def sync_channels(

@@ -109,7 +109,8 @@ class SlackAPIClient:
         cursor: Optional[str] = None,
     ) -> dict:
         """List member IDs in a channel. Returns members array and response_metadata.next_cursor."""
-        params = {"channel": channel, "limit": min(limit, 1000)}
+        safe_limit = max(1, min(limit, 1000))
+        params = {"channel": channel, "limit": safe_limit}
         if cursor:
             params["cursor"] = cursor
         return self._request("GET", "conversations.members", params=params)
@@ -123,7 +124,8 @@ class SlackAPIClient:
         cursor: Optional[str] = None,
     ) -> dict:
         """Get message history for a channel."""
-        params = {"channel": channel, "limit": min(limit, 1000)}
+        safe_limit = max(1, min(limit, 1000))
+        params = {"channel": channel, "limit": safe_limit}
         if oldest:
             params["oldest"] = oldest
         if latest:
@@ -143,7 +145,8 @@ class SlackAPIClient:
         include_deleted: bool = False,
     ) -> dict:
         """List users in the workspace. Returns members with profile, etc."""
-        params = {"limit": min(limit, 1000)}
+        safe_limit = max(1, min(limit, 1000))
+        params = {"limit": safe_limit}
         if cursor:
             params["cursor"] = cursor
         if include_deleted:
