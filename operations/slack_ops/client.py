@@ -142,15 +142,12 @@ class SlackAPIClient:
         self,
         limit: int = 200,
         cursor: Optional[str] = None,
-        include_deleted: bool = False,
     ) -> dict:
         """List users in the workspace. Returns members with profile, etc."""
         safe_limit = max(1, min(limit, 1000))
         params = {"limit": safe_limit}
         if cursor:
             params["cursor"] = cursor
-        if include_deleted:
-            params["include_deleted"] = "true"
         return self._request("GET", "users.list", params=params)
 
     def team_info(self) -> dict:

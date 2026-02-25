@@ -24,16 +24,13 @@ def _process_user_info(
     user_data: dict,
     *,
     include_bots: bool = True,
-    include_deleted: bool = True,
 ) -> bool:
     """
-    Process one user: skip if bot/deleted (unless flags allow), else
+    Process one user: skip if bot (unless include_bots), else
     get_or_create_slack_user. Returns True if user was synced, False if skipped.
     Raises on error.
     """
     if not include_bots and user_data.get("is_bot"):
-        return False
-    if not include_deleted and user_data.get("deleted"):
         return False
     get_or_create_slack_user(user_data)
     return True
@@ -43,13 +40,12 @@ def sync_users(
     team_slug: str,
     *,
     team_id: Optional[str] = None,
-    include_deleted: bool = True,
     include_bots: bool = True,
 ) -> tuple[int, int]:
     """
     Sync workspace users to the database.
 
-    First checks workspace/cppa_user_tracker/<team_slug>/users.json. If it
+    First checks workspace/cppa_slack_tracker/<team_slug>/users.json. If it
     exists, loads it, processes each user via _process_user_info, then
     removes the file. If not, fetches users via fetch_user_list(team_id or
     team_slug) from cppa_slack_tracker.fetcher.
@@ -86,11 +82,7 @@ def sync_users(
                 if not isinstance(user_data, dict):
                     continue
                 try:
-                    if _process_user_info(
-                        user_data,
-                        include_bots=include_bots,
-                        include_deleted=include_deleted,
-                    ):
+                    if _process_user_info(user_data, include_bots=include_bots):
                         success_count += 1
                 except Exception as e:
                     logger.warning(
@@ -106,17 +98,10 @@ def sync_users(
             return success_count, error_count
 
     # No users.json or load failed: fetch from API
-    members = fetch_user_list(
-        team_id or team_slug,
-        include_deleted=include_deleted,
-    )
+    members = fetch_user_list(team_id or team_slug)
     for user_data in members:
         try:
-            if _process_user_info(
-                user_data,
-                include_bots=include_bots,
-                include_deleted=include_deleted,
-            ):
+            if _process_user_info(user_data, include_bots=include_bots):
                 success_count += 1
         except Exception as e:
             logger.warning(

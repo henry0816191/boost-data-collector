@@ -23,7 +23,6 @@ def _get_client():
 def fetch_user_list(
     _team_id: str,
     *,
-    include_deleted: bool = True,
     client=None,
 ) -> list[dict]:
     """
@@ -39,7 +38,6 @@ def fetch_user_list(
         data = client.users_list(
             limit=1000,
             cursor=cursor,
-            include_deleted=include_deleted,
         )
         if not data.get("ok"):
             logger.warning("users.list failed: %s", data.get("error", "unknown"))

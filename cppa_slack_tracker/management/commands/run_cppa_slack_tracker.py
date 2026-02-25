@@ -188,7 +188,6 @@ class Command(BaseCommand):
         success_count, error_count = sync_users(
             team_slug,
             team_id=team.team_id,
-            include_deleted=True,
             include_bots=True,
         )
         self.stdout.write(
@@ -283,6 +282,12 @@ class Command(BaseCommand):
                 channel_by_id = {c.channel_id: c for c in channels}
                 load_failures = 0
                 for msg in all_loaded:
+                    if not isinstance(msg, dict):
+                        load_failures += 1
+                        logger.warning(
+                            "Skipping non-dict payload from --messages-json: %r", msg
+                        )
+                        continue
                     ch_id = msg.get("channel")
                     channel = channel_by_id.get(ch_id) if ch_id else None
                     if channel:

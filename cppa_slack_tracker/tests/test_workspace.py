@@ -17,7 +17,7 @@ from cppa_slack_tracker.workspace import _slug  # noqa: PLC2701
 
 
 @pytest.fixture
-def mock_workspace_dir(tmp_path):
+def _mock_workspace_dir(tmp_path):
     """Patch WORKSPACE_DIR to a temp path; RAW_DIR unset so raw root is workspace/raw/."""
     with patch("cppa_slack_tracker.workspace.settings") as m_settings:
         m_settings.WORKSPACE_DIR = tmp_path / "workspace"
@@ -27,7 +27,7 @@ def mock_workspace_dir(tmp_path):
 
 
 @pytest.fixture
-def mock_get_workspace_path(tmp_path):
+def _mock_get_workspace_path(tmp_path):
     """Patch get_workspace_path to return a temp app workspace."""
     app_workspace = tmp_path / "workspace" / "cppa_slack_tracker"
     app_workspace.mkdir(parents=True, exist_ok=True)
@@ -37,19 +37,19 @@ def mock_get_workspace_path(tmp_path):
 
 
 class TestGetWorkspaceRoot:
-    def test_returns_path_from_get_workspace_path(self, mock_get_workspace_path):
+    def test_returns_path_from_get_workspace_path(self, _mock_get_workspace_path):
         root = get_workspace_root()
-        assert root == mock_get_workspace_path.return_value
+        assert root == _mock_get_workspace_path.return_value
         assert "cppa_slack_tracker" in str(root)
 
 
 class TestGetRawRoot:
-    def test_raw_root_under_workspace_dir(self, mock_workspace_dir):
+    def test_raw_root_under_workspace_dir(self, _mock_workspace_dir):
         root = get_raw_root()
-        assert root == mock_workspace_dir / "raw" / "cppa_slack_tracker"
+        assert root == _mock_workspace_dir / "raw" / "cppa_slack_tracker"
         assert root.exists()
 
-    def test_raw_root_contains_raw_segment(self, mock_workspace_dir):
+    def test_raw_root_contains_raw_segment(self, _mock_workspace_dir):
         root = get_raw_root()
         assert "raw" in root.parts
         assert root.parts[-1] == "cppa_slack_tracker"
@@ -67,7 +67,7 @@ class TestGetRawRoot:
 
 
 class TestSlugAndPaths:
-    def test_get_team_channel_dir_sanitizes_slugs(self, mock_get_workspace_path):
+    def test_get_team_channel_dir_sanitizes_slugs(self, _mock_get_workspace_path):
         # Use a team_slug that _slug sanitizes (e.g. "/" -> "_") so we can verify remapping
         team_slug = "Cpp/lang"
         path = get_team_channel_dir(team_slug, "boost-json")
@@ -77,31 +77,31 @@ class TestSlugAndPaths:
         ), "team_slug should be sanitized for path segment"
         assert team_slug not in str(path), "raw team_slug should not appear in path"
 
-    def test_get_message_json_path_format(self, mock_get_workspace_path):
+    def test_get_message_json_path_format(self, _mock_get_workspace_path):
         path = get_message_json_path("Team", "general", "2026-01-15")
         assert path.suffix == ".json"
         assert path.stem == "2026-01-15"
 
-    def test_get_raw_message_json_path_under_raw(self, mock_workspace_dir):
+    def test_get_raw_message_json_path_under_raw(self, _mock_workspace_dir):
         path = get_raw_message_json_path("Team", "general", "2026-01-15")
         assert "raw" in path.parts
         assert path.name == "2026-01-15.json"
 
-    def test_get_raw_team_channel_dir_creates_dirs(self, mock_workspace_dir):
+    def test_get_raw_team_channel_dir_creates_dirs(self, _mock_workspace_dir):
         path = get_raw_team_channel_dir("T1", "C1")
         assert path.exists()
         assert path.is_dir()
 
 
 class TestIterExistingMessageJsons:
-    def test_yields_nothing_when_workspace_missing(self, mock_get_workspace_path):
+    def test_yields_nothing_when_workspace_missing(self, _mock_get_workspace_path):
         with patch("cppa_slack_tracker.workspace.get_workspace_root") as m:
             m.return_value = Path("/nonexistent/workspace")
             paths = list(iter_existing_message_jsons())
         assert paths == []
 
-    def test_yields_date_jsons_in_channel_dir(self, mock_get_workspace_path):
-        root = mock_get_workspace_path.return_value
+    def test_yields_date_jsons_in_channel_dir(self, _mock_get_workspace_path):
+        root = _mock_get_workspace_path.return_value
         team_slug, channel_slug = "Team", "general"
         base = root / _slug(team_slug) / _slug(channel_slug)
         base.mkdir(parents=True)
