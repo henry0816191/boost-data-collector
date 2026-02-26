@@ -134,7 +134,7 @@ def sync_to_pinecone(
 
     ingestion = _get_ingestion()
     result = ingestion.upsert_documents(
-        documents, namespace=namespace, is_chunked=is_chunked
+        documents=documents, namespace=namespace, is_chunked=is_chunked
     )
 
     services.clear_failed_ids(app_id)
