@@ -29,12 +29,14 @@ def test_update_created_repos_by_language_upserts_rows():
     """Upserts yearly rows for languages existing in Language table."""
     cpp = baker.make("github_activity_tracker.Language", name="C++")
 
-    def fake_count(query: str) -> int:
+    def fake_count(client, query: str) -> int:
         if "stars:>10" in query:
             return 12
         return 120
 
     with patch(
+        "boost_usage_tracker.update_created_repos_by_language.get_github_client"
+    ), patch(
         "boost_usage_tracker.update_created_repos_by_language._count_items_from_git",
         side_effect=fake_count,
     ):
@@ -61,8 +63,10 @@ def test_update_created_repos_by_language_upserts_rows():
 
     # second run updates existing rows
     with patch(
+        "boost_usage_tracker.update_created_repos_by_language.get_github_client"
+    ), patch(
         "boost_usage_tracker.update_created_repos_by_language._count_items_from_git",
-        side_effect=lambda q: 130 if "stars:>10" not in q else 13,
+        side_effect=lambda client, q: 130 if "stars:>10" not in q else 13,
     ):
         second = update_created_repos_by_language(
             languages_csv="C++",
