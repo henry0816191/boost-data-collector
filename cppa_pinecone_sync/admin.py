@@ -6,13 +6,13 @@ from .models import PineconeFailList, PineconeSyncStatus
 
 @admin.register(PineconeFailList)
 class PineconeFailListAdmin(ModelAdmin):
-    list_display = ("id", "type", "failed_id", "created_at")
-    list_filter = ("type", "created_at")
-    search_fields = ("failed_id", "type")
+    list_display = ("id", "app_id", "failed_id", "created_at")
+    list_filter = ("app_id", "created_at")
+    search_fields = ("failed_id",)
 
 
 @admin.register(PineconeSyncStatus)
 class PineconeSyncStatusAdmin(ModelAdmin):
-    list_display = ("id", "type", "final_sync_at", "created_at", "updated_at")
-    list_filter = ("type",)
-    search_fields = ("type",)
+    list_display = ("id", "app_id", "final_sync_at", "created_at", "updated_at")
+    list_filter = ("app_id",)
+    search_fields = ("app_id",)

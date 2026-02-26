@@ -98,7 +98,7 @@ def sync_to_pinecone(
     This is the **public API** that other apps call.
 
     Args:
-        app_id: Identifies the data source (e.g. 1, 2, 3). Stored as str(app_id) in
+        app_id: Identifies the data source (e.g. 1, 2, 3). Stored as IntegerField in
             PineconeFailList and PineconeSyncStatus.
         namespace: Pinecone namespace to upsert into.
         preprocess_fn: A callable returning ``(list[dict], is_chunked)``. Each dict
@@ -108,11 +108,10 @@ def sync_to_pinecone(
     Returns:
         dict with keys: upserted, total, failed_count, failed_ids, errors.
     """
-    sync_type = str(app_id)
     logger.info("sync_to_pinecone: starting app_id=%s namespace=%s", app_id, namespace)
 
-    failed_ids = services.get_failed_ids(sync_type)
-    final_sync_at = services.get_final_sync_at(sync_type)
+    failed_ids = services.get_failed_ids(app_id)
+    final_sync_at = services.get_final_sync_at(app_id)
     logger.debug(
         "app_id=%s: %d previously failed IDs, final_sync_at=%s",
         app_id,
@@ -125,12 +124,12 @@ def sync_to_pinecone(
         logger.info(
             "sync_to_pinecone: preprocess returned 0 documents for app_id=%s", app_id
         )
-        services.update_sync_status(sync_type)
+        services.update_sync_status(app_id)
         return _empty_sync_result()
 
     documents = _build_documents_from_raw(raw_documents)
     if not documents:
-        services.update_sync_status(sync_type)
+        services.update_sync_status(app_id)
         return _empty_sync_result()
 
     ingestion = _get_ingestion()
@@ -138,15 +137,15 @@ def sync_to_pinecone(
         documents, namespace=namespace, is_chunked=is_chunked
     )
 
-    services.clear_failed_ids(sync_type)
+    services.clear_failed_ids(app_id)
     new_failed_ids = _extract_new_failed_ids(result)
     if new_failed_ids:
-        services.record_failed_ids(sync_type, new_failed_ids)
+        services.record_failed_ids(app_id, new_failed_ids)
         logger.warning(
             "app_id=%s: %d source IDs recorded as failed", app_id, len(new_failed_ids)
         )
 
-    services.update_sync_status(sync_type)
+    services.update_sync_status(app_id)
 
     summary = {
         "upserted": result.get("upserted", 0),

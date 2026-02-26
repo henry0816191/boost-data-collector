@@ -21,49 +21,49 @@ from .models import PineconeFailList, PineconeSyncStatus
 # --- PineconeFailList ---
 
 
-def get_failed_ids(sync_type: str) -> list[str]:
-    """Return all failed_id values for the given type."""
+def get_failed_ids(app_id: int) -> list[str]:
+    """Return all failed_id values for the given app_id."""
     return list(
-        PineconeFailList.objects.filter(type=sync_type).values_list(
+        PineconeFailList.objects.filter(app_id=app_id).values_list(
             "failed_id", flat=True
         )
     )
 
 
-def clear_failed_ids(sync_type: str) -> int:
-    """Delete all PineconeFailList records for the given type. Returns count deleted."""
-    count, _ = PineconeFailList.objects.filter(type=sync_type).delete()
+def clear_failed_ids(app_id: int) -> int:
+    """Delete all PineconeFailList records for the given app_id. Returns count deleted."""
+    count, _ = PineconeFailList.objects.filter(app_id=app_id).delete()
     return count
 
 
-def record_failed_ids(sync_type: str, failed_ids: list[str]) -> list[PineconeFailList]:
+def record_failed_ids(app_id: int, failed_ids: list[str]) -> list[PineconeFailList]:
     """Bulk-create PineconeFailList entries for each failed_id. Returns created objects."""
     if not failed_ids:
         return []
-    objs = [PineconeFailList(failed_id=fid, type=sync_type) for fid in failed_ids]
+    objs = [PineconeFailList(failed_id=fid, app_id=app_id) for fid in failed_ids]
     return PineconeFailList.objects.bulk_create(objs)
 
 
 # --- PineconeSyncStatus ---
 
 
-def get_final_sync_at(sync_type: str) -> Optional[datetime]:
-    """Return final_sync_at for the given type, or None if no record exists."""
-    row = PineconeSyncStatus.objects.filter(type=sync_type).first()
+def get_final_sync_at(app_id: int) -> Optional[datetime]:
+    """Return final_sync_at for the given app_id, or None if no record exists."""
+    row = PineconeSyncStatus.objects.filter(app_id=app_id).first()
     return row.final_sync_at if row else None
 
 
 def update_sync_status(
-    sync_type: str, final_sync_at: Optional[datetime] = None
+    app_id: int, final_sync_at: Optional[datetime] = None
 ) -> PineconeSyncStatus:
-    """Create or update PineconeSyncStatus for the given type.
+    """Create or update PineconeSyncStatus for the given app_id.
 
     Sets final_sync_at to the provided value, or now() if not given.
     Returns the PineconeSyncStatus instance.
     """
     ts = final_sync_at or timezone.now()
     obj, created = PineconeSyncStatus.objects.get_or_create(
-        type=sync_type,
+        app_id=app_id,
         defaults={"final_sync_at": ts},
     )
     if not created:

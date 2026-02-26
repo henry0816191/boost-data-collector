@@ -10,7 +10,7 @@ import pytest
 
 @pytest.fixture
 def app_id():
-    """Default app_id for sync_to_pinecone tests (stored as str(app_id) in DB)."""
+    """Default app_id for sync_to_pinecone tests (IntegerField in DB)."""
     return 1
 
 

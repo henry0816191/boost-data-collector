@@ -165,7 +165,7 @@ def test_sync_to_pinecone_empty_preprocess_returns_early(app_id):
     assert result["upserted"] == 0
     assert result["total"] == 0
     assert result["failed_ids"] == []
-    assert services.get_final_sync_at(str(app_id)) is not None
+    assert services.get_final_sync_at(app_id) is not None
 
 
 @pytest.mark.django_db
@@ -212,7 +212,7 @@ def test_sync_to_pinecone_calls_ingestion_and_updates_db(mock_get_ingestion, app
     assert result["total"] == 2
     assert result["failed_count"] == 0
     assert result["failed_ids"] == []
-    assert services.get_final_sync_at(str(app_id)) is not None
+    assert services.get_final_sync_at(app_id) is not None
 
 
 @pytest.mark.django_db
@@ -239,7 +239,7 @@ def test_sync_to_pinecone_records_failed_ids(mock_get_ingestion, app_id):
 
     assert result["failed_count"] == 1
     assert set(result["failed_ids"]) == {"fail1", "fail2"}
-    failed_in_db = services.get_failed_ids(str(app_id))
+    failed_in_db = services.get_failed_ids(app_id)
     assert set(failed_in_db) == {"fail1", "fail2"}
 
 
@@ -247,7 +247,7 @@ def test_sync_to_pinecone_records_failed_ids(mock_get_ingestion, app_id):
 @patch("cppa_pinecone_sync.sync._get_ingestion")
 def test_sync_to_pinecone_clears_previous_failed_ids(mock_get_ingestion, app_id):
     """sync_to_pinecone clears existing PineconeFailList entries for app_id before recording new ones."""
-    services.record_failed_ids(str(app_id), ["old1"])
+    services.record_failed_ids(app_id, ["old1"])
     mock_ingestion = MagicMock()
     mock_ingestion.upsert_documents.return_value = {
         "upserted": 1,
@@ -263,4 +263,4 @@ def test_sync_to_pinecone_clears_previous_failed_ids(mock_get_ingestion, app_id)
         ], False
 
     sync_to_pinecone(app_id, "ns", preprocess)
-    assert services.get_failed_ids(str(app_id)) == []
+    assert services.get_failed_ids(app_id) == []
