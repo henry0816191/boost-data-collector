@@ -10,7 +10,7 @@ Other apps call:
 from cppa_pinecone_sync.sync import sync_to_pinecone
 
 result = sync_to_pinecone(
-    app_id=1,                  # e.g. 1, 2, 3 (stored as str(app_id) in DB)
+    app_id=1,                  # e.g. 1, 2, 3
     namespace="your_namespace",
     preprocess_fn=your_preprocess_fn,
 )
@@ -23,7 +23,7 @@ The sync pipeline will:
 3. Upsert the documents you return to Pinecone (with chunking and validation as needed).
 4. Update the fail list and sync status in the database.
 
-Your preprocess function’s job is step 2: decide *what* to sync and return it in the required shape.
+Your preprocess function’s job is step 2: decide _what_ to sync and return it in the required shape.
 
 ---
 
@@ -50,12 +50,12 @@ def your_preprocess_fn(
 
 Each item in the list must be a dict with at least:
 
-| Key         | Location   | Required | Description |
-|------------|------------|----------|-------------|
-| `content`  | top-level  | Yes      | The text to index (plain string). |
-| `metadata` | top-level  | Yes      | Dict of metadata attached to the document. |
-| `metadata["doc_id"]` or `metadata["url"]` | inside `metadata` | One required | Stable identifier for the document (e.g. primary key, URL). Used for chunk IDs and for skipping invalid docs. |
-| `metadata["ids"]` | inside `metadata` | Recommended | Comma-separated **source record IDs** (e.g. DB primary keys). Used to record failed IDs when an upsert fails so they can be retried next run. If omitted, failed-document tracking for that item will be empty. |
+| Key                                       | Location          | Required     | Description                                                                                                                                                                                                     |
+| ----------------------------------------- | ----------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content`                                 | top-level         | Yes          | The text to index (plain string).                                                                                                                                                                               |
+| `metadata`                                | top-level         | Yes          | Dict of metadata attached to the document.                                                                                                                                                                      |
+| `metadata["doc_id"]` or `metadata["url"]` | inside `metadata` | One required | Stable identifier for the document (e.g. primary key, URL). Used for chunk IDs and for skipping invalid docs.                                                                                                   |
+| `metadata["ids"]`                         | inside `metadata` | Recommended  | Comma-separated **source record IDs** (e.g. DB primary keys). Used to record failed IDs when an upsert fails so they can be retried next run. If omitted, failed-document tracking for that item will be empty. |
 
 Any other keys in `metadata` (e.g. `title`, `author`, `source`) are passed through to Pinecone and can be used for filtering or display.
 

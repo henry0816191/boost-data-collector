@@ -18,6 +18,8 @@ import logging
 from datetime import datetime
 from typing import Any, Callable, Optional
 
+from django.db import transaction
+
 from . import services
 from .ingestion import PineconeIngestion
 
@@ -137,10 +139,11 @@ def sync_to_pinecone(
         documents=documents, namespace=namespace, is_chunked=is_chunked
     )
 
-    services.clear_failed_ids(app_id)
     new_failed_ids = _extract_new_failed_ids(result)
-    if new_failed_ids:
-        services.record_failed_ids(app_id, new_failed_ids)
+    with transaction.atomic():
+        services.clear_failed_ids(app_id)
+        if new_failed_ids:
+            services.record_failed_ids(app_id, new_failed_ids)
         logger.warning(
             "app_id=%s: %d source IDs recorded as failed", app_id, len(new_failed_ids)
         )

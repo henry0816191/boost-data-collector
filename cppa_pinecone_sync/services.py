@@ -68,5 +68,5 @@ def update_sync_status(
     )
     if not created:
         obj.final_sync_at = ts
-        obj.save(update_fields=["final_sync_at"])
+        obj.save(update_fields=["final_sync_at", "updated_at"])
     return obj

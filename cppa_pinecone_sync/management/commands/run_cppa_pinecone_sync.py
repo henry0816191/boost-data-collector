@@ -12,7 +12,7 @@ Usage:
 import importlib
 import logging
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from cppa_pinecone_sync.sync import sync_to_pinecone
 
@@ -67,29 +67,20 @@ class Command(BaseCommand):
         preprocessor_path = (options.get("preprocessor") or "").strip() or None
 
         if app_id is not None and not (namespace and preprocessor_path):
-            self.stderr.write(
-                self.style.ERROR(
-                    "When --app-id is set, both --namespace and --preprocessor are required."
-                )
+            raise CommandError(
+                "When --app-id is set, both --namespace and --preprocessor are required."
             )
-            return 1
         if (namespace or preprocessor_path) and app_id is None:
-            self.stderr.write(
-                self.style.ERROR(
-                    "When --namespace or --preprocessor is set, --app-id is required."
-                )
+            raise CommandError(
+                "When --namespace or --preprocessor is set, --app-id is required."
             )
-            return 1
 
         if app_id is None:
-            self.stdout.write(
-                self.style.WARNING(
-                    "No --app-id/--namespace/--preprocessor given. "
-                    "Run with --app-id, --namespace and --preprocessor to sync one source; "
-                    "or register sources and run 'all' (not yet implemented)."
-                )
+            raise CommandError(
+                "No --app-id/--namespace/--preprocessor given. "
+                "Run with --app-id, --namespace and --preprocessor to sync one source; "
+                "or register sources and run 'all' (not yet implemented)."
             )
-            return 0
 
         logger.info(
             "run_cppa_pinecone_sync: starting app_id=%s namespace=%s preprocessor=%s",
@@ -101,18 +92,17 @@ class Command(BaseCommand):
         try:
             preprocess_fn = _resolve_preprocessor(preprocessor_path)
             result = sync_to_pinecone(app_id, namespace, preprocess_fn)
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"CPPA Pinecone Sync completed: upserted={result['upserted']}, "
-                    f"total={result['total']}, failed_count={result['failed_count']}"
-                )
+            logger.info(
+                "CPPA Pinecone Sync completed: upserted=%s, total=%s, failed_count=%s",
+                result["upserted"],
+                result["total"],
+                result["failed_count"],
             )
             if result.get("errors"):
                 for err in result["errors"]:
-                    self.stdout.write(self.style.WARNING(str(err)))
+                    logger.warning("Sync error: %s", err)
             logger.info("run_cppa_pinecone_sync: finished successfully")
-            return 0
         except Exception as e:
             logger.exception("run_cppa_pinecone_sync failed: %s", e)
-            self.stderr.write(self.style.ERROR(f"Sync failed: {e}"))
-            raise
+            logger.error("Sync failed: %s", e)
+            raise CommandError(f"Sync failed: {e}")

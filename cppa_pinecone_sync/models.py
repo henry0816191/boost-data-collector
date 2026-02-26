@@ -1,8 +1,8 @@
 """
 Models per docs/Schema.md section 9: CPPA Pinecone Sync.
 
-PineconeFailList  – records failed sync operations by failed_id and app_id for retry or audit.
-PineconeSyncStatus – tracks the last successful sync per source app_id.
+PineconeFailList  - records failed sync operations by failed_id and app_id for retry or audit.
+PineconeSyncStatus - tracks the last successful sync per source app_id.
 """
 
 from django.db import models
