@@ -173,11 +173,11 @@ def test_safe_msg_id_empty_returns_unknown():
     assert _safe_msg_id("") == "unknown"
 
 
-def test_safe_msg_id_whitespace_only_returns_empty_after_strip():
-    """_safe_msg_id with whitespace-only returns '' (strip gives empty; only literal '' returns 'unknown')."""
+def test_safe_msg_id_whitespace_only_returns_unknown_after_strip():
+    """_safe_msg_id strips first; whitespace-only becomes empty and returns 'unknown'."""
     from boost_mailing_list_tracker.workspace import _safe_msg_id
 
-    assert _safe_msg_id("   ") == ""
+    assert _safe_msg_id("   ") == "unknown"
 
 
 def test_safe_msg_id_replaces_unsafe_chars():
