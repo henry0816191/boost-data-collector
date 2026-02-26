@@ -18,10 +18,9 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from django.core.management.base import BaseCommand
-from django.db.models import Max
 from django.utils.dateparse import parse_datetime
 
-from boost_usage_tracker.models import BoostExternalRepository, BoostUsage
+from boost_usage_tracker.models import BoostExternalRepository
 from github_activity_tracker.models import GitHubRepository
 from boost_usage_tracker.boost_searcher import (
     BOOST_INCLUDE_SEARCH_BATCH_SIZE,
