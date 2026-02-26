@@ -3,7 +3,7 @@
 import pytest
 from model_bakery import baker
 
-from cppa_pinecone_sync.models import PineconeFailList, PineconeSyncStatus
+from cppa_pinecone_sync.models import PineconeFailList
 
 
 # --- PineconeFailList ---

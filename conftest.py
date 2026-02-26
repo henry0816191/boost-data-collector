@@ -31,7 +31,7 @@ pytest_plugins = [
     "github_ops.tests.fixtures",
     "github_activity_tracker.tests.fixtures",
     "boost_library_tracker.tests.fixtures",
-	"cppa_pinecone_sync.tests.fixtures",
+    "cppa_pinecone_sync.tests.fixtures",
     "workflow.tests.fixtures",
 ]
 

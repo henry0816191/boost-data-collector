@@ -87,19 +87,19 @@ If one logical “document” is built from several source records, pass their I
 
 ## Implementing the logic
 
-1. **Retry failed first**  
+1. **Retry failed first**
    Use `failed_ids` to (e.g.) query your DB or API for those records and add them to the set of documents to return. Without this, failed items would never be retried.
 
-2. **Incremental sync**  
+2. **Incremental sync**
    Use `final_sync_at` to restrict to new/updated data (e.g. `updated_at > final_sync_at`). For the first run, `final_sync_at` is `None` — then you can either return a full dump or a bounded window, depending on your app.
 
-3. **Deduplicate**  
+3. **Deduplicate**
    If the same record appears both in `failed_ids` and in the “since `final_sync_at`” set, return it once.
 
-4. **Build the list**  
+4. **Build the list**
    For each record, build one (or more) dicts with `content` and `metadata` as above. If you already produce chunks (e.g. by section), set `is_chunked=True`; otherwise set `is_chunked=False` and let the pipeline chunk by size.
 
-5. **Return**  
+5. **Return**
    Return `(documents, is_chunked)`. You may return `([], False)` if there is nothing to sync; the pipeline will still update sync status.
 
 ---

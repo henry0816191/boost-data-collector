@@ -12,4 +12,3 @@ redis>=5.0
 slack-bolt>=1.18
 pytz>=2024.1
 selenium>=4.35
-

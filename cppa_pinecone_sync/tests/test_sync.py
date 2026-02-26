@@ -158,6 +158,7 @@ def test_extract_new_failed_ids_skips_empty():
 @pytest.mark.django_db
 def test_sync_to_pinecone_empty_preprocess_returns_early(app_id):
     """sync_to_pinecone returns empty result and updates status when preprocess returns no docs."""
+
     def preprocess(_failed_ids, _final_sync_at):
         return [], False
 
@@ -171,6 +172,7 @@ def test_sync_to_pinecone_empty_preprocess_returns_early(app_id):
 @pytest.mark.django_db
 def test_sync_to_pinecone_all_invalid_docs_returns_early(app_id):
     """sync_to_pinecone returns empty result when all raw docs lack doc_id/url."""
+
     def preprocess(_failed_ids, _final_sync_at):
         return [
             {"ids": "1", "content": "x", "metadata": {}},
