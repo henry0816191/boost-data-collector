@@ -78,6 +78,7 @@ def _persist_email(email_data: dict) -> tuple[bool, bool]:
     """Persist one formatted email dict to DB. Returns (message_created, skipped).
 
     Sender is identified by email (sender_address); display_name is used only when creating.
+    Skips rows with missing/invalid sender_address or sent_at.
     """
     msg_id = _clean_text(email_data.get("msg_id", "")).strip()
     if not msg_id:
@@ -88,13 +89,30 @@ def _persist_email(email_data: dict) -> tuple[bool, bool]:
 
     sender_name = _clean_text(email_data.get("sender_name", "")).strip()
     sender_address = _clean_text(email_data.get("sender_address", "")).strip()
+    if not sender_address or "@" not in sender_address:
+        logger.debug(
+            "Skipping row with missing/invalid sender_address: msg_id=%s", msg_id
+        )
+        return False, True
+
+    sent_at_str = _clean_text(email_data.get("sent_at", "")).strip()
+    try:
+        sent_at = parse_datetime(sent_at_str) if sent_at_str else None
+    except (TypeError, ValueError):
+        logger.debug(
+            "Skipping row with invalid sent_at %r: msg_id=%s", sent_at_str, msg_id
+        )
+        return False, True
+    if sent_at_str and sent_at is None:
+        logger.debug(
+            "Skipping row with unparseable sent_at %r: msg_id=%s", sent_at_str, msg_id
+        )
+        return False, True
+
     profile, _ = get_or_create_mailing_list_profile(
         email=sender_address,
         display_name=sender_name,
     )
-
-    sent_at_str = _clean_text(email_data.get("sent_at", "")).strip()
-    sent_at = parse_datetime(sent_at_str) if sent_at_str else None
 
     _, was_created = get_or_create_mailing_list_message(
         sender=profile,
@@ -243,31 +261,40 @@ class Command(BaseCommand):
                     skipped_count += 1
                     continue
 
-                # Provisional raw archive for Phase 3:
-                # workspace/raw/boost_mailing_list_tracker/<list_name>/<msg_id>.json
-                # Keep these files (do not delete).
-                raw_path = get_raw_json_path(list_name, msg_id)
-                raw_path.parent.mkdir(parents=True, exist_ok=True)
-                raw_path.write_text(
-                    json.dumps(email_data, indent=2, default=str),
-                    encoding="utf-8",
-                )
-
-                # Write to workspace (like github_activity_tracker: save JSON then persist then remove)
                 json_path = get_message_json_path(list_name, msg_id)
-                json_path.parent.mkdir(parents=True, exist_ok=True)
-                json_path.write_text(
-                    json.dumps(email_data, indent=2, default=str),
-                    encoding="utf-8",
-                )
+                try:
+                    # Provisional raw archive for Phase 3:
+                    # workspace/raw/boost_mailing_list_tracker/<list_name>/<msg_id>.json
+                    # Keep these files (do not delete).
+                    raw_path = get_raw_json_path(list_name, msg_id)
+                    raw_path.parent.mkdir(parents=True, exist_ok=True)
+                    raw_path.write_text(
+                        json.dumps(email_data, indent=2, default=str),
+                        encoding="utf-8",
+                    )
 
-                was_created, skipped = _persist_email(email_data)
-                if was_created:
-                    created_count += 1
-                elif skipped:
+                    # Write to workspace (like github_activity_tracker: save JSON then persist then remove)
+                    json_path.parent.mkdir(parents=True, exist_ok=True)
+                    json_path.write_text(
+                        json.dumps(email_data, indent=2, default=str),
+                        encoding="utf-8",
+                    )
+
+                    was_created, skipped = _persist_email(email_data)
+                    if was_created:
+                        created_count += 1
+                    elif skipped:
+                        skipped_count += 1
+                except Exception as e:
                     skipped_count += 1
-
-                json_path.unlink(missing_ok=True)
+                    logger.warning(
+                        "Skipping malformed email list_name=%s msg_id=%s: %s",
+                        list_name,
+                        msg_id,
+                        e,
+                    )
+                finally:
+                    json_path.unlink(missing_ok=True)
 
             self.stdout.write(
                 self.style.SUCCESS(

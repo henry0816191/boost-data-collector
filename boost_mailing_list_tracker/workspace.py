@@ -26,9 +26,10 @@ def get_workspace_root() -> Path:
 
 def _safe_msg_id(msg_id: str) -> str:
     """Return a filesystem-safe filename from msg_id (no / \\ : etc.)."""
-    if not msg_id:
+    stripped = (msg_id or "").strip()
+    if not stripped:
         return "unknown"
-    safe = re.sub(r'[/\\:*?"<>|]', "_", msg_id.strip())
+    safe = re.sub(r'[/\\:*?"<>|]', "_", stripped)
     return safe[:200] if len(safe) > 200 else safe
 
 
@@ -67,11 +68,11 @@ def get_message_json_path(list_name: str, msg_id: str) -> Path:
 
 
 def iter_existing_message_jsons(list_name: str):
-    """Yield path for each messages/*.json under workspace/.../<list_name>/."""
-    messages_dir = get_workspace_root() / _safe_msg_id(list_name)
+    """Yield path for each messages/*.json under workspace/.../<list_name>/messages/."""
+    messages_dir = get_workspace_root() / _safe_msg_id(list_name) / "messages"
     if not messages_dir.is_dir():
         return
-    for path in messages_dir.rglob("*.json"):
+    for path in messages_dir.glob("*.json"):
         if path.name.startswith("."):
             continue
         yield path

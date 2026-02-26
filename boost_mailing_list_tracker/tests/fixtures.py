@@ -16,6 +16,7 @@ from boost_mailing_list_tracker.models import MailingListName
 @pytest.fixture
 def mailing_list_profile(db, identity):
     """MailingListProfile linked to an Identity (sender for messages)."""
+    _ = db  # Request DB access; linter expects parameter to be used
     return baker.make(
         "cppa_user_tracker.MailingListProfile",
         identity=identity,

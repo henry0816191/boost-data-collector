@@ -128,9 +128,13 @@ def test_get_raw_json_path_returns_raw_list_msg_json(mock_workspace_path):
 
 def test_get_raw_json_path_sanitizes_msg_id(mock_workspace_path):
     """get_raw_json_path uses filesystem-safe filename for msg_id."""
+    unsafe_chars = set(r'/\:*?"<>|')
     path = get_raw_json_path("list", "<msg/with\\:bad*chars?")
     assert path.parent.is_dir() or path.parent == get_raw_dir("list")
-    assert " " not in path.name or path.name == "unknown.json"
+    assert path.suffix == ".json"
+    assert not unsafe_chars.intersection(
+        path.stem
+    ), f"path.name {path.name!r} should not contain unsafe chars {unsafe_chars}"
 
 
 # --- get_messages_dir ---

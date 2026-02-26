@@ -65,6 +65,20 @@ def _extract_sender(raw: dict[str, Any]) -> tuple[str, str]:
     sender_address = _to_text(raw.get("sender_address")).strip()
     sender_name = _to_text(raw.get("sender_name")).strip()
 
+    # Prefer nested "sender" dict when present (e.g. API payloads used by fetcher).
+    sender_obj = raw.get("sender")
+    if isinstance(sender_obj, dict):
+        addr = _to_text(
+            sender_obj.get("address") or sender_obj.get("email") or ""
+        ).strip()
+        name = _to_text(
+            sender_obj.get("name") or sender_obj.get("sender_name") or ""
+        ).strip()
+        if addr:
+            sender_address = sender_address or addr
+        if name:
+            sender_name = sender_name or name
+
     if sender_address and sender_name:
         return sender_address, sender_name
 
@@ -94,8 +108,6 @@ def _normalize_sent_at(raw: dict[str, Any]) -> str | None:
     # Try RFC2822 first (e.g. "Sat, 03 Apr 2010 18:32:00 +0200").
     try:
         parsed = parsedate_to_datetime(date_value)
-        if parsed is None:
-            return date_value
         if parsed.tzinfo is None:
             return parsed.isoformat()
         return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")

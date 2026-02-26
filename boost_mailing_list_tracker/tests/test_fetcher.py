@@ -86,12 +86,12 @@ def test_filter_by_date_missing_date_in_item():
         {"date": None},
         {"subject": "no date"},
     ]
-    filtered, stop = fetcher._filter_by_date(
+    filtered, _ = fetcher._filter_by_date(
         results,
         start_date="2024-05-01T00:00:00Z",
         end_date="2024-12-31T23:59:59Z",
     )
-    # First item included; others have no date so d and start_date/end_date comparisons are falsy
+    # First item included; others have no date so skipped
     assert len(filtered) >= 1
     assert filtered[0]["date"] == "2024-06-01T12:00:00Z"
 

@@ -186,7 +186,7 @@ def test_delete_mailing_list_message_leaves_others(
     sample_sent_at,
 ):
     """delete_mailing_list_message only removes the given message."""
-    msg1, _ = services.get_or_create_mailing_list_message(
+    services.get_or_create_mailing_list_message(
         mailing_list_profile,
         msg_id="<keep@example.com>",
         sent_at=sample_sent_at,

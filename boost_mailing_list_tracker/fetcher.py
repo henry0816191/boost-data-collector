@@ -11,6 +11,7 @@ Ported from old_project_files/fetch_boost_emails.py and adapted for Django
 import json
 import logging
 import time
+from datetime import datetime
 from typing import Any, Optional
 
 import requests
@@ -32,6 +33,32 @@ MAX_RETRIES = 3
 REQUEST_TIMEOUT = 30  # seconds
 
 
+def _parse_datetime(s: str) -> Optional[datetime]:
+    """Parse ISO date/datetime string to datetime. Returns None if empty or invalid."""
+    if not s or not str(s).strip():
+        return None
+    raw = str(s).strip()
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_start_bound(start_date: str) -> Optional[datetime]:
+    """Parse start_date to datetime for range comparison."""
+    return _parse_datetime(start_date)
+
+
+def _parse_end_bound(end_date: str) -> Optional[datetime]:
+    """Parse end_date to datetime; date-only strings are treated as end of that day."""
+    dt = _parse_datetime(end_date)
+    if dt is None:
+        return None
+    if "T" not in str(end_date).strip():
+        dt = dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+    return dt
+
+
 def _filter_by_date(
     results: list[dict[str, Any]],
     start_date: str,
@@ -41,23 +68,47 @@ def _filter_by_date(
 
     The API returns results in descending date order. If a result's date is
     before start_date, we stop early (no more results will match).
+    start_date and end_date are parsed once; date-only end_date is treated
+    as end of that day (23:59:59.999999). Items with missing/invalid dates
+    are skipped (and logged at debug).
     """
+    start_dt = _parse_start_bound(start_date) if start_date else None
+    end_dt = _parse_end_bound(end_date) if end_date else None
+
     filtered: list[dict[str, Any]] = []
     stop = False
     for item in results:
         d = item.get("date")
-        if start_date and d and d < start_date:
+        if not d:
+            logger.debug(
+                "Skipping item with missing date: %s", item.get("message_id_hash")
+            )
+            continue
+        item_dt = _parse_datetime(d)
+        if item_dt is None:
+            logger.debug(
+                "Skipping item with invalid date %r: %s", d, item.get("message_id_hash")
+            )
+            continue
+        if start_dt is not None and item_dt < start_dt:
             stop = True
             break
-        if end_date and d and d > end_date:
+        if end_dt is not None and item_dt > end_dt:
             continue
         filtered.append(item)
     return filtered, stop
 
 
 def _fetch_page(url: str, page: int = 1) -> Optional[dict[str, Any]]:
-    """Fetch a single paginated API page with retry on HTTP 429."""
-    url_with_params = f"{url}?limit={PAGE_SIZE}&offset={(page - 1) * PAGE_SIZE}"
+    """Fetch a single paginated API page with retry on HTTP 429.
+
+    When url is a base endpoint (no query string), appends limit and offset.
+    When url already contains '?' (e.g. API-provided \"next\" URL), use as-is.
+    """
+    if "?" in url:
+        url_with_params = url
+    else:
+        url_with_params = f"{url}?limit={PAGE_SIZE}&offset={(page - 1) * PAGE_SIZE}"
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -102,10 +153,10 @@ def _fetch_page(url: str, page: int = 1) -> Optional[dict[str, Any]]:
         except requests.exceptions.HTTPError as e:
             if e.response is not None and e.response.status_code == 429:
                 continue
-            logger.error("HTTP error fetching page %d: %s", page, e)
+            logger.exception("HTTP error fetching page %d: %s", page, e)
             return None
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
-            logger.error("Error fetching page %d: %s", page, e)
+            logger.exception("Error fetching page %d: %s", page, e)
             return None
 
     return None
@@ -146,6 +197,14 @@ def fetch_email_list(
     return results if results else None
 
 
+def _path_tail(value: Any) -> str:
+    """Extract final path segment from a URL or plain id; safe for missing/invalid."""
+    if not value:
+        return ""
+    s = str(value).strip().rstrip("/")
+    return s.split("/")[-1] if s else ""
+
+
 def format_email(item: dict[str, Any], source_url: str) -> dict[str, Any]:
     """Format a raw API email item into a dict matching our model fields.
 
@@ -158,8 +217,8 @@ def format_email(item: dict[str, Any], source_url: str) -> dict[str, Any]:
 
     return {
         "msg_id": item.get("message_id_hash", ""),
-        "parent_id": parent.split("/")[-2] if parent else "",
-        "thread_id": thread.split("/")[-2] if thread else "",
+        "parent_id": _path_tail(parent),
+        "thread_id": _path_tail(thread),
         "subject": item.get("subject", ""),
         "content": item.get("content", ""),
         "list_name": source_url.split("/")[-3],
@@ -204,7 +263,7 @@ def fetch_all_emails(
     """Fetch and format emails from all configured Boost mailing lists.
 
     - If start_date is null or empty, uses the day after the latest sent_at in the database.
-    - Raw scraped data is saved to workspace/raw/boost_mailing_list_app/<list_name>/
+    - Raw scraped data is saved to workspace/raw/boost_mailing_list_tracker/<list_name>/
       before formatting; raw files are kept (not removed).
 
     Returns a list of formatted email dicts (may be empty on total failure).

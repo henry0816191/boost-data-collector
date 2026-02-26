@@ -31,6 +31,13 @@ def _normalize_failed_ids(failed_ids: list[str]) -> list[str]:
     return out
 
 
+def _get_sender_display_name(sender: Any) -> str:
+    """Return trimmed display name from sender (display_name or identity.display_name)."""
+    return (getattr(sender, "display_name", "") or "").strip() or (
+        getattr(getattr(sender, "identity", None), "display_name", "") or ""
+    ).strip()
+
+
 def _build_document_content(message: MailingListMessage) -> str:
     """
     Build plain-text content for embedding.
@@ -41,9 +48,7 @@ def _build_document_content(message: MailingListMessage) -> str:
     if message.subject:
         parts.append(f"Subject: {message.subject.strip()}")
 
-    sender_name = (getattr(message.sender, "display_name", "") or "").strip() or (
-        getattr(getattr(message.sender, "identity", None), "display_name", "") or ""
-    ).strip()
+    sender_name = _get_sender_display_name(message.sender)
     if sender_name:
         parts.append(f"Sender: {sender_name}")
 
@@ -104,17 +109,16 @@ def preprocess_mailing_list_for_pinecone(
             # Skip unusable empty docs; pipeline also validates chunks.
             continue
 
-        sender_name = (getattr(message.sender, "display_name", "") or "").strip() or (
-            getattr(getattr(message.sender, "identity", None), "display_name", "") or ""
-        ).strip()
+        sender_name = _get_sender_display_name(message.sender)
 
+        safe_timestamp = int(message.sent_at.timestamp()) if message.sent_at else 0
         metadata: dict[str, Any] = {
             "doc_id": msg_id,
             "type": "mailing",
             "thread_id": message.thread_id or "",
             "subject": message.subject or "",
             "author": sender_name,
-            "timestamp": int(message.sent_at.timestamp()),
+            "timestamp": safe_timestamp,
             "parent_id": message.parent_id or "",
             # ids should reference DB row identity for sync bookkeeping.
             "table_ids": message.pk,

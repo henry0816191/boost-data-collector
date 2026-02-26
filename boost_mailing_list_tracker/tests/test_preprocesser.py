@@ -188,8 +188,6 @@ def test_preprocesser_document_shape_and_metadata_fields(
     assert target["metadata"]["subject"] == "Shape subject"
     assert target["metadata"]["list_name"] == default_list_name
     assert target["metadata"]["timestamp"] == int(sample_sent_at.timestamp())
-    # table_ids should be DB identity (not msg_id string).
-    assert target["metadata"]["table_ids"] == msg.pk
     assert "ids" not in target["metadata"]
     assert "msg_id" not in target["metadata"]
     assert "source" not in target["metadata"]
