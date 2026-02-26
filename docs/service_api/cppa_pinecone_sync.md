@@ -8,37 +8,37 @@ All creates/updates/deletes for `PineconeFailList` and `PineconeSyncStatus` must
 
 ## PineconeFailList
 
-### `get_failed_ids(sync_type: str) -> list[str]`
+### `get_failed_ids(app_id: int) -> list[str]`
 
-Return all `failed_id` values for the given type.
+Return all `failed_id` values for the given application.
 
-| Parameter   | Type  | Description                   |
-| ----------- | ----- | ----------------------------- |
-| `sync_type` | `str` | Source type (e.g. `"slack"`). |
+| Parameter | Type  | Description                          |
+| --------- | ----- | ------------------------------------ |
+| `app_id`  | `int` | Application ID (e.g. 1, 2, 3).       |
 
 **Returns:** `list[str]` of failed_id values.
 
 ---
 
-### `clear_failed_ids(sync_type: str) -> int`
+### `clear_failed_ids(app_id: int) -> int`
 
-Delete all `PineconeFailList` records for the given type.
+Delete all `PineconeFailList` records for the given application.
 
-| Parameter   | Type  | Description  |
-| ----------- | ----- | ------------ |
-| `sync_type` | `str` | Source type. |
+| Parameter | Type  | Description     |
+| --------- | ----- | --------------- |
+| `app_id`  | `int` | Application ID. |
 
 **Returns:** `int` — number of rows deleted.
 
 ---
 
-### `record_failed_ids(sync_type: str, failed_ids: list[str]) -> list[PineconeFailList]`
+### `record_failed_ids(app_id: int, failed_ids: list[str]) -> list[PineconeFailList]`
 
 Bulk-create `PineconeFailList` entries for each failed ID.
 
 | Parameter    | Type        | Description                            |
 | ------------ | ----------- | -------------------------------------- |
-| `sync_type`  | `str`       | Source type.                           |
+| `app_id`     | `int`       | Application ID.                        |
 | `failed_ids` | `list[str]` | List of source record IDs that failed. |
 
 **Returns:** `list[PineconeFailList]` — created objects. Empty list if `failed_ids` is empty.
@@ -47,25 +47,25 @@ Bulk-create `PineconeFailList` entries for each failed ID.
 
 ## PineconeSyncStatus
 
-### `get_final_sync_at(sync_type: str) -> datetime | None`
+### `get_final_sync_at(app_id: int) -> datetime | None`
 
-Return `final_sync_at` for the given type, or `None` if no record exists.
+Return `final_sync_at` for the given application, or `None` if no record exists.
 
-| Parameter   | Type  | Description  |
-| ----------- | ----- | ------------ |
-| `sync_type` | `str` | Source type. |
+| Parameter | Type  | Description     |
+| --------- | ----- | --------------- |
+| `app_id`  | `int` | Application ID. |
 
 **Returns:** `datetime | None`.
 
 ---
 
-### `update_sync_status(sync_type: str, final_sync_at: datetime | None = None) -> PineconeSyncStatus`
+### `update_sync_status(app_id: int, final_sync_at: datetime | None = None) -> PineconeSyncStatus`
 
-Create or update `PineconeSyncStatus` for the given type. Sets `final_sync_at` to the provided value, or `now()` if not given.
+Create or update `PineconeSyncStatus` for the given application. Sets `final_sync_at` to the provided value, or `now()` if not given.
 
 | Parameter       | Type               | Description                              |
 | --------------- | ------------------ | ---------------------------------------- |
-| `sync_type`     | `str`              | Source type.                             |
+| `app_id`        | `int`              | Application ID.                          |
 | `final_sync_at` | `datetime \| None` | Timestamp. Defaults to `timezone.now()`. |
 
 **Returns:** `PineconeSyncStatus` instance.

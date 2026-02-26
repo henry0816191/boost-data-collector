@@ -83,6 +83,7 @@ def test_pinecone_sync_status_str():
     )
     s = str(obj)
     assert "1" in s
+    assert "final_sync_at" in s
 
 
 @pytest.mark.django_db

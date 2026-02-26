@@ -319,7 +319,7 @@ class PineconeIngestion:
             doc_id = hashlib.md5(original_doc_id.encode()).hexdigest()
             record: dict[str, Any] = {"id": doc_id, "chunk_text": text}
             record.update(metadata)
-            record.pop("table_ids")
+            record.pop("table_ids", None)
             records.append(record)
         return records
 

@@ -108,7 +108,7 @@ def test_get_final_sync_at_returns_value(app_id):
     services.update_sync_status(app_id, final_sync_at=when)
     result = services.get_final_sync_at(app_id)
     assert result is not None
-    assert (result - when).total_seconds() < 1
+    assert abs((result - when).total_seconds()) < 1
 
 
 # --- update_sync_status ---

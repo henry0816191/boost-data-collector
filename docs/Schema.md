@@ -667,7 +667,7 @@ erDiagram
 
 **Note:** **PineconeFailList** - Records failed sync operations by `failed_id` and `app_id` for retry or audit.
 
-**Note:** **PineconeSyncStatus** - Tracks the last successful sync per source type. One row per `app_id`. `final_sync_at` is when the last sync for that type completed; `created_at` and `updated_at` are for the row.
+**Note:** **PineconeSyncStatus** - Tracks the last successful sync per app. One row per `app_id`. `final_sync_at` is when the last sync for that type completed; `created_at` and `updated_at` are for the row.
 
 ---
 
