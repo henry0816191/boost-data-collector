@@ -11,6 +11,7 @@ from boost_library_usage_dashboard.dashboard_html_common import (
     CHARTJS_VERSION,
     base_css,
     e,
+    json_for_script,
     table_container,
     table_js,
 )
@@ -279,11 +280,11 @@ def build_index_page(data: dict[str, Any], output_dir: Path) -> None:
         {{key:'recent_usage', type:'number'}}, {{key:'activity_score', type:'number'}},
         {{key:'average_stars', type:'number'}}
       ],
-      rowHtml: (r) => `<tr><td><a href="libraries/${{r.safe_name}}.html">${{r.name || ''}}</a></td><td>${{r.created_version || ''}}</td><td>${{toNumber(r.repo_count).toLocaleString()}}</td><td>${{toNumber(r.total_usage).toLocaleString()}}</td><td>${{toNumber(r.recent_usage).toLocaleString()}}</td><td>${{Number(r.activity_score || 0).toFixed(3)}}</td><td>${{toNumber(r.average_stars).toLocaleString()}}</td></tr>`
+      rowHtml: (r) => `<tr><td><a href="libraries/${{esc(r.safe_name)}}.html">${{esc(r.name || '')}}</a></td><td>${{r.created_version || ''}}</td><td>${{toNumber(r.repo_count).toLocaleString()}}</td><td>${{toNumber(r.total_usage).toLocaleString()}}</td><td>${{toNumber(r.recent_usage).toLocaleString()}}</td><td>${{Number(r.activity_score || 0).toFixed(3)}}</td><td>${{toNumber(r.average_stars).toLocaleString()}}</td></tr>`
     }});
 
     const topColumns = [{{key:'repo_name', type:'text'}}, {{key:'stars', type:'number'}}, {{key:'usage_count', type:'number'}}, {{key:'created_at', type:'date'}}];
-    const topRow = (r) => `<tr><td><a href="https://github.com/${{r.repo_name || ''}}" target="_blank">${{r.repo_name || ''}}</a></td><td>${{toNumber(r.stars).toLocaleString()}}</td><td>${{toNumber(r.usage_count).toLocaleString()}}</td><td>${{(r.created_at || '').toString().slice(0,10) || 'N/A'}}</td></tr>`;
+    const topRow = (r) => `<tr><td><a href="https://github.com/${{esc(r.repo_name || '')}}" target="_blank">${{esc(r.repo_name || '')}}</a></td><td>${{toNumber(r.stars).toLocaleString()}}</td><td>${{toNumber(r.usage_count).toLocaleString()}}</td><td>${{(r.created_at || '').toString().slice(0,10) || 'N/A'}}</td></tr>`;
     initDataTable({{ data: tableTopStars, tableId:'table-top-stars', searchId:'search-top-stars', infoId:'info-top-stars', prevId:'prev-top-stars', nextId:'next-top-stars', defaultSortKey:'stars', defaultSortAsc:false, columns: topColumns, rowHtml: topRow }});
     initDataTable({{ data: tableTopUsage, tableId:'table-top-usage', searchId:'search-top-usage', infoId:'info-top-usage', prevId:'prev-top-usage', nextId:'next-top-usage', defaultSortKey:'usage_count', defaultSortAsc:false, columns: topColumns, rowHtml: topRow }});
     initDataTable({{ data: tableTopCreated, tableId:'table-top-created', searchId:'search-top-created', infoId:'info-top-created', prevId:'prev-top-created', nextId:'next-top-created', defaultSortKey:'created_at', defaultSortAsc:false, columns: topColumns, rowHtml: topRow }});
