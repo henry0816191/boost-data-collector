@@ -297,6 +297,7 @@ class Command(BaseCommand):
                         created_count += 1
                     elif skipped:
                         skipped_count += 1
+                    json_path.unlink(missing_ok=True)
                 except Exception as e:
                     skipped_count += 1
                     logger.warning(
@@ -305,8 +306,6 @@ class Command(BaseCommand):
                         msg_id,
                         e,
                     )
-                finally:
-                    json_path.unlink(missing_ok=True)
 
             self.stdout.write(
                 self.style.SUCCESS(
