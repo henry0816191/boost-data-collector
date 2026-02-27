@@ -71,6 +71,7 @@ def _deobfuscate_address(addr: str) -> str:
     s = s.replace("[at]", "@").replace("(at)", "@")
     return s.strip(" \t.,;()[]")
 
+
 def _extract_sender(raw: dict[str, Any]) -> tuple[str, str]:
     sender_address = _to_text(raw.get("sender_address")).strip()
     sender_name = _to_text(raw.get("sender_name")).strip()
