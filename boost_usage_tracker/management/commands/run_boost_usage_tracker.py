@@ -18,6 +18,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from django.core.management.base import BaseCommand
+from django.utils import timezone as django_tz
 from django.utils.dateparse import parse_datetime
 
 from boost_usage_tracker.models import BoostExternalRepository
@@ -286,9 +287,11 @@ def task_monitor_stars(
         repos_to_refresh = list(
             GitHubRepository.objects.filter(pk__in=stars_to_update.keys())
         )
+        now = django_tz.now()
         for repo_obj in repos_to_refresh:
             repo_obj.stars = stars_to_update[repo_obj.pk]
-        GitHubRepository.objects.bulk_update(repos_to_refresh, ["stars"])
+            repo_obj.updated_at = now
+        GitHubRepository.objects.bulk_update(repos_to_refresh, ["stars", "updated_at"])
         logger.info("Bulk-updated stars for %d repos", len(repos_to_refresh))
 
     if dry_run:

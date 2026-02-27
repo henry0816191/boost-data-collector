@@ -224,14 +224,22 @@ def bulk_create_or_update_boost_usage(
         key = (boost_header.pk, file_path.pk)
         key_to_item[key] = (boost_header, file_path, last_commit_date)
 
-    # Build map (boost_header_id, file_path_id) -> usage for existing rows
-    existing_map = {
-        (u.boost_header_id, u.file_path_id): u
-        for u in BoostUsage.objects.filter(
-            repo=repo,
-            boost_header__isnull=False,
-        ).select_related("boost_header", "file_path")
-    }
+    # Build map (boost_header_id, file_path_id) -> usage for existing rows (only keys we process)
+    from django.db.models import Q
+
+    key_pairs = list(key_to_item.keys())
+    if not key_pairs:
+        existing_map = {}
+    else:
+        q = Q(boost_header_id=key_pairs[0][0], file_path_id=key_pairs[0][1])
+        for bh_id, fp_id in key_pairs[1:]:
+            q = q | Q(boost_header_id=bh_id, file_path_id=fp_id)
+        existing_map = {
+            (u.boost_header_id, u.file_path_id): u
+            for u in BoostUsage.objects.filter(repo=repo)
+            .filter(q)
+            .select_related("boost_header", "file_path")
+        }
 
     to_update: list[BoostUsage] = []
     to_create_keys: set[tuple[int, int]] = set(key_to_item.keys())
