@@ -60,8 +60,9 @@ def write_summary_report(
             ]
         )
         for lib in stats["never_used_libraries"]:
+            name = lib.get("name", "Unknown")
             report_lines.append(
-                f"| {lib['name']} | {lib.get('created_version') or 'N/A'} | {lib.get('last_updated_version') or 'N/A'} |"
+                f"| {name} | {lib.get('created_version') or 'N/A'} | {lib.get('last_updated_version') or 'N/A'} |"
             )
 
     version_stats = stats.get("version_related_stats", {})
