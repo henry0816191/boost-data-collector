@@ -28,7 +28,7 @@ def normalize_issue_json(data: dict[str, Any]) -> dict[str, Any]:
     Accepts: (1) flat { number, id, title, user, comments, ... };
     (2) nested { "issue_info": { ... }, "comments": [...] }.
     Returns a single dict with all issue fields and "comments" list."""
-    if "issue_info" in data:
+    if "issue_info" in data and isinstance(data.get("issue_info"), dict):
         out = dict(data["issue_info"])
         out["comments"] = data.get("comments", out.get("comments", []))
         return out
@@ -40,7 +40,7 @@ def normalize_pr_json(data: dict[str, Any]) -> dict[str, Any]:
     Accepts: (1) flat { number, id, title, head, base, comments, reviews, ... };
     (2) nested { "pr_info": { ... }, "comments": [...], "reviews": [...] }.
     Returns a single dict with all PR fields plus "comments" and "reviews" lists."""
-    if "pr_info" in data:
+    if "pr_info" in data and isinstance(data.get("pr_info"), dict):
         out = dict(data["pr_info"])
         out["comments"] = data.get("comments", out.get("comments", []))
         out["reviews"] = data.get("reviews", out.get("reviews", []))

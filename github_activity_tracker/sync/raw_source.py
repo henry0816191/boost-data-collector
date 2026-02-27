@@ -56,32 +56,56 @@ def _merge_list_by_id(existing_list: list, new_list: list, id_key: str = "id") -
 
 
 def _merge_issue_json(existing: dict, new: dict) -> dict:
-    """Merge issue JSON: detail from new (issue_info or flat); comments merged by id.
+    """Merge issue JSON: merge incoming detail onto existing detail; comments merged by id.
     Accepts and produces nested { issue_info: <detail>, comments: [...] }."""
-    new_detail = new.get("issue_info")
-    if new_detail is None:
-        new_detail = {k: v for k, v in new.items() if k != "comments"}
+    existing_detail = existing.get("issue_info")
+    if not isinstance(existing_detail, dict):
+        existing_detail = (
+            {k: v for k, v in existing.items() if k != "comments"}
+            if isinstance(existing, dict)
+            else {}
+        )
+    incoming_detail = new.get("issue_info")
+    if not isinstance(incoming_detail, dict):
+        incoming_detail = (
+            {k: v for k, v in new.items() if k != "comments"}
+            if isinstance(new, dict)
+            else {}
+        )
+    merged_detail = {**existing_detail, **incoming_detail}
     existing_comments = existing.get("comments") or []
     new_comments = new.get("comments") or []
     return {
-        "issue_info": new_detail,
+        "issue_info": merged_detail,
         "comments": _merge_list_by_id(existing_comments, new_comments, "id"),
     }
 
 
 def _merge_pr_json(existing: dict, new: dict) -> dict:
-    """Merge PR JSON: detail from new (pr_info or flat); comments and reviews merged by id.
+    """Merge PR JSON: merge incoming detail onto existing detail; comments and reviews merged by id.
     Accepts and produces nested { pr_info: <detail>, comments: [...], reviews: [...] }.
     """
-    new_detail = new.get("pr_info")
-    if new_detail is None:
-        new_detail = {k: v for k, v in new.items() if k not in ("comments", "reviews")}
+    existing_detail = existing.get("pr_info")
+    if not isinstance(existing_detail, dict):
+        existing_detail = (
+            {k: v for k, v in existing.items() if k not in ("comments", "reviews")}
+            if isinstance(existing, dict)
+            else {}
+        )
+    incoming_detail = new.get("pr_info")
+    if not isinstance(incoming_detail, dict):
+        incoming_detail = (
+            {k: v for k, v in new.items() if k not in ("comments", "reviews")}
+            if isinstance(new, dict)
+            else {}
+        )
+    merged_detail = {**existing_detail, **incoming_detail}
     existing_comments = existing.get("comments") or []
     new_comments = new.get("comments") or []
     existing_reviews = existing.get("reviews") or []
     new_reviews = new.get("reviews") or []
     return {
-        "pr_info": new_detail,
+        "pr_info": merged_detail,
         "comments": _merge_list_by_id(existing_comments, new_comments, "id"),
         "reviews": _merge_list_by_id(existing_reviews, new_reviews, "id"),
     }
