@@ -31,6 +31,7 @@ class RepoSearchResult:
     created_at: str = ""
     updated_at: str = ""
     pushed_at: str = ""
+    forks: int = 0
 
 
 def _extract_repo_metadata(item: dict[str, Any]) -> RepoSearchResult:
@@ -46,6 +47,7 @@ def _extract_repo_metadata(item: dict[str, Any]) -> RepoSearchResult:
         created_at=item.get("created_at") or "",
         updated_at=item.get("updated_at") or "",
         pushed_at=item.get("pushed_at") or "",
+        forks=item.get("forks_count") or 0,
     )
 
 

@@ -58,7 +58,7 @@ def _ensure_github_repo(client, result: RepoSearchResult):
     defaults = {
         "stars": result.stars,
         "description": result.description,
-        "forks": 0,
+        "forks": result.forks,
     }
     if result.pushed_at:
         defaults["repo_pushed_at"] = parse_datetime(result.pushed_at)
