@@ -24,7 +24,7 @@ def test_run_all_collectors_command_exists(workflow_cmd_name):
     ):
         call_command(workflow_cmd_name, stdout=out, stderr=err)
     content = out.getvalue()
-    assert "Running" in content or "succeeded" in content
+    assert "Running" in content and "succeeded" in content
 
 
 @pytest.mark.django_db
@@ -73,7 +73,7 @@ def test_run_all_collectors_stop_on_failure(workflow_cmd_name):
                 stdout=out,
                 stderr=err,
             )
-    # COLLECTOR_COMMANDS has three commands; with --stop-on-failure, only the first should run.
+    # With --stop-on-failure, only the first command runs (count 1 regardless of len(COLLECTOR_COMMANDS)).
     assert call_command_mock.call_count == 1
 
 

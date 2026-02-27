@@ -56,13 +56,17 @@ def test_filter_by_date_excludes_after_end():
         {"date": "2024-06-20T12:00:00Z"},  # after end
         {"date": "2024-06-10T12:00:00Z"},
     ]
+    end_date_str = "2024-06-15T23:59:59Z"
     filtered, stop = fetcher._filter_by_date(
         results,
         start_date="",
-        end_date="2024-06-15T23:59:59Z",
+        end_date=end_date_str,
     )
+    end_dt = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
     assert len(filtered) == 2
-    assert all(item["date"] <= "2024-06-15T23:59:59Z" for item in filtered)
+    for item in filtered:
+        item_dt = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+        assert item_dt <= end_dt
     assert stop is False
 
 

@@ -61,6 +61,16 @@ def _extract_list_name(*sources: Any) -> str:
     return ""
 
 
+def _deobfuscate_address(addr: str) -> str:
+    """Normalize address: lowercase, replace common obfuscations with '@', strip."""
+    if not addr:
+        return ""
+    s = addr.lower().strip()
+    for pattern in [" (a) ", " [at] ", " [at]", "[at] ", " at ", " AT "]:
+        s = s.replace(pattern, "@")
+    s = s.replace("[at]", "@").replace("(at)", "@")
+    return s.strip(" \t.,;()[]")
+
 def _extract_sender(raw: dict[str, Any]) -> tuple[str, str]:
     sender_address = _to_text(raw.get("sender_address")).strip()
     sender_name = _to_text(raw.get("sender_name")).strip()
@@ -71,14 +81,19 @@ def _extract_sender(raw: dict[str, Any]) -> tuple[str, str]:
         addr = _to_text(
             sender_obj.get("address") or sender_obj.get("email") or ""
         ).strip()
+        addr = _deobfuscate_address(addr) if addr else ""
         name = _to_text(
-            sender_obj.get("name") or sender_obj.get("sender_name") or ""
+            sender_obj.get("name")
+            or sender_obj.get("sender_name")
+            or sender_obj.get("display_name")
+            or ""
         ).strip()
         if addr:
             sender_address = sender_address or addr
         if name:
             sender_name = sender_name or name
 
+    sender_address = _deobfuscate_address(sender_address) if sender_address else ""
     if sender_address and sender_name:
         return sender_address, sender_name
 
@@ -93,6 +108,7 @@ def _extract_sender(raw: dict[str, Any]) -> tuple[str, str]:
         if not sender_name:
             sender_name = raw_from.split("<", 1)[0].strip().strip('"').strip()
 
+    sender_address = _deobfuscate_address(sender_address) if sender_address else ""
     return sender_address, sender_name
 
 

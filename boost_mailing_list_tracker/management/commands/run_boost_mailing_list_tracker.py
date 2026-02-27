@@ -14,12 +14,14 @@ import os
 
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
-from django.db.models import Max
-from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from boost_mailing_list_tracker.email_formatter import format_email
-from boost_mailing_list_tracker.fetcher import BOOST_LIST_URLS, fetch_all_emails
+from boost_mailing_list_tracker.fetcher import (
+    BOOST_LIST_URLS,
+    _get_start_date_from_db,
+    fetch_all_emails,
+)
 from boost_mailing_list_tracker.models import MailingListMessage
 from boost_mailing_list_tracker.preprocesser import preprocess_mailing_list_for_pinecone
 from boost_mailing_list_tracker.services import get_or_create_mailing_list_message
@@ -95,6 +97,10 @@ def _persist_email(email_data: dict) -> tuple[bool, bool]:
         )
         return False, True
 
+    display_name = sender_name or "Unknown Sender"
+    if display_name == "Unknown Sender" and sender_address and "@" in sender_address:
+        display_name = sender_address.split("@")[0] or display_name
+
     sent_at_str = _clean_text(email_data.get("sent_at", "")).strip()
     try:
         sent_at = parse_datetime(sent_at_str) if sent_at_str else None
@@ -111,7 +117,7 @@ def _persist_email(email_data: dict) -> tuple[bool, bool]:
 
     profile, _ = get_or_create_mailing_list_profile(
         email=sender_address,
-        display_name=sender_name,
+        display_name=display_name,
     )
 
     _, was_created = get_or_create_mailing_list_message(
@@ -127,31 +133,35 @@ def _persist_email(email_data: dict) -> tuple[bool, bool]:
     return was_created, False
 
 
-def _get_start_date_from_db() -> str:
-    """Return latest sent_at in UTC ISO8601 format, or empty string when no data."""
-    result = MailingListMessage.objects.aggregate(Max("sent_at"))
-    max_sent = result.get("sent_at__max")
-    if max_sent is None:
-        return ""
-    if max_sent.tzinfo is not None:
-        max_sent = max_sent.astimezone(timezone.utc)
-    return max_sent.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _process_existing_workspace_json(list_name: str) -> int:
-    """Load each messages/*.json for this list, persist to DB, remove file. Returns count processed."""
-    count = 0
+def _process_existing_workspace_json(list_name: str) -> tuple[int, int]:
+    """Load each messages/*.json for this list, persist to DB, remove file. Returns (files_processed, messages_skipped)."""
+    processed = 0
+    skipped = 0
     for path in iter_existing_message_jsons(list_name):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             formatted_data = format_email(data)
             for formatted_email in formatted_data:
-                _persist_email(formatted_email)
+                try:
+                    _persist_email(formatted_email)
+                except Exception:
+                    logger.exception(
+                        "Failed to persist message from %s (msg_id=%s, subject=%s)",
+                        path,
+                        formatted_email.get("msg_id", "?"),
+                        formatted_email.get("subject", "?"),
+                    )
+                    skipped += 1
             path.unlink()
-            count += 1
+            processed += 1
         except Exception as e:
             logger.exception("Failed to process %s: %s", path, e)
-    return count
+    if skipped:
+        logger.info(
+            "run_boost_mailing_list_tracker: skipped %d message(s) due to persist errors",
+            skipped,
+        )
+    return processed, skipped
 
 
 class Command(BaseCommand):
@@ -211,9 +221,11 @@ class Command(BaseCommand):
             # Phase 1: process existing workspace JSONs
             if not dry_run:
                 total_existing = 0
+                total_skipped = 0
                 for list_name in list_names:
-                    n = _process_existing_workspace_json(list_name)
-                    total_existing += n
+                    processed, skipped = _process_existing_workspace_json(list_name)
+                    total_existing += processed
+                    total_skipped += skipped
                 if total_existing:
                     self.stdout.write(
                         f"Processed {total_existing} existing message JSON(s) from workspace."

@@ -265,12 +265,7 @@ def test_iter_all_list_dirs_yields_lists_with_messages(mock_workspace_path):
         / "messages"
         / "1.json"
     ).write_text("{}")
-    # get_workspace_root() is patched to return tmp_path / "boost_mailing_list_tracker"
-    with patch(
-        "boost_mailing_list_tracker.workspace.get_workspace_path",
-        return_value=mock_workspace_path / "boost_mailing_list_tracker",
-    ):
-        pairs = list(iter_all_list_dirs())
+    pairs = list(iter_all_list_dirs())
     assert len(pairs) == 2
     names = {p[0] for p in pairs}
     assert "list1" in names

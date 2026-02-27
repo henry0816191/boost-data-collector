@@ -156,10 +156,10 @@ def _fetch_page(url: str, page: int = 1) -> Optional[dict[str, Any]]:
         except requests.exceptions.HTTPError as e:
             if e.response is not None and e.response.status_code == 429:
                 continue
-            logger.exception("HTTP error fetching page %d: %s", page, e)
+            logger.exception("HTTP error fetching page %d", page)
             return None
-        except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
-            logger.exception("Error fetching page %d: %s", page, e)
+        except (requests.exceptions.RequestException, json.JSONDecodeError):
+            logger.exception("Error fetching page %d", page)
             return None
 
     return None
