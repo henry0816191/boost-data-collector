@@ -161,7 +161,9 @@ def sync_issues(
         for issue_data in fetcher.fetch_issues_from_github(
             client, owner, repo_name, start_date, end_date
         ):
-            issue_number = (issue_data.get("issue_info") or {}).get("number") or issue_data.get("number")
+            issue_number = (issue_data.get("issue_info") or {}).get(
+                "number"
+            ) or issue_data.get("number")
             if issue_number is None:
                 continue
             json_path = get_issue_json_path(owner, repo_name, issue_number)

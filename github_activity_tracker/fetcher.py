@@ -273,9 +273,7 @@ def fetch_issues_from_github(
                     if full_issue and isinstance(full_issue, dict):
                         issue = full_issue
                 except Exception as e:
-                    logger.debug(
-                        "Failed to fetch full issue #%s: %s", issue_number, e
-                    )
+                    logger.debug("Failed to fetch full issue #%s: %s", issue_number, e)
                 logger.debug(f"Fetching comments for issue #{issue_number}")
                 comments = fetch_comments_from_github(
                     client, owner, repo, issue_number, start_time, end_time
@@ -397,9 +395,7 @@ def fetch_pull_requests_from_github(
         for pr in prs:
             updated_str = pr.get("updated_at") or pr.get("created_at")
             pr_number = pr.get("number")
-            logger.debug(
-                "Fetching PR #%s with updated_str: %s", pr_number, updated_str
-            )
+            logger.debug("Fetching PR #%s with updated_str: %s", pr_number, updated_str)
             if updated_str:
                 try:
                     pr_dt = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))

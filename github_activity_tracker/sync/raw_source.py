@@ -71,7 +71,8 @@ def _merge_issue_json(existing: dict, new: dict) -> dict:
 
 def _merge_pr_json(existing: dict, new: dict) -> dict:
     """Merge PR JSON: detail from new (pr_info or flat); comments and reviews merged by id.
-    Accepts and produces nested { pr_info: <detail>, comments: [...], reviews: [...] }."""
+    Accepts and produces nested { pr_info: <detail>, comments: [...], reviews: [...] }.
+    """
     new_detail = new.get("pr_info")
     if new_detail is None:
         new_detail = {k: v for k, v in new.items() if k not in ("comments", "reviews")}

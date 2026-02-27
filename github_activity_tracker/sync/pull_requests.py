@@ -185,7 +185,9 @@ def sync_pull_requests(
         for pr_data in fetcher.fetch_pull_requests_from_github(
             client, owner, repo_name, start_date, end_date
         ):
-            pr_number = (pr_data.get("pr_info") or {}).get("number") or pr_data.get("number")
+            pr_number = (pr_data.get("pr_info") or {}).get("number") or pr_data.get(
+                "number"
+            )
             if pr_number is None:
                 continue
             json_path = get_pr_json_path(owner, repo_name, pr_number)
