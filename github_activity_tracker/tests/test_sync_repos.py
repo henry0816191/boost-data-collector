@@ -85,3 +85,24 @@ def test_sync_repos_raises_on_rate_limit_exception(github_repository):
     ):
         with pytest.raises(RateLimitException, match="rate limited"):
             sync_repos(github_repository)
+
+
+@pytest.mark.django_db
+def test_sync_repos_sets_description_empty_when_api_returns_none(github_repository):
+    """sync_repos sets description to '' when repo_data description is None."""
+    mock_client = MagicMock()
+    mock_client.get_repository_info.return_value = {
+        "stargazers_count": 0,
+        "forks_count": 0,
+        "description": None,
+        "pushed_at": None,
+        "created_at": None,
+        "updated_at": None,
+    }
+    with patch(
+        "github_activity_tracker.sync.repos.get_github_client",
+        return_value=mock_client,
+    ):
+        sync_repos(github_repository)
+    github_repository.refresh_from_db()
+    assert github_repository.description == ""

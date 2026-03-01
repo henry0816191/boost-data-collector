@@ -35,7 +35,7 @@ def sync_repos(repo: GitHubRepository) -> None:
         # Update repo fields (stars, forks, description, dates)
         repo.stars = repo_data.get("stargazers_count", 0)
         repo.forks = repo_data.get("forks_count", 0)
-        repo.description = repo_data.get("description", "")
+        repo.description = repo_data.get("description") or ""
         repo.repo_pushed_at = parse_datetime(repo_data.get("pushed_at"))
         repo.repo_created_at = parse_datetime(repo_data.get("created_at"))
         repo.repo_updated_at = parse_datetime(repo_data.get("updated_at"))

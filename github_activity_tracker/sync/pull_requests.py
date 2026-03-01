@@ -11,14 +11,16 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from cppa_user_tracker.services import get_or_create_github_account
 from github_activity_tracker import fetcher, services
+from .raw_source import save_pr_raw_source
 from github_activity_tracker.workspace import (
     get_pr_json_path,
     iter_existing_pr_jsons,
 )
+from django.utils import timezone
 from github_ops import get_github_client
 from github_ops.client import ConnectionException, RateLimitException
 from github_activity_tracker.sync.utils import (
@@ -129,6 +131,7 @@ def _process_existing_pr_jsons(repo: GitHubRepository) -> int:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             _process_pr_data(repo, data)
+            save_pr_raw_source(owner, repo_name, data)
             path.unlink()
             count += 1
         except Exception as e:
@@ -136,10 +139,22 @@ def _process_existing_pr_jsons(repo: GitHubRepository) -> int:
     return count
 
 
-def sync_pull_requests(repo: GitHubRepository) -> None:
-    """1) Process existing workspace JSONs; 2) Fetch from GitHub, save as JSON, persist to DB, remove file."""
+def sync_pull_requests(
+    repo: GitHubRepository,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+) -> None:
+    """1) Process existing workspace JSONs; 2) Fetch from GitHub, save as JSON, persist to DB, remove file.
+
+    Args:
+        repo: Repository to sync.
+        start_date: Override start date (default: last PR updated_at + 1s, or None if no PRs).
+        end_date: Override end date (default: now).
+    """
     logger.info(
-        "sync_pull_requests: starting for repo id=%s (%s)", repo.pk, repo.repo_name
+        "sync_pull_requests: starting for repo id=%s (%s)",
+        repo.pk,
+        repo.repo_name,
     )
 
     owner = repo.owner_account.username
@@ -150,17 +165,18 @@ def sync_pull_requests(repo: GitHubRepository) -> None:
         n_existing = _process_existing_pr_jsons(repo)
         if n_existing:
             logger.info(
-                "sync_pull_requests: processed %s existing PR JSON(s)", n_existing
+                "sync_pull_requests: processed %s existing PR JSON(s)",
+                n_existing,
             )
 
         # Phase 2: fetch from GitHub, write JSON, persist to DB, remove file
         client = get_github_client()
-        last_pr = repo.pull_requests.order_by("-pr_updated_at").first()
-        if last_pr:
-            start_date = last_pr.pr_updated_at + timedelta(seconds=1)
-        else:
-            start_date = None
-        end_date = datetime.now()
+        if start_date is None:
+            last_pr = repo.pull_requests.order_by("-pr_updated_at").first()
+            if last_pr:
+                start_date = last_pr.pr_updated_at + timedelta(seconds=1)
+        if end_date is None:
+            end_date = timezone.now()
 
         count = 0
         for pr_data in fetcher.fetch_pull_requests_from_github(
@@ -175,6 +191,7 @@ def sync_pull_requests(repo: GitHubRepository) -> None:
                 json.dumps(pr_data, indent=2, default=str), encoding="utf-8"
             )
             _process_pr_data(repo, pr_data)
+            save_pr_raw_source(owner, repo_name, pr_data)
             json_path.unlink()
             count += 1
 
@@ -190,6 +207,8 @@ def sync_pull_requests(repo: GitHubRepository) -> None:
         raise
     except Exception as e:
         logger.exception(
-            "sync_pull_requests: unexpected error for repo id=%s: %s", repo.pk, e
+            "sync_pull_requests: unexpected error for repo id=%s: %s",
+            repo.pk,
+            e,
         )
         raise

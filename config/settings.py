@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "operations",
     "github_activity_tracker",
     "boost_library_tracker",
+    "boost_mailing_list_tracker",
     "cppa_slack_transcript_tracker",
     "cppa_slack_tracker",
     "discord_activity_tracker",
@@ -134,6 +135,7 @@ _WORKSPACE_APP_SLUGS = (
     "cppa_slack_transcript_tracker",
     "cppa_slack_tracker",
     "discord_activity_tracker",
+    "boost_mailing_list_tracker",
     "shared",
 )
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)

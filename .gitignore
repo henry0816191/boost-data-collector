@@ -27,6 +27,7 @@ pytest-cache-files*/
 
 # Celery
 celerybeat-schedule
+celerybeat-schedule-*
 celerybeat.pid
 
 # Environment

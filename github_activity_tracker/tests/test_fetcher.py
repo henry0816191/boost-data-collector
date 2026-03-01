@@ -1,5 +1,6 @@
 """Tests for github_activity_tracker.fetcher."""
 
+import pytest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
@@ -111,6 +112,45 @@ def test_fetch_commits_from_github_includes_since_until_params():
     assert "until" in params
 
 
+def test_fetch_commits_from_github_skips_commit_on_502_503_504():
+    """fetch_commits_from_github skips commit and continues when full-commit fetch returns 502/503/504."""
+    import requests as req
+
+    client = MagicMock()
+    # API returns commits (e.g. newest first); fetcher iterates reversed(), so first
+    # full-commit fetch is for the last in this list (def456), second for abc123.
+    client.rest_request.side_effect = [
+        [
+            {
+                "sha": "abc123",
+                "commit": {"author": {"date": "2024-01-01T00:00:00Z"}},
+            },
+            {
+                "sha": "def456",
+                "commit": {"author": {"date": "2024-01-02T00:00:00Z"}},
+            },
+        ],
+        req.exceptions.HTTPError("Bad Gateway", response=MagicMock(status_code=502)),
+        {"sha": "abc123", "commit": {"message": "msg1"}, "stats": {"additions": 1}},
+    ]
+    items = list(fetch_commits_from_github(client, "o", "r"))
+    assert len(items) == 1
+    assert items[0]["sha"] == "abc123"
+
+
+def test_fetch_commits_from_github_reraises_non_server_error_http():
+    """fetch_commits_from_github re-raises HTTPError when status is not 502/503/504."""
+    import requests as req
+
+    client = MagicMock()
+    client.rest_request.side_effect = [
+        [{"sha": "abc", "commit": {"author": {"date": "2024-01-01T00:00:00Z"}}}],
+        req.exceptions.HTTPError("Forbidden", response=MagicMock(status_code=403)),
+    ]
+    with pytest.raises(req.exceptions.HTTPError):
+        list(fetch_commits_from_github(client, "o", "r"))
+
+
 # --- fetch_comments_from_github ---
 
 
@@ -151,8 +191,9 @@ def test_fetch_issues_from_github_yields_issue_dicts():
     """fetch_issues_from_github yields issue dicts (excluding PRs)."""
     client = MagicMock()
     # No "pull_request" key = plain issue (fetcher filters by "pull_request" in i)
+    # Must include updated_at/created_at or fetcher skips the issue
     client.rest_request.side_effect = [
-        [{"number": 1, "title": "Issue 1"}],
+        [{"number": 1, "title": "Issue 1", "updated_at": "2024-06-01T00:00:00Z"}],
         [],  # comments for issue 1
     ]
     items = list(fetch_issues_from_github(client, "o", "r"))

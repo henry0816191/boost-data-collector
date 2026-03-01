@@ -176,6 +176,39 @@ def test_rest_request_connection_error_after_retries_raises():
         client.rest_request("/repos/foo/bar")
 
 
+def test_rest_request_retries_on_502_then_succeeds():
+    """rest_request retries on 502/503/504 and returns JSON when a later attempt succeeds."""
+    client = GitHubAPIClient("token")
+    client._check_rate_limit = MagicMock()
+    resp_502 = MagicMock(status_code=502, headers={})
+    resp_502.raise_for_status = MagicMock()
+    resp_200 = MagicMock(status_code=200, headers={}, json=lambda: {"id": 1})
+    resp_200.raise_for_status = MagicMock()
+    client.session.get = MagicMock(side_effect=[resp_502, resp_200])
+    with patch("github_ops.client.time.sleep"):
+        out = client.rest_request("/repos/foo/bar")
+    assert out == {"id": 1}
+    assert client.session.get.call_count == 2
+
+
+def test_rest_request_502_after_max_retries_raises():
+    """rest_request raises after max retries when all attempts return 502."""
+    import requests as req
+
+    client = GitHubAPIClient("token")
+    client.max_retries = 2
+    client._check_rate_limit = MagicMock()
+    resp_502 = MagicMock(status_code=502, headers={})
+    resp_502.raise_for_status = MagicMock(
+        side_effect=req.exceptions.HTTPError("Bad Gateway", response=resp_502)
+    )
+    client.session.get = MagicMock(return_value=resp_502)
+    with patch("github_ops.client.time.sleep"):
+        with pytest.raises(req.exceptions.HTTPError):
+            client.rest_request("/repos/foo/bar")
+    assert client.session.get.call_count == 2
+
+
 # --- rest_post ---
 
 

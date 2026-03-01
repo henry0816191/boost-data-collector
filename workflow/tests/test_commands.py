@@ -10,7 +10,7 @@ from django.core.management.base import CommandError
 
 @pytest.mark.django_db
 def test_run_all_collectors_command_exists(workflow_cmd_name):
-    """run_all_collectors is registered and runnable; SystemExit is expected when tokens missing."""
+    """run_all_collectors is registered and runnable; sub-commands are mocked to avoid hanging."""
     commands = get_commands()
     assert (
         workflow_cmd_name in commands
@@ -18,12 +18,13 @@ def test_run_all_collectors_command_exists(workflow_cmd_name):
 
     out = StringIO()
     err = StringIO()
-    try:
+    with patch(
+        "workflow.management.commands.run_all_collectors.call_command",
+        return_value=None,
+    ):
         call_command(workflow_cmd_name, stdout=out, stderr=err)
-    except SystemExit:
-        # Expected when sub-commands fail (e.g. no GITHUB_TOKEN); command was found and ran.
-        pass
-    # Do not catch Exception: import errors, missing deps, or other bugs must fail the test.
+    content = out.getvalue()
+    assert "Running" in content and "succeeded" in content
 
 
 @pytest.mark.django_db
@@ -72,7 +73,7 @@ def test_run_all_collectors_stop_on_failure(workflow_cmd_name):
                 stdout=out,
                 stderr=err,
             )
-    # COLLECTOR_COMMANDS has two commands; with --stop-on-failure, only the first should run.
+    # With --stop-on-failure, only the first command runs (count 1 regardless of len(COLLECTOR_COMMANDS)).
     assert call_command_mock.call_count == 1
 
 

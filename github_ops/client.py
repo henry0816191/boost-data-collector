@@ -118,6 +118,22 @@ class GitHubAPIClient:
                             self._handle_rate_limit(wait_time)
                             return self.rest_request(endpoint, params)
 
+                # Retry on server errors (502 Bad Gateway, 503 Unavailable, 504 Gateway Timeout)
+                if response.status_code in (502, 503, 504):
+                    if attempt < self.max_retries - 1:
+                        wait_time = self.retry_delay * (2**attempt)
+                        logger.warning(
+                            "HTTP %s on %s (attempt %s/%s), retrying in %ss...",
+                            response.status_code,
+                            endpoint,
+                            attempt + 1,
+                            self.max_retries,
+                            wait_time,
+                        )
+                        time.sleep(wait_time)
+                        continue
+                    response.raise_for_status()
+
                 response.raise_for_status()
 
                 if "X-RateLimit-Remaining" in response.headers:
