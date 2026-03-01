@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "operations",
     "github_activity_tracker",
     "boost_library_tracker",
+    "boost_library_docs_tracker",
     "cppa_slack_transcript_tracker",
     "discord_activity_tracker",
 ]
@@ -126,6 +127,7 @@ WORKSPACE_DIR = Path(
 _WORKSPACE_APP_SLUGS = (
     "github_activity_tracker",
     "boost_library_tracker",
+    "boost_library_docs_tracker",
     "cppa_slack_transcript_tracker",
     "discord_activity_tracker",
     "shared",

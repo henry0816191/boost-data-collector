@@ -671,97 +671,136 @@ erDiagram
 
 ---
 
+### 10. Boost Library Docs Tracker
+
+```mermaid
+erDiagram
+    BoostLibraryVersion ||--o{ BoostLibraryDocumentation : "has"
+    BoostDocContent ||--o{ BoostLibraryDocumentation : "used_in"
+
+    BoostDocContent {
+        int id PK
+        text url UK "IX"
+        string content_hash "IX"
+        text page_content
+        datetime scraped_at
+        datetime created_at
+    }
+
+    BoostLibraryDocumentation {
+        int id PK
+        int boost_library_version_id FK
+        int boost_doc_content_id FK
+        string status "IX"
+        int page_count
+        datetime updated_at
+        datetime created_at
+    }
+```
+
+**Note:** **BoostDocContent** stores one globally unique page per URL. One row per URL regardless of version or library. `content_hash` (SHA-256 of `page_content`) is used to detect whether content has changed between versions. `scraped_at` is updated each time the page is re-fetched.
+
+**Note:** **BoostLibraryDocumentation** is the join table between **BoostLibraryVersion** (section 3) and **BoostDocContent**. One row per (library-version, page) pair — it records which pages were found under a given (library, version) combination. `status` tracks the scrape and Pinecone sync state for that pair: `pending`, `running`, `completed`, `failed`. `page_count` is the total number of pages discovered for the `boost_library_version_id` in this run (same value for all rows sharing the same `boost_library_version_id`; used for progress/reporting). A `completed` status for all rows of a given `boost_library_version_id` means that (library, version) is fully scraped and can be skipped on re-run.
+
+**Note:** Unique constraint on `url` in BoostDocContent. Composite unique constraint on `(boost_library_version_id, boost_doc_content_id)` in BoostLibraryDocumentation. Index on `(boost_library_version_id, status)` for efficient restart queries.
+
+---
+
 ## Appendix
 
 ### Appendix A: Table summary
 
-| Table                                | Description                                                                                              | Section |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------- |
-| **BaseProfile**                      | Base table for profiles; extended by platform-specific profile tables. Has `identity_id` FK to Identity. | 1       |
-| **Identity**                         | Top-level user/account; one identity can have multiple BaseProfiles.                                     | 1       |
-| **Email**                            | Email addresses linked to BaseProfile (one profile, many emails).                                        | 1       |
-| **GitHubAccount**                    | Profile for GitHub (user/org/enterprise); extends BaseProfile.                                           | 1       |
-| **SlackUser**                        | Profile for Slack; extends BaseProfile.                                                                  | 1       |
-| **MailingListProfile**               | Profile for mailing list; extends BaseProfile.                                                           | 1       |
-| **WG21PaperAuthorProfile**           | Profile for WG21 paper authors; extends BaseProfile.                                                     | 1       |
-| **TmpIdentity**                      | Temporary identity for staging (CPPA User Tracker).                                                      | 1       |
-| **TempProfileIdentityRelation**     | Staging table: base_profile_id -> target_identity_id (CPPA User Tracker).                                | 1       |
-| **GitHubRepository**                 | Repository metadata (owner, repo_name, stars, forks, etc.). Base table for repo subtypes.                | 2       |
-| **GitHubFile**                       | File in a repo (filename, repo_id, is_deleted). Base for file subtypes.                                  | 2       |
-| **Language**                         | Reference: language name.                                                                                | 2       |
-| **License**                          | Reference: license name, spdx_id, url.                                                                   | 2       |
-| **RepoLanguage**                     | Repo-language link with line_count.                                                                      | 2       |
-| **RepoLicense**                      | Repo-license link.                                                                                       | 2       |
-| **GitCommit**                        | Commit in a repo (hash, committer, comment, commit_at).                                                  | 2       |
-| **GitCommitFileChange**              | Per-commit file change (links commit, GitHubFile, status, additions, deletions, patch).                  | 2       |
-| **Issue**                            | GitHub issue (repo, creator, number, title, body, state, labels, assignees).                             | 2       |
-| **IssueComment**                     | Comment on an issue.                                                                                     | 2       |
-| **IssueAssignee**                    | Issue-assignee link.                                                                                     | 2       |
-| **IssueLabel**                       | Issue-label name.                                                                                        | 2       |
-| **PullRequest**                      | PR (repo, creator, number, title, body, state, head_hash, base_hash, dates).                             | 2       |
-| **PullRequestReview**                | Review on a PR.                                                                                          | 2       |
-| **PullRequestComment**               | Comment on a PR.                                                                                         | 2       |
-| **PullRequestAssignee**              | PR-assignee link.                                                                                        | 2       |
-| **PullRequestLabel**                 | PR-label name.                                                                                           | 2       |
-| **BoostLibraryRepository**           | Extends GitHubRepository; adds created_at, updated_at (Boost repos).                                     | 3       |
-| **BoostLibrary**                     | Library within a Boost repo (name).                                                                      | 3       |
-| **BoostFile**                        | Extends GitHubFile; adds library_id (file in a Boost library).                                           | 3       |
-| **BoostVersion**                     | Reference: Boost version string.                                                                         | 3       |
-| **BoostLibraryVersion**              | Library-version link (cpp_version, description).                                                         | 3       |
-| **BoostDependency**                  | Library dependency (client_library, version, dep_library).                                               | 3       |
-| **DependencyChangeLog**              | Log of dependency add/remove (client_library, dep_library, is_add, created_at).                          | 3       |
-| **BoostLibraryRoleRelationship**     | Library version-account link (maintainer/author).                                                        | 3       |
-| **BoostLibraryCategory**             | Reference: category name.                                                                                | 3       |
-| **BoostLibraryCategoryRelationship** | Library-category link.                                                                                   | 3       |
-| **BoostExternalRepository**          | Extends GitHubRepository; adds boost_version, is_boost_embedded, is_boost_used.                          | 4       |
-| **BoostUsage**                       | External repo use of Boost (repo, boost_header_id, file_path_id, last_commit_date).                      | 4       |
-| **MailingListMessage**               | Mailing list message (sender_id->MailingListProfile, msg_id, subject, content, list_name, sent_at).      | 5       |
-| **SlackTeam**                        | Slack workspace (team_id, team_name).                                                                    | 6       |
-| **SlackChannel**                     | Channel in a team (channel_id, name, type, creator_user_id).                                             | 6       |
-| **SlackMessage**                     | Message in a channel (ts, slack_user_id, message, thread_ts).                                            | 6       |
-| **SlackChannelMembership**           | Channel-member link (slack_user_id, is_restricted, is_deleted).                                          | 6       |
-| **SlackChannelMembershipChangeLog**  | Log of join/leave (slack_user_id, is_joined, created_at).                                                | 6       |
-| **WG21Paper**                        | WG21 paper (paper_id, url, title, publication_date).                                                     | 7       |
-| **WG21PaperAuthor**                  | Paper-author link (paper_id, profile_id->WG21PaperAuthorProfile).                                        | 7       |
-| **Website**                          | Daily site visit total (stat_date, website_visit_count).                                                 | 8       |
-| **WebsiteVisitCount**                | Per-date, per-country visit count.                                                                       | 8       |
-| **WebsiteWordCount**                 | Per-date, per-word count.                                                                                | 8       |
-| **PineconeFailList**                 | Failed sync records (failed_id, type) for retry/audit.                                                   | 9       |
-| **PineconeSyncStatus**               | Last sync per type (type, final_sync_at, created_at, updated_at); type = slack, mailing list, wg21, etc. | 9       |
+| Table                                | Description                                                                                                                                          | Section |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| **BaseProfile**                      | Base table for profiles; extended by platform-specific profile tables. Has `identity_id` FK to Identity.                                             | 1       |
+| **Identity**                         | Top-level user/account; one identity can have multiple BaseProfiles.                                                                                 | 1       |
+| **Email**                            | Email addresses linked to BaseProfile (one profile, many emails).                                                                                    | 1       |
+| **GitHubAccount**                    | Profile for GitHub (user/org/enterprise); extends BaseProfile.                                                                                       | 1       |
+| **SlackUser**                        | Profile for Slack; extends BaseProfile.                                                                                                              | 1       |
+| **MailingListProfile**               | Profile for mailing list; extends BaseProfile.                                                                                                       | 1       |
+| **WG21PaperAuthorProfile**           | Profile for WG21 paper authors; extends BaseProfile.                                                                                                 | 1       |
+| **TmpIdentity**                      | Temporary identity for staging (CPPA User Tracker).                                                                                                  | 1       |
+| **TempProfileIdentityRelation**      | Staging table: base_profile_id -> target_identity_id (CPPA User Tracker).                                                                            | 1       |
+| **GitHubRepository**                 | Repository metadata (owner, repo_name, stars, forks, etc.). Base table for repo subtypes.                                                            | 2       |
+| **GitHubFile**                       | File in a repo (filename, repo_id, is_deleted). Base for file subtypes.                                                                              | 2       |
+| **Language**                         | Reference: language name.                                                                                                                            | 2       |
+| **License**                          | Reference: license name, spdx_id, url.                                                                                                               | 2       |
+| **RepoLanguage**                     | Repo-language link with line_count.                                                                                                                  | 2       |
+| **RepoLicense**                      | Repo-license link.                                                                                                                                   | 2       |
+| **GitCommit**                        | Commit in a repo (hash, committer, comment, commit_at).                                                                                              | 2       |
+| **GitCommitFileChange**              | Per-commit file change (links commit, GitHubFile, status, additions, deletions, patch).                                                              | 2       |
+| **Issue**                            | GitHub issue (repo, creator, number, title, body, state, labels, assignees).                                                                         | 2       |
+| **IssueComment**                     | Comment on an issue.                                                                                                                                 | 2       |
+| **IssueAssignee**                    | Issue-assignee link.                                                                                                                                 | 2       |
+| **IssueLabel**                       | Issue-label name.                                                                                                                                    | 2       |
+| **PullRequest**                      | PR (repo, creator, number, title, body, state, head_hash, base_hash, dates).                                                                         | 2       |
+| **PullRequestReview**                | Review on a PR.                                                                                                                                      | 2       |
+| **PullRequestComment**               | Comment on a PR.                                                                                                                                     | 2       |
+| **PullRequestAssignee**              | PR-assignee link.                                                                                                                                    | 2       |
+| **PullRequestLabel**                 | PR-label name.                                                                                                                                       | 2       |
+| **BoostLibraryRepository**           | Extends GitHubRepository; adds created_at, updated_at (Boost repos).                                                                                 | 3       |
+| **BoostLibrary**                     | Library within a Boost repo (name).                                                                                                                  | 3       |
+| **BoostFile**                        | Extends GitHubFile; adds library_id (file in a Boost library).                                                                                       | 3       |
+| **BoostVersion**                     | Reference: Boost version string.                                                                                                                     | 3       |
+| **BoostLibraryVersion**              | Library-version link (cpp_version, description).                                                                                                     | 3       |
+| **BoostDependency**                  | Library dependency (client_library, version, dep_library).                                                                                           | 3       |
+| **DependencyChangeLog**              | Log of dependency add/remove (client_library, dep_library, is_add, created_at).                                                                      | 3       |
+| **BoostLibraryRoleRelationship**     | Library version-account link (maintainer/author).                                                                                                    | 3       |
+| **BoostLibraryCategory**             | Reference: category name.                                                                                                                            | 3       |
+| **BoostLibraryCategoryRelationship** | Library-category link.                                                                                                                               | 3       |
+| **BoostExternalRepository**          | Extends GitHubRepository; adds boost_version, is_boost_embedded, is_boost_used.                                                                      | 4       |
+| **BoostUsage**                       | External repo use of Boost (repo, boost_header_id, file_path_id, last_commit_date).                                                                  | 4       |
+| **MailingListMessage**               | Mailing list message (sender_id->MailingListProfile, msg_id, subject, content, list_name, sent_at).                                                  | 5       |
+| **SlackTeam**                        | Slack workspace (team_id, team_name).                                                                                                                | 6       |
+| **SlackChannel**                     | Channel in a team (channel_id, name, type, creator_user_id).                                                                                         | 6       |
+| **SlackMessage**                     | Message in a channel (ts, slack_user_id, message, thread_ts).                                                                                        | 6       |
+| **SlackChannelMembership**           | Channel-member link (slack_user_id, is_restricted, is_deleted).                                                                                      | 6       |
+| **SlackChannelMembershipChangeLog**  | Log of join/leave (slack_user_id, is_joined, created_at).                                                                                            | 6       |
+| **WG21Paper**                        | WG21 paper (paper_id, url, title, publication_date).                                                                                                 | 7       |
+| **WG21PaperAuthor**                  | Paper-author link (paper_id, profile_id->WG21PaperAuthorProfile).                                                                                    | 7       |
+| **Website**                          | Daily site visit total (stat_date, website_visit_count).                                                                                             | 8       |
+| **WebsiteVisitCount**                | Per-date, per-country visit count.                                                                                                                   | 8       |
+| **WebsiteWordCount**                 | Per-date, per-word count.                                                                                                                            | 8       |
+| **PineconeFailList**                 | Failed sync records (failed_id, type) for retry/audit.                                                                                               | 9       |
+| **PineconeSyncStatus**               | Last sync per type (type, final_sync_at, created_at, updated_at); type = slack, mailing list, wg21, etc.                                             | 9       |
+| **BoostDocContent**                  | Globally unique scraped page by URL (url, content_hash, page_content, scraped_at). One row per URL across all versions.                              | 10      |
+| **BoostLibraryDocumentation**        | Join table: BoostLibraryVersion × BoostDocContent. Tracks which pages belong to each (library, version) and their scrape/sync status and page_count. | 10      |
 
 ### Appendix B: Relationship summary
 
-| From                         | To                                                                                                                     | Relationship                               |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Identity                     | BaseProfile                                                                                                            | One identity has many profiles             |
-| BaseProfile                  | Email                                                                                                                  | One profile has many emails                |
-| BaseProfile                  | GitHubAccount, SlackUser, MailingListProfile, WG21PaperAuthorProfile                                                   | Extends (1:1 subtype)                      |
-| TmpIdentity                  | TempProfileIdentityRelation                                                                                           | Has many (target)                          |
+| From                        | To                                                                                                                     | Relationship                               |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Identity                    | BaseProfile                                                                                                            | One identity has many profiles             |
+| BaseProfile                 | Email                                                                                                                  | One profile has many emails                |
+| BaseProfile                 | GitHubAccount, SlackUser, MailingListProfile, WG21PaperAuthorProfile                                                   | Extends (1:1 subtype)                      |
+| TmpIdentity                 | TempProfileIdentityRelation                                                                                            | Has many (target)                          |
 | TempProfileIdentityRelation | BaseProfile                                                                                                            | Has many (base_profile_id)                 |
-| GitHubAccount                | GitHubRepository                                                                                                       | Owns many                                  |
-| GitHubRepository             | RepoLanguage, RepoLicense                                                                                              | Has many                                   |
-| GitHubRepository             | BoostLibraryRepository, BoostExternalRepository                                                                        | Extends (1:1 subtype)                      |
-| GitHubRepository             | GitCommit, Issue, PullRequest                                                                                          | Contains many                              |
-| GitHubRepository             | GitHubFile                                                                                                             | Has many                                   |
-| GitHubFile                   | BoostFile                                                                                                              | Extends (1:1 subtype)                      |
-| GitHubFile                   | GitCommitFileChange                                                                                                    | Changed in (many file changes)             |
-| GitCommit                    | GitCommitFileChange                                                                                                    | Has many                                   |
-| Issue                        | IssueComment, IssueAssignee, IssueLabel                                                                                | Has many                                   |
-| PullRequest                  | PullRequestReview, PullRequestComment, PullRequestAssignee, PullRequestLabel                                           | Has many                                   |
-| GitHubAccount                | GitCommit, Issue, IssueComment, IssueAssignee, PullRequest, PullRequestReview, PullRequestComment, PullRequestAssignee | Committer/creator/author/assignee/reviewer |
-| BoostLibraryRepository       | BoostLibrary                                                                                                           | Has many                                   |
-| BoostLibrary                 | BoostFile, BoostDependency (client/dep), BoostLibraryVersion, DependencyChangeLog                                      | Has many                                   |
-| BoostLibrary                 | BoostLibraryCategoryRelationship                                                                                       | Has many                                   |
-| BoostVersion                 | BoostDependency, BoostLibraryVersion                                                                                   | Version                                    |
-| BoostLibraryVersion          | BoostLibraryRoleRelationship                                                                                           | Has many                                   |
-| GitHubAccount                | BoostLibraryRoleRelationship                                                                                           | Role (maintainer/author)                   |
-| BoostLibraryCategory         | BoostLibraryCategoryRelationship                                                                                       | Category                                   |
-| BoostExternalRepository      | BoostUsage                                                                                                             | Has many                                   |
-| BoostUsage                   | BoostFile, GitHubFile                                                                                                  | References (boost header, file path)       |
-| MailingListProfile           | MailingListMessage                                                                                                     | Sender (has many messages)                 |
-| SlackTeam                    | SlackChannel                                                                                                           | Has many                                   |
-| SlackChannel                 | SlackMessage, SlackChannelMembership, SlackChannelMembershipChangeLog                                                  | Contains / has many                        |
-| SlackUser                    | SlackMessage, SlackChannelMembership, SlackChannelMembershipChangeLog                                                  | Author / member / user                     |
-| SlackChannel                 | SlackUser                                                                                                              | Creator (many-to-one)                      |
-| WG21PaperAuthorProfile       | WG21PaperAuthor                                                                                                        | Author (has many)                          |
-| WG21Paper                    | WG21PaperAuthor                                                                                                        | Has many authors                           |
+| GitHubAccount               | GitHubRepository                                                                                                       | Owns many                                  |
+| GitHubRepository            | RepoLanguage, RepoLicense                                                                                              | Has many                                   |
+| GitHubRepository            | BoostLibraryRepository, BoostExternalRepository                                                                        | Extends (1:1 subtype)                      |
+| GitHubRepository            | GitCommit, Issue, PullRequest                                                                                          | Contains many                              |
+| GitHubRepository            | GitHubFile                                                                                                             | Has many                                   |
+| GitHubFile                  | BoostFile                                                                                                              | Extends (1:1 subtype)                      |
+| GitHubFile                  | GitCommitFileChange                                                                                                    | Changed in (many file changes)             |
+| GitCommit                   | GitCommitFileChange                                                                                                    | Has many                                   |
+| Issue                       | IssueComment, IssueAssignee, IssueLabel                                                                                | Has many                                   |
+| PullRequest                 | PullRequestReview, PullRequestComment, PullRequestAssignee, PullRequestLabel                                           | Has many                                   |
+| GitHubAccount               | GitCommit, Issue, IssueComment, IssueAssignee, PullRequest, PullRequestReview, PullRequestComment, PullRequestAssignee | Committer/creator/author/assignee/reviewer |
+| BoostLibraryRepository      | BoostLibrary                                                                                                           | Has many                                   |
+| BoostLibrary                | BoostFile, BoostDependency (client/dep), BoostLibraryVersion, DependencyChangeLog                                      | Has many                                   |
+| BoostLibrary                | BoostLibraryCategoryRelationship                                                                                       | Has many                                   |
+| BoostVersion                | BoostDependency, BoostLibraryVersion                                                                                   | Version                                    |
+| BoostLibraryVersion         | BoostLibraryRoleRelationship                                                                                           | Has many                                   |
+| GitHubAccount               | BoostLibraryRoleRelationship                                                                                           | Role (maintainer/author)                   |
+| BoostLibraryCategory        | BoostLibraryCategoryRelationship                                                                                       | Category                                   |
+| BoostExternalRepository     | BoostUsage                                                                                                             | Has many                                   |
+| BoostUsage                  | BoostFile, GitHubFile                                                                                                  | References (boost header, file path)       |
+| MailingListProfile          | MailingListMessage                                                                                                     | Sender (has many messages)                 |
+| SlackTeam                   | SlackChannel                                                                                                           | Has many                                   |
+| SlackChannel                | SlackMessage, SlackChannelMembership, SlackChannelMembershipChangeLog                                                  | Contains / has many                        |
+| SlackUser                   | SlackMessage, SlackChannelMembership, SlackChannelMembershipChangeLog                                                  | Author / member / user                     |
+| SlackChannel                | SlackUser                                                                                                              | Creator (many-to-one)                      |
+| WG21PaperAuthorProfile      | WG21PaperAuthor                                                                                                        | Author (has many)                          |
+| WG21Paper                   | WG21PaperAuthor                                                                                                        | Has many authors                           |
+| BoostLibraryVersion         | BoostLibraryDocumentation                                                                                                | Has many (boost_library_version_id)        |
+| BoostDocContent             | BoostLibraryDocumentation                                                                                                | Used in many (boost_doc_content_id)       |
