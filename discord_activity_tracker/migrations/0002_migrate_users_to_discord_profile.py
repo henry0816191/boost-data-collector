@@ -8,7 +8,6 @@ def migrate_users_forward(apps, schema_editor):
     DiscordUser = apps.get_model("discord_activity_tracker", "DiscordUser")
     BaseProfile = apps.get_model("cppa_user_tracker", "BaseProfile")
     DiscordProfile = apps.get_model("cppa_user_tracker", "DiscordProfile")
-    DiscordMessage = apps.get_model("discord_activity_tracker", "DiscordMessage")
 
     # Build mapping: old DiscordUser.pk → new DiscordProfile.pk
     pk_map = {}
@@ -16,7 +15,7 @@ def migrate_users_forward(apps, schema_editor):
         # Create BaseProfile row first (multi-table inheritance)
         bp = BaseProfile.objects.create(type="discord")
         # Create DiscordProfile row
-        dp = DiscordProfile.objects.create(
+        DiscordProfile.objects.create(
             baseprofile_ptr_id=bp.pk,
             discord_user_id=du.user_id,
             username=du.username,
@@ -28,7 +27,6 @@ def migrate_users_forward(apps, schema_editor):
 
     # Remap author_id in DiscordMessage using raw SQL for performance
     if pk_map:
-        db_alias = schema_editor.connection.alias
         # Build CASE WHEN for bulk update
         case_parts = " ".join(
             f"WHEN {old_pk} THEN {new_pk}" for old_pk, new_pk in pk_map.items()

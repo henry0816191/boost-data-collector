@@ -95,6 +95,8 @@ def boost_library_version(db, boost_library, boost_version):
         boost_version,
         cpp_version="C++14",
         description="Algorithm library",
+        key="algorithm",
+        documentation="https://www.boost.org/doc/libs/1_81_0/libs/algorithm/doc/html/index.html",
     )
     return lib_ver
 
