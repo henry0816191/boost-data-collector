@@ -74,19 +74,23 @@ class Command(BaseCommand):
 
         if from_date and to_date and from_date > to_date:
             raise CommandError(
-                f"Invalid date range: from_date must be before or equal to to_date."
+                "Invalid date range: from_date must be before or equal to to_date."
             )
 
-        start_commit, start_issue, start_pr, end_date = clang_state.resolve_start_end_dates(
-            from_date, to_date
-        )
+        resolved = clang_state.resolve_start_end_dates(from_date, to_date)
+        if resolved is None:
+            return
 
-        self.stdout.write(
-            f"Resolved: start_commit={start_commit!r} start_issue={start_issue!r} "
-            f"start_pr={start_pr!r} end={end_date!r}"
+        start_commit, start_issue, start_pr, end_date = resolved
+        logger.info(
+            "Resolved: start_commit=%r start_issue=%r start_pr=%r end=%r",
+            start_commit,
+            start_issue,
+            start_pr,
+            end_date,
         )
         if dry_run:
-            self.stdout.write(self.style.SUCCESS("Dry run: no fetch performed."))
+            logger.info("Dry run: no fetch performed.")
             return
 
         try:
@@ -96,14 +100,8 @@ class Command(BaseCommand):
                 start_pr=start_pr,
                 end_date=end_date,
             )
-            self.stdout.write(
-                self.style.SUCCESS(
-                    f"run_clang_github_tracker: saved commits={commits_saved} "
-                    f"issues={issues_saved} prs={prs_saved}"
-                )
-            )
-            logger.debug(
-                "run_clang_github_tracker: finished (commits=%s issues=%s prs=%s)",
+            logger.info(
+                "run_clang_github_tracker: saved commits=%s issues=%s prs=%s",
                 commits_saved,
                 issues_saved,
                 prs_saved,

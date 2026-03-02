@@ -41,7 +41,14 @@ def _to_iso(dt: datetime | None) -> str | None:
 
 
 def load_state() -> dict[str, str | None]:
-    """Load state from workspace/clang_github_activity/state.json. Returns dict with last_*_date keys or empty dict if missing/invalid."""
+    """
+    Load state from workspace/clang_github_activity/state.json.
+
+    Returns:
+        - {} (empty dict): file missing, invalid, or read error → no state; process from start.
+        - Dict with keys last_commit_date, last_issue_date, last_pr_date (values str or None):
+          valid state file; None means no previous sync for that entity.
+    """
     path = get_state_path()
     if not path.exists():
         return {}
@@ -117,10 +124,11 @@ def _latest_date_from_issue_or_pr_json(path: Path) -> datetime | None:
 
 def compute_state_from_raw() -> dict[str, str | None]:
     """
-    Scan raw/github_activity_tracker/llvm/llvm-project for commits, issues, prs
+    Scan raw/github_activity_tracker/<owner>/<repo> for commits, issues, prs
     and return state dict with last_commit_date, last_issue_date, last_pr_date (ISO or None).
+    If the raw folder does not exist, returns all Nones (caller can write state.json from this).
     """
-    root = get_raw_repo_dir()
+    root = get_raw_repo_dir(create=False)
     result: dict[str, str | None] = {
         KEY_LAST_COMMIT_DATE: None,
         KEY_LAST_ISSUE_DATE: None,
@@ -164,15 +172,46 @@ def compute_state_from_raw() -> dict[str, str | None]:
 
 def ensure_state_file_exists() -> dict[str, str | None]:
     """
-    If state file does not exist, compute state from raw/github_activity_tracker/llvm/llvm-project
-    and write state.json; then return the state. If state file exists, just load and return.
+    If state file does not exist, ensure state.json exists:
+    - If raw folder exists: compute state from raw and write state.json.
+    - If raw folder does not exist: write state.json with {last_commit_date: null, last_issue_date: null, last_pr_date: null}.
+    If state file exists, load and return. If the file content is not a valid object (empty or invalid JSON), retry once by recomputing from raw and overwriting.
+
+    Returns:
+        - {} (empty dict): error (e.g. write failed after retry). Caller should log and finish.
+        - Dict with last_commit_date, last_issue_date, last_pr_date (str or None): state exists; use it (None = fetch from beginning).
     """
     path = get_state_path()
     if path.exists():
-        return load_state()
+        state = load_state()
+        if state:
+            return state
+        # File exists but content is not a valid object (empty or invalid); retry once by recomputing from raw
+        logger.warning(
+            "state.json is empty or not a valid object; recomputing from raw once."
+        )
+        computed = compute_state_from_raw()
+        try:
+            path.write_text(json.dumps(computed, indent=2), encoding="utf-8")
+            logger.info(
+                "Rewrote state file from raw: last_commit=%s last_issue=%s last_pr=%s",
+                computed.get(KEY_LAST_COMMIT_DATE),
+                computed.get(KEY_LAST_ISSUE_DATE),
+                computed.get(KEY_LAST_PR_DATE),
+            )
+            return computed
+        except OSError as e:
+            logger.warning("Failed to rewrite state file %s: %s", path, e)
+            return {}
     computed = compute_state_from_raw()
-    get_state_path().parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(computed, indent=2), encoding="utf-8")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(computed, indent=2), encoding="utf-8")
+    except OSError as e:
+        logger.warning(
+            "Failed to write state file %s: %s; proceeding with no state.", path, e
+        )
+        return {}
     logger.info(
         "Created state file from raw scan: last_commit=%s last_issue=%s last_pr=%s",
         computed.get(KEY_LAST_COMMIT_DATE),
@@ -185,7 +224,7 @@ def ensure_state_file_exists() -> dict[str, str | None]:
 def resolve_start_end_dates(
     from_date: datetime | None,
     to_date: datetime | None,
-) -> tuple[datetime | None, datetime | None, datetime | None, datetime]:
+) -> tuple[datetime | None, datetime | None, datetime | None, datetime] | None:
     """
     Resolve start dates for commits, issues, PRs and end_date.
 
@@ -193,8 +232,9 @@ def resolve_start_end_dates(
     - Else: ensure state file exists (create from raw scan if missing), then use state's
       last_*_date + 1s as start per entity, and to_date or now as end.
 
-    Returns: (start_commit, start_issue, start_pr, end_date).
-    end_date is always set (to_date or now). start_* are None to mean "fetch from beginning".
+    Returns:
+        (start_commit, start_issue, start_pr, end_date) when state is valid.
+        None when state is {} after one retry — error is logged; caller should finish.
     """
     if from_date is not None and to_date is not None:
         # CLI provided both: use for all
@@ -205,6 +245,13 @@ def resolve_start_end_dates(
         return from_date, from_date, from_date, to_date
 
     state = ensure_state_file_exists()
+    if not state:
+        state = ensure_state_file_exists()  # retry once
+    if not state:
+        logger.error(
+            "State unavailable after retry (error reading state.json or raw folder). Cannot resolve dates; exiting."
+        )
+        return None
     now = datetime.now(timezone.utc)
 
     if to_date is None:
@@ -221,8 +268,14 @@ def resolve_start_end_dates(
             dt = dt.replace(tzinfo=timezone.utc)
         return dt + timedelta(seconds=1)
 
-    start_commit = from_date if from_date is not None else start_from_state(KEY_LAST_COMMIT_DATE)
-    start_issue = from_date if from_date is not None else start_from_state(KEY_LAST_ISSUE_DATE)
-    start_pr = from_date if from_date is not None else start_from_state(KEY_LAST_PR_DATE)
+    start_commit = (
+        from_date if from_date is not None else start_from_state(KEY_LAST_COMMIT_DATE)
+    )
+    start_issue = (
+        from_date if from_date is not None else start_from_state(KEY_LAST_ISSUE_DATE)
+    )
+    start_pr = (
+        from_date if from_date is not None else start_from_state(KEY_LAST_PR_DATE)
+    )
 
     return start_commit, start_issue, start_pr, to_date

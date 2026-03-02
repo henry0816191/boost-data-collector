@@ -131,7 +131,11 @@ def sync_raw_only(
                     latest_pr = dt
 
         # Update state file with latest dates
-        if latest_commit is not None or latest_issue is not None or latest_pr is not None:
+        if (
+            latest_commit is not None
+            or latest_issue is not None
+            or latest_pr is not None
+        ):
             clang_state.save_state(
                 last_commit_date=latest_commit,
                 last_issue_date=latest_issue,

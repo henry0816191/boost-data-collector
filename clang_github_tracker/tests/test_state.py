@@ -1,10 +1,7 @@
 """Tests for clang_github_tracker.state (no DB)."""
 
-import json
-from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 
 from clang_github_tracker import state as clang_state
 

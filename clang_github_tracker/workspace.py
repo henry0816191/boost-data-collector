@@ -10,6 +10,8 @@ Layout:
 
 from pathlib import Path
 
+from django.conf import settings
+
 from config.workspace import get_workspace_path
 
 _APP_SLUG = "clang_github_activity"
@@ -17,9 +19,9 @@ _RAW_APP_SLUG = "github_activity_tracker"
 
 STATE_FILENAME = "state.json"
 
-# Repo we sync (raw only, no DB)
-OWNER = "llvm"
-REPO = "llvm-project"
+# Repo we sync (raw only, no DB); from settings (env: CLANG_GITHUB_OWNER, CLANG_GITHUB_REPO)
+OWNER = settings.CLANG_GITHUB_OWNER
+REPO = settings.CLANG_GITHUB_REPO
 
 
 def get_workspace_root() -> Path:
@@ -39,8 +41,11 @@ def get_raw_root() -> Path:
     return path
 
 
-def get_raw_repo_dir(owner: str = OWNER, repo: str = REPO) -> Path:
-    """Return workspace/raw/github_activity_tracker/<owner>/<repo>/; creates dirs if missing."""
+def get_raw_repo_dir(
+    owner: str = OWNER, repo: str = REPO, *, create: bool = True
+) -> Path:
+    """Return workspace/raw/github_activity_tracker/<owner>/<repo>/; creates dirs if missing when create=True."""
     path = get_raw_root() / owner / repo
-    path.mkdir(parents=True, exist_ok=True)
+    if create:
+        path.mkdir(parents=True, exist_ok=True)
     return path
