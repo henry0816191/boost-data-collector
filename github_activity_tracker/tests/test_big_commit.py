@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from github_activity_tracker import big_commit
 
 
@@ -141,13 +143,15 @@ def test_ensure_repo_cloned_removes_existing_non_git_dir_before_clone(tmp_path):
     with patch(
         "github_activity_tracker.big_commit.get_clone_dir", return_value=clone_path
     ):
-        with patch("github_activity_tracker.big_commit.shutil.rmtree") as rmtree_mock:
+        with patch(
+            "github_activity_tracker.big_commit.remove_clone_dir", return_value=True
+        ) as remove_mock:
             with patch("github_activity_tracker.big_commit.clone_repo") as clone_mock:
                 with patch("github_activity_tracker.big_commit.register_clone"):
                     result = big_commit.ensure_repo_cloned("owner", "repo")
 
     assert result == clone_path
-    rmtree_mock.assert_called_once_with(clone_path)
+    remove_mock.assert_called_once_with(clone_path)
     clone_mock.assert_called_once_with("owner/repo", clone_path)
 
 
@@ -228,7 +232,7 @@ def test_get_full_commit_files_initial_commit_diffs_against_empty_tree(tmp_path)
 
 
 def test_get_full_commit_files_initial_commit_fallback_to_api_files_on_error(tmp_path):
-    """get_full_commit_files for initial commit falls back to API files when git diff fails."""
+    """get_full_commit_files for initial commit falls back to API files when git diff fails (if not truncated)."""
     commit_data = {
         "sha": "abc123",
         "parents": [],
@@ -243,3 +247,25 @@ def test_get_full_commit_files_initial_commit_fallback_to_api_files_on_error(tmp
         ):
             files = big_commit.get_full_commit_files("owner", "repo", commit_data)
     assert files == commit_data["files"]
+
+
+def test_get_full_commit_files_initial_commit_raises_when_api_truncated_and_git_fails(
+    tmp_path,
+):
+    """get_full_commit_files for initial commit raises when git diff fails and API files count is 300 (truncated)."""
+    commit_data = {
+        "sha": "abc123",
+        "parents": [],
+        "files": [{"filename": f"file{i}.txt"} for i in range(300)],
+    }
+    with patch(
+        "github_activity_tracker.big_commit.ensure_repo_cloned", return_value=tmp_path
+    ):
+        with patch(
+            "github_activity_tracker.big_commit.get_commit_file_changes",
+            side_effect=RuntimeError("empty tree not in shallow clone"),
+        ):
+            with pytest.raises(RuntimeError) as exc_info:
+                big_commit.get_full_commit_files("owner", "repo", commit_data)
+    assert "abc123" in str(exc_info.value)
+    assert "300" in str(exc_info.value) or "truncated" in str(exc_info.value).lower()

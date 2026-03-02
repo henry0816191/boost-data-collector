@@ -17,6 +17,9 @@ from github_ops.tokens import get_github_client, get_github_token
 
 logger = logging.getLogger(__name__)
 
+# Timeout (seconds) for top-level git diff subprocess calls (--name-status, --numstat)
+GIT_DIFF_TIMEOUT = 60
+
 
 def _url_with_token(url: str, token: str) -> str:
     """Inject token into GitHub HTTPS URL for auth."""
@@ -193,44 +196,57 @@ def get_commit_file_changes(
         repo_dir: Path to cloned repo
         parent_sha: Parent commit SHA, or empty tree SHA for initial commits
         commit_sha: Commit SHA
-        patch_size_limit: Optional max chars per patch (None = no limit)
+        patch_size_limit: Optional max chars per patch. None or 0 = no limit (fetch full patch).
     """
     repo_dir = Path(repo_dir)
 
     # Get file status (A=added, M=modified, D=deleted, R=renamed, etc.)
     # Use utf-8 encoding so git diff output (e.g. patches) decodes correctly on Windows
-    result_status = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repo_dir),
-            "diff",
-            "--name-status",
-            f"{parent_sha}..{commit_sha}",
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=True,
-    )
+    try:
+        result_status = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_dir),
+                "diff",
+                "--name-status",
+                f"{parent_sha}..{commit_sha}",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+            timeout=GIT_DIFF_TIMEOUT,
+        )
 
-    # Get additions/deletions per file
-    result_numstat = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repo_dir),
-            "diff",
-            "--numstat",
-            f"{parent_sha}..{commit_sha}",
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=True,
-    )
+        # Get additions/deletions per file
+        result_numstat = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_dir),
+                "diff",
+                "--numstat",
+                f"{parent_sha}..{commit_sha}",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+            timeout=GIT_DIFF_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as e:
+        logger.warning(
+            "git diff timed out after %ss (repo_dir=%s, %s..%s): %s",
+            GIT_DIFF_TIMEOUT,
+            repo_dir,
+            parent_sha[:7],
+            commit_sha[:7],
+            e,
+        )
+        raise
 
     # Parse status (format: "M\tpath" or "R100\told_path\tnew_path")
     status_map = {}
@@ -301,7 +317,11 @@ def get_commit_file_changes(
                 patch = result_patch.stdout
 
                 # Apply size limit if specified
-                if patch_size_limit and len(patch) > patch_size_limit:
+                if (
+                    patch_size_limit is not None
+                    and patch_size_limit > 0
+                    and len(patch) > patch_size_limit
+                ):
                     patch = patch[:patch_size_limit] + "\n... (truncated)"
             except (
                 subprocess.TimeoutExpired,
@@ -323,7 +343,7 @@ def get_commit_file_changes(
 
         files.append(file_dict)
 
-    logger.info(
+    logger.debug(
         "Extracted %d file changes from git diff %s..%s",
         len(files),
         parent_sha[:7],

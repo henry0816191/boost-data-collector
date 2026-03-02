@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 
 from django.core.management.base import BaseCommand
+from django.db import transaction
 from django.db.models import Count
 
 from github_activity_tracker import big_commit
@@ -59,9 +60,8 @@ class Command(BaseCommand):
             .order_by("id")
         )
         if limit > 0:
-            commits_300 = commits_300[:limit]
-
-        total = commits_300.count()
+            commits_300 = list(commits_300[:limit])
+        total = len(commits_300) if limit > 0 else commits_300.count()
         if total == 0:
             self.stdout.write(
                 self.style.SUCCESS("No commits with exactly 300 file changes found.")
@@ -111,8 +111,9 @@ class Command(BaseCommand):
                     )
 
                     # Replace file changes in DB: delete existing, re-add with full list
-                    GitCommitFileChange.objects.filter(commit=commit_obj).delete()
-                    _process_commit_files(repo, commit_obj, {"files": full_files})
+                    with transaction.atomic():
+                        GitCommitFileChange.objects.filter(commit=commit_obj).delete()
+                        _process_commit_files(repo, commit_obj, {"files": full_files})
 
                     new_count = commit_obj.file_changes.count()
                     self.stdout.write(

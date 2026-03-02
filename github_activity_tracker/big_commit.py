@@ -11,14 +11,17 @@ Flow:
 from __future__ import annotations
 
 import logging
-import shutil
 import subprocess
 import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 from github_ops import clone_repo, get_commit_file_changes
-from github_activity_tracker.workspace import get_clone_dir, register_clone
+from github_activity_tracker.workspace import (
+    get_clone_dir,
+    register_clone,
+    remove_clone_dir,
+)
 
 if TYPE_CHECKING:
     from github_ops.client import GitHubAPIClient
@@ -171,16 +174,24 @@ def ensure_repo_cloned(owner: str, repo: str) -> Path:
                     errors="replace",
                     timeout=300,
                 )
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            except (
+                subprocess.CalledProcessError,
+                subprocess.TimeoutExpired,
+            ) as e:
                 logger.warning("Failed to fetch updates for %s/%s: %s", owner, repo, e)
                 # Continue with existing clone
         else:
             # Clone repo (remove existing dir if present, so git clone does not fail with exit 128)
             if clone_path.exists():
                 logger.warning(
-                    "Removing existing non-git directory %s before clone", clone_path
+                    "Removing existing non-git directory %s before clone",
+                    clone_path,
                 )
-                shutil.rmtree(clone_path)
+                if not remove_clone_dir(clone_path):
+                    raise OSError(
+                        "Could not remove existing directory %s (e.g. file in use)"
+                        % clone_path
+                    )
             logger.info("Cloning %s/%s to %s", owner, repo, clone_path)
             clone_repo(f"{owner}/{repo}", clone_path)
 
@@ -217,7 +228,7 @@ def get_full_commit_files(
     is_initial_commit = not parents
     parent_sha = parents[0].get("sha") if parents else _GIT_EMPTY_TREE_SHA
     if is_initial_commit:
-        logger.info(
+        logger.debug(
             "Commit %s is initial commit, diffing against empty tree",
             commit_sha[:7],
         )
@@ -231,13 +242,33 @@ def get_full_commit_files(
         files = get_commit_file_changes(clone_path, parent_sha, commit_sha)
     except Exception as e:
         if is_initial_commit:
-            # Fallback: e.g. empty tree not in shallow clone
-            logger.warning(
-                "Initial commit %s: git diff failed (%s), using API files",
+            api_files = commit_data.get("files") or []
+            if len(api_files) == 300:
+                # API result may be truncated; do not silently violate full-file-list contract
+                logger.error(
+                    "Initial commit %s: git diff failed (%s); API files count is 300 (truncated?), re-raising",
+                    commit_sha[:7],
+                    e,
+                )
+                raise RuntimeError(
+                    "Initial commit %s: could not get full file list (git diff failed: %s); "
+                    "API returned 300 files (possibly truncated)" % (commit_sha[:7], e)
+                ) from e
+            files = api_files
+            logger.error(
+                "Initial commit %s: git diff failed (%s), using API files (%d)",
+                commit_sha[:7],
+                e,
+                len(files),
+            )
+        else:
+            logger.error(
+                "Commit %s: git diff failed (%s), re-raising",
                 commit_sha[:7],
                 e,
             )
-            files = commit_data.get("files") or []
-        else:
-            raise
+            raise RuntimeError(
+                "Commit %s: could not get full file list via git (git diff failed: %s)"
+                % (commit_sha[:7], e)
+            ) from e
     return files

@@ -5,7 +5,7 @@ Layout: workspace/github_activity_tracker/<owner>/<repo>/
   - commits/<hash>.json
   - issues/<issue_number>.json
   - prs/<pr_number>.json
-  - clones/{owner}_{repo}/ (repo clones for big commits)
+  - clones/<owner>/<repo>/ (repo clones for big commits)
 """
 
 import os
@@ -164,10 +164,12 @@ def get_clones_root() -> Path:
 
 def get_clone_dir(owner: str, repo: str) -> Path:
     """
-    Return clone path for a repo: workspace/.../clones/{owner}_{repo}/.
-    Does NOT create the directory (cloning creates it).
+    Return clone path for a repo: workspace/.../clones/<owner>/<repo>/.
+    Creates parent directory (clones/<owner>/) so git clone can create the repo dir.
     """
-    return get_clones_root() / f"{owner}_{repo}"
+    path = get_clones_root() / owner / repo
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def register_clone(clone_path: Path) -> None:

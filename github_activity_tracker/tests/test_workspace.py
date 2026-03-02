@@ -443,9 +443,10 @@ def test_get_clones_root_returns_clones_subdir(mock_workspace_path):
 
 
 def test_get_clone_dir_returns_owner_repo_path(mock_workspace_path):
-    """get_clone_dir returns .../clones/{owner}_{repo}."""
+    """get_clone_dir returns .../clones/<owner>/<repo> and creates parent dir."""
     path = get_clone_dir("boostorg", "outcome")
-    assert path == mock_workspace_path / "clones" / "boostorg_outcome"
+    assert path == mock_workspace_path / "clones" / "boostorg" / "outcome"
+    assert path.parent.is_dir()
 
 
 # --- remove_clone_dir (Windows Access denied fix) ---
