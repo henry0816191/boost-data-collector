@@ -50,6 +50,7 @@ WORKSPACE_DIR.mkdir(exist_ok=True)
 for _slug in (
     "github_activity_tracker",
     "boost_library_tracker",
+    "clang_github_activity",
     "discord_activity_tracker",
     "shared",
 ):
