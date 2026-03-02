@@ -142,9 +142,7 @@ def get_raw_source_commit_path(owner: str, repo: str, commit_sha: str) -> Path:
     return get_raw_source_commits_dir(owner, repo) / f"{commit_sha}.json"
 
 
-def get_raw_source_issue_path(
-    owner: str, repo: str, issue_number: int
-) -> Path:
+def get_raw_source_issue_path(owner: str, repo: str, issue_number: int) -> Path:
     """Path for raw source issues/<number>.json."""
     return get_raw_source_issues_dir(owner, repo) / f"{issue_number}.json"
 

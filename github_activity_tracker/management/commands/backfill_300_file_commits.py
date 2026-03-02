@@ -112,9 +112,7 @@ class Command(BaseCommand):
 
                     # Replace file changes in DB: delete existing, re-add with full list
                     GitCommitFileChange.objects.filter(commit=commit_obj).delete()
-                    _process_commit_files(
-                        repo, commit_obj, {"files": full_files}
-                    )
+                    _process_commit_files(repo, commit_obj, {"files": full_files})
 
                     new_count = commit_obj.file_changes.count()
                     self.stdout.write(
@@ -132,15 +130,11 @@ class Command(BaseCommand):
                         sha[:7],
                         e,
                     )
-                    self.stdout.write(
-                        self.style.ERROR(f"  Failed: {e}")
-                    )
+                    self.stdout.write(self.style.ERROR(f"  Failed: {e}"))
                     failed += 1
 
             self.stdout.write(
-                self.style.SUCCESS(
-                    f"Done. Updated {updated}, failed {failed}."
-                )
+                self.style.SUCCESS(f"Done. Updated {updated}, failed {failed}.")
             )
 
         finally:

@@ -457,7 +457,9 @@ def test_add_commit_file_change_defaults_patch_empty(github_repository, github_a
 
 
 @pytest.mark.django_db
-def test_add_commit_file_change_strips_nul_from_patch(github_repository, github_account):
+def test_add_commit_file_change_strips_nul_from_patch(
+    github_repository, github_account
+):
     """add_commit_file_change strips NUL bytes from patch (PostgreSQL text cannot contain 0x00)."""
     commit_obj, _ = services.create_or_update_commit(
         github_repository,

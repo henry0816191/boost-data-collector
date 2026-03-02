@@ -47,16 +47,16 @@ def test_get_changed_file_count_via_trees_returns_count():
             "truncated": False,
         },
     ]
-    
+
     commit_data = {
         "commit": {"tree": {"sha": "commit_tree_sha"}},
         "parents": [{"sha": "parent_sha"}],
     }
-    
+
     count = big_commit.get_changed_file_count_via_trees(
         mock_client, "owner", "repo", commit_data
     )
-    
+
     # file2.txt modified, file3.txt added = 2 changed
     assert count == 2
 
@@ -69,16 +69,16 @@ def test_get_changed_file_count_via_trees_returns_none_when_truncated():
         {"tree": [], "truncated": True},
         {"tree": [], "truncated": False},
     ]
-    
+
     commit_data = {
         "commit": {"tree": {"sha": "commit_tree_sha"}},
         "parents": [{"sha": "parent_sha"}],
     }
-    
+
     count = big_commit.get_changed_file_count_via_trees(
         mock_client, "owner", "repo", commit_data
     )
-    
+
     assert count is None
 
 
@@ -88,23 +88,25 @@ def test_get_changed_file_count_via_trees_returns_none_for_initial_commit():
         "commit": {"tree": {"sha": "tree_sha"}},
         "parents": [],
     }
-    
+
     count = big_commit.get_changed_file_count_via_trees(
         MagicMock(), "owner", "repo", commit_data
     )
-    
+
     assert count is None
 
 
 def test_ensure_repo_cloned_clones_when_not_exists(tmp_path):
     """ensure_repo_cloned clones repo when it doesn't exist."""
     clone_path = tmp_path / "owner_repo"
-    
-    with patch("github_activity_tracker.big_commit.get_clone_dir", return_value=clone_path):
+
+    with patch(
+        "github_activity_tracker.big_commit.get_clone_dir", return_value=clone_path
+    ):
         with patch("github_activity_tracker.big_commit.clone_repo") as clone_mock:
             with patch("github_activity_tracker.big_commit.register_clone"):
                 result = big_commit.ensure_repo_cloned("owner", "repo")
-    
+
     assert result == clone_path
     clone_mock.assert_called_once_with("owner/repo", clone_path)
 
@@ -115,7 +117,9 @@ def test_ensure_repo_cloned_fetches_when_exists(tmp_path):
     clone_path.mkdir()
     (clone_path / ".git").mkdir()
 
-    with patch("github_activity_tracker.big_commit.get_clone_dir", return_value=clone_path):
+    with patch(
+        "github_activity_tracker.big_commit.get_clone_dir", return_value=clone_path
+    ):
         with patch("github_activity_tracker.big_commit.subprocess.run") as run_mock:
             with patch("github_activity_tracker.big_commit.register_clone"):
                 result = big_commit.ensure_repo_cloned("owner", "repo")
@@ -134,7 +138,9 @@ def test_ensure_repo_cloned_removes_existing_non_git_dir_before_clone(tmp_path):
     # No .git - not a git repo (e.g. leftover from failed clone)
     (clone_path / "some_file.txt").write_text("leftover")
 
-    with patch("github_activity_tracker.big_commit.get_clone_dir", return_value=clone_path):
+    with patch(
+        "github_activity_tracker.big_commit.get_clone_dir", return_value=clone_path
+    ):
         with patch("github_activity_tracker.big_commit.shutil.rmtree") as rmtree_mock:
             with patch("github_activity_tracker.big_commit.clone_repo") as clone_mock:
                 with patch("github_activity_tracker.big_commit.register_clone"):
@@ -152,16 +158,33 @@ def test_get_full_commit_files_returns_files_list(tmp_path):
         "parents": [{"sha": "parent_sha"}],
         "files": [{"filename": "file.txt"}] * 300,  # Truncated
     }
-    
+
     mock_files = [
-        {"filename": "file1.txt", "status": "modified", "additions": 1, "deletions": 0, "patch": ""},
-        {"filename": "file2.txt", "status": "added", "additions": 5, "deletions": 0, "patch": ""},
+        {
+            "filename": "file1.txt",
+            "status": "modified",
+            "additions": 1,
+            "deletions": 0,
+            "patch": "",
+        },
+        {
+            "filename": "file2.txt",
+            "status": "added",
+            "additions": 5,
+            "deletions": 0,
+            "patch": "",
+        },
     ]
-    
-    with patch("github_activity_tracker.big_commit.ensure_repo_cloned", return_value=tmp_path):
-        with patch("github_activity_tracker.big_commit.get_commit_file_changes", return_value=mock_files):
+
+    with patch(
+        "github_activity_tracker.big_commit.ensure_repo_cloned", return_value=tmp_path
+    ):
+        with patch(
+            "github_activity_tracker.big_commit.get_commit_file_changes",
+            return_value=mock_files,
+        ):
             files = big_commit.get_full_commit_files("owner", "repo", commit_data)
-    
+
     assert files == mock_files
 
 
@@ -173,11 +196,28 @@ def test_get_full_commit_files_initial_commit_diffs_against_empty_tree(tmp_path)
         "files": [{"filename": "file.txt"}],
     }
     mock_files = [
-        {"filename": "file1.txt", "status": "added", "additions": 10, "deletions": 0, "patch": ""},
-        {"filename": "file2.txt", "status": "added", "additions": 5, "deletions": 0, "patch": ""},
+        {
+            "filename": "file1.txt",
+            "status": "added",
+            "additions": 10,
+            "deletions": 0,
+            "patch": "",
+        },
+        {
+            "filename": "file2.txt",
+            "status": "added",
+            "additions": 5,
+            "deletions": 0,
+            "patch": "",
+        },
     ]
-    with patch("github_activity_tracker.big_commit.ensure_repo_cloned", return_value=tmp_path):
-        with patch("github_activity_tracker.big_commit.get_commit_file_changes", return_value=mock_files) as mock_get_changes:
+    with patch(
+        "github_activity_tracker.big_commit.ensure_repo_cloned", return_value=tmp_path
+    ):
+        with patch(
+            "github_activity_tracker.big_commit.get_commit_file_changes",
+            return_value=mock_files,
+        ) as mock_get_changes:
             files = big_commit.get_full_commit_files("owner", "repo", commit_data)
     assert files == mock_files
     # Initial commit: parent_sha should be the empty tree
@@ -194,7 +234,12 @@ def test_get_full_commit_files_initial_commit_fallback_to_api_files_on_error(tmp
         "parents": [],
         "files": [{"filename": "api_file.txt"}],
     }
-    with patch("github_activity_tracker.big_commit.ensure_repo_cloned", return_value=tmp_path):
-        with patch("github_activity_tracker.big_commit.get_commit_file_changes", side_effect=RuntimeError("empty tree not found")):
+    with patch(
+        "github_activity_tracker.big_commit.ensure_repo_cloned", return_value=tmp_path
+    ):
+        with patch(
+            "github_activity_tracker.big_commit.get_commit_file_changes",
+            side_effect=RuntimeError("empty tree not found"),
+        ):
             files = big_commit.get_full_commit_files("owner", "repo", commit_data)
     assert files == commit_data["files"]

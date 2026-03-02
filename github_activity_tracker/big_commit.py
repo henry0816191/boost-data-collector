@@ -42,7 +42,7 @@ def _get_repo_lock(owner: str, repo: str) -> threading.Lock:
 def is_commit_truncated(commit_data: dict) -> bool:
     """
     Check if commit files array is possibly truncated (exactly 300 files).
-    
+
     Returns True if commit has exactly 300 files (GitHub API limit).
     """
     files = commit_data.get("files") or []
@@ -57,9 +57,9 @@ def get_changed_file_count_via_trees(
 ) -> Optional[int]:
     """
     Get real changed file count via GitHub Trees API (compare commit tree vs parent tree).
-    
+
     Returns count, or None if trees are truncated or error occurs.
-    
+
     Note: This is optional; can skip and just use clone path for all 300-file commits.
     """
     try:
@@ -70,22 +70,24 @@ def get_changed_file_count_via_trees(
             logger.debug("Commit has no parent (initial commit), skipping tree check")
             return None
         parent_sha = parents[0].get("sha")
-        
+
         if not commit_tree_sha or not parent_sha:
             logger.warning("Missing tree or parent SHA, cannot check via trees API")
             return None
-        
+
         # Get parent commit to get its tree SHA
-        parent_commit = client.rest_request(f"/repos/{owner}/{repo}/commits/{parent_sha}")
+        parent_commit = client.rest_request(
+            f"/repos/{owner}/{repo}/commits/{parent_sha}"
+        )
         if not parent_commit:
             logger.warning("Could not fetch parent commit %s", parent_sha)
             return None
         parent_tree_sha = parent_commit.get("commit", {}).get("tree", {}).get("sha")
-        
+
         if not parent_tree_sha:
             logger.warning("Could not get parent tree SHA")
             return None
-        
+
         # Fetch both trees (recursive)
         commit_tree = client.rest_request(
             f"/repos/{owner}/{repo}/git/trees/{commit_tree_sha}?recursive=1"
@@ -93,16 +95,16 @@ def get_changed_file_count_via_trees(
         parent_tree = client.rest_request(
             f"/repos/{owner}/{repo}/git/trees/{parent_tree_sha}?recursive=1"
         )
-        
+
         if not commit_tree or not parent_tree:
             logger.warning("Could not fetch trees")
             return None
-        
+
         # Check if truncated
         if commit_tree.get("truncated") or parent_tree.get("truncated"):
             logger.info("Trees are truncated, cannot get accurate count via API")
             return None
-        
+
         # Get blob paths (type == "blob" means file)
         commit_blobs = {
             item["path"]: item["sha"]
@@ -114,7 +116,7 @@ def get_changed_file_count_via_trees(
             for item in parent_tree.get("tree", [])
             if item.get("type") == "blob"
         }
-        
+
         # Count changed files (added, removed, or modified)
         added = set(commit_blobs.keys()) - set(parent_blobs.keys())
         removed = set(parent_blobs.keys()) - set(commit_blobs.keys())
@@ -123,7 +125,7 @@ def get_changed_file_count_via_trees(
             for path in commit_blobs
             if path in parent_blobs and commit_blobs[path] != parent_blobs[path]
         }
-        
+
         total_changed = len(added) + len(removed) + len(modified)
         logger.info(
             "Trees API: %d added, %d removed, %d modified = %d total changed",
@@ -133,7 +135,7 @@ def get_changed_file_count_via_trees(
             total_changed,
         )
         return total_changed
-    
+
     except Exception as e:
         logger.warning("Failed to get changed file count via trees: %s", e)
         return None
@@ -142,18 +144,23 @@ def get_changed_file_count_via_trees(
 def ensure_repo_cloned(owner: str, repo: str) -> Path:
     """
     Ensure repo is cloned in workspace; clone or fetch as needed.
-    
+
     Returns path to cloned repo.
     Registers clone path for cleanup when run finishes.
     Thread-safe (uses per-repo lock).
     """
     clone_path = get_clone_dir(owner, repo)
     lock = _get_repo_lock(owner, repo)
-    
+
     with lock:
         if clone_path.exists() and (clone_path / ".git").is_dir():
             # Already cloned; fetch updates
-            logger.info("Repo %s/%s already cloned at %s, fetching updates", owner, repo, clone_path)
+            logger.info(
+                "Repo %s/%s already cloned at %s, fetching updates",
+                owner,
+                repo,
+                clone_path,
+            )
             try:
                 subprocess.run(
                     ["git", "-C", str(clone_path), "fetch", "--all"],
@@ -176,10 +183,10 @@ def ensure_repo_cloned(owner: str, repo: str) -> Path:
                 shutil.rmtree(clone_path)
             logger.info("Cloning %s/%s to %s", owner, repo, clone_path)
             clone_repo(f"{owner}/{repo}", clone_path)
-        
+
         # Register for cleanup
         register_clone(clone_path)
-    
+
     return clone_path
 
 
@@ -195,17 +202,17 @@ def get_full_commit_files(
 ) -> list[dict]:
     """
     Get full list of changed files for a commit via git (for commits with 300+ files).
-    
+
     1. Ensures repo is cloned.
     2. Calls github_ops.get_commit_file_changes to get full file list.
     3. For initial commits (no parent), diffs against git's empty tree so we still get full file list + patches.
-    
+
     Returns list of file dicts matching GitHub API shape.
     Raises exception if clone or git operations fail.
     """
     commit_sha = commit_data.get("sha")
     parents = commit_data.get("parents") or []
-    
+
     # For initial commit, diff against empty tree to get all files as "added" with full patches
     is_initial_commit = not parents
     parent_sha = parents[0].get("sha") if parents else _GIT_EMPTY_TREE_SHA

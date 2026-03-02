@@ -197,7 +197,7 @@ def test_get_commit_file_changes_returns_list_of_file_dicts(tmp_path):
     name_status_output = "M\tREADME.md\nA\tnew_file.txt\nD\told_file.txt"
     numstat_output = "5\t2\tREADME.md\n10\t0\tnew_file.txt\n0\t3\told_file.txt"
     patch_output = "diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ patch @@"
-    
+
     with patch("github_ops.git_ops.subprocess.run") as run_mock:
         run_mock.side_effect = [
             MagicMock(stdout=name_status_output, returncode=0),  # --name-status
@@ -206,9 +206,9 @@ def test_get_commit_file_changes_returns_list_of_file_dicts(tmp_path):
             MagicMock(stdout=patch_output, returncode=0),  # patch for new_file.txt
             MagicMock(stdout=patch_output, returncode=0),  # patch for old_file.txt
         ]
-        
+
         files = get_commit_file_changes(tmp_path, "parent_sha", "commit_sha")
-    
+
     assert len(files) == 3
     assert all("filename" in f for f in files)
     assert all("status" in f for f in files)
@@ -219,9 +219,13 @@ def test_get_commit_file_changes_returns_list_of_file_dicts(tmp_path):
 
 def test_get_commit_file_changes_maps_status_codes():
     """get_commit_file_changes maps git status codes (A/M/D/R) to added/modified/removed/renamed."""
-    name_status_output = "A\tadded.txt\nM\tmodified.txt\nD\tremoved.txt\nR100\told.txt\tnew.txt"
-    numstat_output = "1\t0\tadded.txt\n2\t1\tmodified.txt\n0\t1\tremoved.txt\n0\t0\tnew.txt"
-    
+    name_status_output = (
+        "A\tadded.txt\nM\tmodified.txt\nD\tremoved.txt\nR100\told.txt\tnew.txt"
+    )
+    numstat_output = (
+        "1\t0\tadded.txt\n2\t1\tmodified.txt\n0\t1\tremoved.txt\n0\t0\tnew.txt"
+    )
+
     with patch("github_ops.git_ops.subprocess.run") as run_mock:
         run_mock.side_effect = [
             MagicMock(stdout=name_status_output, returncode=0),
@@ -231,15 +235,15 @@ def test_get_commit_file_changes_maps_status_codes():
             MagicMock(stdout="", returncode=0),
             MagicMock(stdout="", returncode=0),
         ]
-        
+
         files = get_commit_file_changes("/fake/path", "parent", "commit")
-    
+
     statuses = {f["filename"]: f["status"] for f in files}
     assert statuses["added.txt"] == "added"
     assert statuses["modified.txt"] == "modified"
     assert statuses["removed.txt"] == "removed"
     assert statuses["new.txt"] == "renamed"
-    
+
     # Check rename has previous_filename
     renamed = [f for f in files if f["filename"] == "new.txt"][0]
     assert renamed.get("previous_filename") == "old.txt"
@@ -258,10 +262,14 @@ def test_get_commit_file_changes_applies_patch_size_limit():
             MagicMock(stdout=large_patch, returncode=0),
         ]
 
-        files = get_commit_file_changes("/fake", "parent", "commit", patch_size_limit=100)
+        files = get_commit_file_changes(
+            "/fake", "parent", "commit", patch_size_limit=100
+        )
 
     assert len(files) == 1
-    assert len(files[0]["patch"]) == 100 + len("\n... (truncated)")  # patch_size_limit + suffix
+    assert len(files[0]["patch"]) == 100 + len(
+        "\n... (truncated)"
+    )  # patch_size_limit + suffix
     assert files[0]["patch"].endswith("... (truncated)")
 
 

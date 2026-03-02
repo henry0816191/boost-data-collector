@@ -170,14 +170,7 @@ def test_get_prs_dir_idempotent(mock_workspace_path):
 def test_get_commit_json_path_returns_commits_sha_json(mock_workspace_path):
     """get_commit_json_path returns .../commits/<sha>.json."""
     path = get_commit_json_path("owner", "repo", "abc123def")
-    assert (
-        path
-        == mock_workspace_path
-        / "owner"
-        / "repo"
-        / "commits"
-        / "abc123def.json"
-    )
+    assert path == mock_workspace_path / "owner" / "repo" / "commits" / "abc123def.json"
 
 
 def test_get_commit_json_path_does_not_create_file(mock_workspace_path):
@@ -200,9 +193,7 @@ def test_get_commit_json_path_consistent(mock_workspace_path):
 def test_get_issue_json_path_returns_issues_num_json(mock_workspace_path):
     """get_issue_json_path returns .../issues/<number>.json."""
     path = get_issue_json_path("owner", "repo", 42)
-    assert (
-        path == mock_workspace_path / "owner" / "repo" / "issues" / "42.json"
-    )
+    assert path == mock_workspace_path / "owner" / "repo" / "issues" / "42.json"
 
 
 def test_get_issue_json_path_integer_number(mock_workspace_path):
@@ -359,10 +350,7 @@ def test_get_raw_source_repo_dir_returns_owner_repo_subdir(
     path = get_raw_source_repo_dir("boostorg", "boost")
     assert (
         path
-        == mock_raw_workspace_path
-        / "github_activity_tracker"
-        / "boostorg"
-        / "boost"
+        == mock_raw_workspace_path / "github_activity_tracker" / "boostorg" / "boost"
     )
     assert path.is_dir()
 
@@ -374,11 +362,7 @@ def test_get_raw_source_commits_dir_returns_commits_subdir(
     path = get_raw_source_commits_dir("o", "r")
     assert (
         path
-        == mock_raw_workspace_path
-        / "github_activity_tracker"
-        / "o"
-        / "r"
-        / "commits"
+        == mock_raw_workspace_path / "github_activity_tracker" / "o" / "r" / "commits"
     )
     assert path.is_dir()
 
@@ -390,11 +374,7 @@ def test_get_raw_source_issues_dir_returns_issues_subdir(
     path = get_raw_source_issues_dir("o", "r")
     assert (
         path
-        == mock_raw_workspace_path
-        / "github_activity_tracker"
-        / "o"
-        / "r"
-        / "issues"
+        == mock_raw_workspace_path / "github_activity_tracker" / "o" / "r" / "issues"
     )
     assert path.is_dir()
 
@@ -403,12 +383,7 @@ def test_get_raw_source_prs_dir_returns_prs_subdir(mock_raw_workspace_path):
     """get_raw_source_prs_dir returns .../<owner>/<repo>/prs/."""
     path = get_raw_source_prs_dir("o", "r")
     assert (
-        path
-        == mock_raw_workspace_path
-        / "github_activity_tracker"
-        / "o"
-        / "r"
-        / "prs"
+        path == mock_raw_workspace_path / "github_activity_tracker" / "o" / "r" / "prs"
     )
     assert path.is_dir()
 
