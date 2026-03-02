@@ -107,6 +107,8 @@ def sync_raw_only(
                 dt = _commit_date(commit_data)
                 if dt and (latest_commit is None or dt > latest_commit):
                     latest_commit = dt
+        if latest_commit is not None:
+            clang_state.save_state(last_commit_date=latest_commit, merge=True)
 
         # Issues
         for issue_data in fetcher.fetch_issues_from_github(
@@ -118,6 +120,8 @@ def sync_raw_only(
                 dt = _issue_date(issue_data)
                 if dt and (latest_issue is None or dt > latest_issue):
                     latest_issue = dt
+        if latest_issue is not None:
+            clang_state.save_state(last_issue_date=latest_issue, merge=True)
 
         # PRs
         for pr_data in fetcher.fetch_pull_requests_from_github(
@@ -129,19 +133,8 @@ def sync_raw_only(
                 dt = _pr_date(pr_data)
                 if dt and (latest_pr is None or dt > latest_pr):
                     latest_pr = dt
-
-        # Update state file with latest dates
-        if (
-            latest_commit is not None
-            or latest_issue is not None
-            or latest_pr is not None
-        ):
-            clang_state.save_state(
-                last_commit_date=latest_commit,
-                last_issue_date=latest_issue,
-                last_pr_date=latest_pr,
-                merge=True,
-            )
+        if latest_pr is not None:
+            clang_state.save_state(last_pr_date=latest_pr, merge=True)
 
     except (ConnectionException, RateLimitException) as e:
         logger.exception("clang_github_tracker sync failed: %s", e)

@@ -45,9 +45,10 @@ def load_state() -> dict[str, str | None]:
     Load state from workspace/clang_github_activity/state.json.
 
     Returns:
-        - {} (empty dict): file missing, invalid, or read error → no state; process from start.
+        - {} (empty dict): file missing, invalid, read error, or loaded object is empty/all-None
+          → invalid; ensure_state_file_exists will recompute from raw.
         - Dict with keys last_commit_date, last_issue_date, last_pr_date (values str or None):
-          valid state file; None means no previous sync for that entity.
+          valid state file (at least one non-None date); None means no previous sync for that entity.
     """
     path = get_state_path()
     if not path.exists():
@@ -55,6 +56,15 @@ def load_state() -> dict[str, str | None]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
+            return {}
+        # Treat empty or all-None as invalid so ensure_state_file_exists can recompute from raw
+        if not any(
+            (
+                data.get(KEY_LAST_COMMIT_DATE),
+                data.get(KEY_LAST_ISSUE_DATE),
+                data.get(KEY_LAST_PR_DATE),
+            )
+        ):
             return {}
         return {
             KEY_LAST_COMMIT_DATE: data.get(KEY_LAST_COMMIT_DATE),
