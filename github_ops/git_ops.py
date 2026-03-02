@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 # Timeout (seconds) for top-level git diff subprocess calls (--name-status, --numstat)
 GIT_DIFF_TIMEOUT = 60
+# Timeout (seconds) for git clone and push (network I/O)
+GIT_CMD_TIMEOUT_SECONDS = 300
 
 
 def _url_with_token(url: str, token: str) -> str:
@@ -60,14 +62,28 @@ def clone_repo(
     if depth is not None:
         cmd.extend(["--depth", str(depth)])
     logger.info("Cloning %s -> %s", url_or_slug, dest_dir)
-    subprocess.run(
-        cmd,
-        check=True,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=GIT_CMD_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as e:
+        logger.warning(
+            "git clone timed out after %ss (%s -> %s): %s",
+            GIT_CMD_TIMEOUT_SECONDS,
+            url_or_slug,
+            dest_dir,
+            e,
+        )
+        raise
+    except subprocess.CalledProcessError as e:
+        logger.warning("git clone failed (%s -> %s): %s", url_or_slug, dest_dir, e)
+        raise
 
 
 def push(
@@ -83,28 +99,54 @@ def push(
     repo_dir = Path(repo_dir)
     if token is None:
         token = get_github_token(use="push")
-    result = subprocess.run(
-        ["git", "-C", str(repo_dir), "remote", "get-url", remote],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_dir), "remote", "get-url", remote],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=True,
+            timeout=GIT_CMD_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as e:
+        logger.warning(
+            "git remote get-url timed out after %ss (%s): %s",
+            GIT_CMD_TIMEOUT_SECONDS,
+            repo_dir,
+            e,
+        )
+        raise
+    except subprocess.CalledProcessError as e:
+        logger.warning("git remote get-url failed (%s): %s", repo_dir, e)
+        raise
     remote_url = result.stdout.strip()
     push_url = _url_with_token(remote_url, token)
     cmd = ["git", "-C", str(repo_dir), "push", push_url]
     if branch:
         cmd.append(branch)
     logger.info("Pushing %s %s", repo_dir, branch or "(current)")
-    subprocess.run(
-        cmd,
-        check=True,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
+    try:
+        subprocess.run(
+            cmd,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=GIT_CMD_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as e:
+        logger.warning(
+            "git push timed out after %ss (%s): %s",
+            GIT_CMD_TIMEOUT_SECONDS,
+            repo_dir,
+            e,
+        )
+        raise
+    except subprocess.CalledProcessError as e:
+        logger.warning("git push failed (%s): %s", repo_dir, e)
+        raise
 
 
 def fetch_file_content(
@@ -294,7 +336,15 @@ def get_commit_file_changes(
         dels = parts[1]
         path = parts[2]
         if " => " in path:
-            path = path.split(" => ", 1)[1].strip()
+            brace_match = re.search(r"\{([^{}]*) => ([^{}]*)\}", path)
+            if brace_match:
+                path = (
+                    path[: brace_match.start()]
+                    + brace_match.group(2)
+                    + path[brace_match.end() :]
+                )
+            else:
+                path = path.split(" => ", 1)[1].strip()
         # Handle binary files (marked as "-")
         additions = 0 if adds == "-" else int(adds)
         deletions = 0 if dels == "-" else int(dels)

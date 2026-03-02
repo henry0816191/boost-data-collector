@@ -249,6 +249,31 @@ def test_get_commit_file_changes_maps_status_codes():
     assert renamed.get("previous_filename") == "old.txt"
 
 
+def test_get_commit_file_changes_brace_style_rename_numstat_path():
+    """Numstat brace-style paths like src/{old => new}/file.txt are normalized to src/new/file.txt for lookup."""
+    # --name-status: rename from src/old/file.txt to src/new/file.txt (key is new path)
+    name_status_output = "R100\tsrc/old/file.txt\tsrc/new/file.txt"
+    # --numstat: git uses brace notation for directory renames
+    numstat_output = "3\t2\tsrc/{old => new}/file.txt"
+
+    with patch("github_ops.git_ops.subprocess.run") as run_mock:
+        run_mock.side_effect = [
+            MagicMock(stdout=name_status_output, returncode=0),
+            MagicMock(stdout=numstat_output, returncode=0),
+            MagicMock(stdout="", returncode=0),  # patch for src/new/file.txt
+        ]
+
+        files = get_commit_file_changes("/fake/path", "parent", "commit")
+
+    assert len(files) == 1
+    assert files[0]["filename"] == "src/new/file.txt"
+    assert files[0]["status"] == "renamed"
+    assert files[0]["previous_filename"] == "src/old/file.txt"
+    # Additions/deletions must come from numstat (not fallback 0,0)
+    assert files[0]["additions"] == 3
+    assert files[0]["deletions"] == 2
+
+
 def test_get_commit_file_changes_applies_patch_size_limit():
     """get_commit_file_changes truncates patch when patch_size_limit is provided."""
     name_status_output = "M\tfile.txt"
