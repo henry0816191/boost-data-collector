@@ -273,6 +273,25 @@ def test_get_commit_file_changes_applies_patch_size_limit():
     assert files[0]["patch"].endswith("... (truncated)")
 
 
+def test_get_commit_file_changes_patch_size_limit_zero_means_no_truncation():
+    """patch_size_limit=0 should behave like None (no truncation)."""
+    name_status_output = "M\tfile.txt"
+    numstat_output = "1\t1\tfile.txt"
+    large_patch = "x" * 1000
+
+    with patch("github_ops.git_ops.subprocess.run") as run_mock:
+        run_mock.side_effect = [
+            MagicMock(stdout=name_status_output, returncode=0),
+            MagicMock(stdout=numstat_output, returncode=0),
+            MagicMock(stdout=large_patch, returncode=0),
+        ]
+
+        files = get_commit_file_changes("/fake", "parent", "commit", patch_size_limit=0)
+
+    assert files[0]["patch"] == large_patch
+    assert not files[0]["patch"].endswith("... (truncated)")
+
+
 def test_get_commit_file_changes_uses_utf8_encoding_for_subprocess():
     """get_commit_file_changes passes encoding=utf-8 and errors=replace to avoid UnicodeDecodeError on Windows."""
     name_status_output = "M\tfile.txt"

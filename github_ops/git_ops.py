@@ -186,8 +186,8 @@ def get_commit_file_changes(
 
     Returns list of file dicts matching GitHub API 'files' shape:
     - filename: str
-    - previous_filename: str (for renames)
-    - status: str (added, modified, removed, renamed)
+    - previous_filename: str (for renames and copies)
+    - status: str (added, copied, removed, modified, renamed, changed, unmerged, unknown, broken)
     - additions: int
     - deletions: int
     - patch: str
@@ -248,30 +248,41 @@ def get_commit_file_changes(
         )
         raise
 
-    # Parse status (format: "M\tpath" or "R100\told_path\tnew_path")
+    # Parse status (format: "M\tpath" or "R100\told_path\tnew_path" or "C100\told_path\tnew_path")
+    # Git diff --name-status: A=Added, C=Copied, D=Deleted, M=Modified, R=Renamed,
+    # T=type changed, U=Unmerged, X=Unknown, B=Broken pairing.
     status_map = {}
+    _status_names = {
+        "A": "added",
+        "C": "copied",
+        "D": "removed",
+        "M": "modified",
+        "R": "renamed",
+        "T": "changed",  # type (e.g. file → symlink)
+        "U": "unmerged",
+        "X": "unknown",
+        "B": "broken",
+    }
     for line in result_status.stdout.strip().split("\n"):
         if not line:
             continue
         parts = line.split("\t")
         status_code = parts[0]
+        first_char = status_code[0] if status_code else "M"
 
-        if status_code.startswith("R"):  # Rename
+        if first_char in ("R", "C") and len(parts) >= 3:
+            # Rename / Copy: "R100\told_path\tnew_path" or "C100\told_path\tnew_path"
             old_path = parts[1]
             new_path = parts[2]
-            status_map[new_path] = ("renamed", old_path)
+            status_name = _status_names.get(first_char, "modified")
+            status_map[new_path] = (status_name, old_path)
         else:
             path = parts[1]
-            status_name = {
-                "A": "added",
-                "M": "modified",
-                "D": "removed",
-                "C": "copied",
-                "T": "changed",  # Type change
-            }.get(status_code[0], "modified")
+            status_name = _status_names.get(first_char, "modified")
             status_map[path] = (status_name, None)
 
     # Parse numstat (format: "additions\tdeletions\tpath")
+    # For renames, path can be "old => new"; use new path as key to match status_map
     numstat_map = {}
     for line in result_numstat.stdout.strip().split("\n"):
         if not line:
@@ -282,7 +293,8 @@ def get_commit_file_changes(
         adds = parts[0]
         dels = parts[1]
         path = parts[2]
-
+        if " => " in path:
+            path = path.split(" => ", 1)[1].strip()
         # Handle binary files (marked as "-")
         additions = 0 if adds == "-" else int(adds)
         deletions = 0 if dels == "-" else int(dels)
