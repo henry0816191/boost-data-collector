@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 def _ensure_utc(dt: datetime | None) -> datetime | None:
+    """Return dt with UTC tzinfo if naive; otherwise return dt or None."""
     if dt is None:
         return None
     if dt.tzinfo is None:
@@ -34,6 +35,7 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
 
 
 def _commit_date(commit_data: dict) -> datetime | None:
+    """Extract author/committer date from GitHub commit payload."""
     commit = commit_data.get("commit") or {}
     author = commit.get("author") or commit.get("committer") or {}
     date_str = author.get("date")
@@ -43,6 +45,7 @@ def _commit_date(commit_data: dict) -> datetime | None:
 
 
 def _issue_date(issue_data: dict) -> datetime | None:
+    """Extract updated_at or created_at from GitHub issue payload."""
     date_str = issue_data.get("updated_at") or issue_data.get("created_at")
     if not date_str:
         return None
@@ -50,6 +53,7 @@ def _issue_date(issue_data: dict) -> datetime | None:
 
 
 def _pr_date(pr_data: dict) -> datetime | None:
+    """Extract updated_at or created_at from GitHub PR payload."""
     date_str = pr_data.get("updated_at") or pr_data.get("created_at")
     if not date_str:
         return None

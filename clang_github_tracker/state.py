@@ -33,6 +33,7 @@ def parse_iso(s: str | None) -> datetime | None:
 
 
 def _to_iso(dt: datetime | None) -> str | None:
+    """Return datetime as ISO string with Z suffix, or None."""
     if dt is None:
         return None
     if dt.tzinfo is None:
@@ -106,6 +107,7 @@ def save_state(
 
 
 def _latest_date_from_commit_json(path: Path) -> datetime | None:
+    """Read a commit JSON file and return the author/committer date, or None."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         commit = data.get("commit") or {}
@@ -117,6 +119,7 @@ def _latest_date_from_commit_json(path: Path) -> datetime | None:
 
 
 def _latest_date_from_issue_or_pr_json(path: Path) -> datetime | None:
+    """Read an issue or PR JSON file and return updated_at or created_at, or None."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         # Top-level or nested under issue_info / pr_info

@@ -1,1 +1,1 @@
-# clang_github_tracker: fetch llvm/llvm-project GitHub activity to raw only (no DB).
+"""Fetch GitHub activity for a configurable repo to raw JSON only (no DB)."""

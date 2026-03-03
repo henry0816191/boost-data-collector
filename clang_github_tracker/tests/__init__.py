@@ -1,1 +1,1 @@
-# clang_github_tracker tests
+"""Tests for clang_github_tracker."""

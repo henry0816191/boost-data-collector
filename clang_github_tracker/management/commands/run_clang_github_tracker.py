@@ -20,12 +20,15 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
+    """Django management command: fetch GitHub activity to raw and optionally run sync."""
+
     help = (
         "Run Clang GitHub Tracker: fetch llvm/llvm-project activity to "
         "raw/github_activity_tracker only (no DB). Uses workspace/clang_github_activity/state.json for resume."
     )
 
     def add_arguments(self, parser):
+        """Register --dry-run, --from-date, --to-date."""
         parser.add_argument(
             "--dry-run",
             action="store_true",
@@ -45,6 +48,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """Resolve dates from state or CLI, then run sync unless --dry-run."""
         dry_run = options["dry_run"]
         from_date_str = (options.get("from_date") or "").strip()
         to_date_str = (options.get("to_date") or "").strip()
