@@ -26,8 +26,8 @@ def test_parse_iso_invalid_or_empty():
 
 def test_compute_state_from_raw_empty_dir(tmp_path):
     """When raw repo dir does not exist, compute_state_from_raw returns nulls."""
-    with patch("clang_github_tracker.workspace.get_raw_root") as m:
-        m.return_value = tmp_path / "raw" / "github_activity_tracker"
+    with patch("clang_github_tracker.state.get_raw_repo_dir") as m:
+        m.return_value = tmp_path / "nonexistent_repo_dir"
         result = clang_state.compute_state_from_raw()
     assert result[clang_state.KEY_LAST_COMMIT_DATE] is None
     assert result[clang_state.KEY_LAST_ISSUE_DATE] is None
