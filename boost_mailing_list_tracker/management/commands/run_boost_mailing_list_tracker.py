@@ -109,6 +109,11 @@ def _persist_email(email_data: dict) -> tuple[bool, bool]:
         )
         return False, True
 
+    if not sender_address:
+        logger.debug(
+            "Missing sender_address for sender_name=%s: msg_id=%s", sender_name, msg_id
+        )
+
     profile, _ = get_or_create_mailing_list_profile(
         email=sender_address,
         display_name=display_name,

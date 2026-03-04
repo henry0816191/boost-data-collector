@@ -141,8 +141,6 @@ def get_or_create_mailing_list_profile(
     email_val = (email or "").strip()
     if not display_name_val:
         raise ValueError("display_name must not be empty.")
-    if not email_val:
-        raise ValueError("email must not be empty.")
 
     profile = (
         MailingListProfile.objects.filter(
@@ -158,7 +156,9 @@ def get_or_create_mailing_list_profile(
     profile = MailingListProfile.objects.create(
         display_name=display_name_val,
     )
-    add_email(profile, email_val, is_primary=True)
+    if email_val:
+        add_email(profile, email_val, is_primary=True)
+
     return profile, True
 
 

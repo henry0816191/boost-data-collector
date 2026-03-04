@@ -497,3 +497,75 @@ def test_get_or_create_unknown_github_account_adds_email_to_existing():
         email="extra@example.com",
     )
     assert account2.emails.filter(email="extra@example.com").exists()
+
+
+# --- get_or_create_mailing_list_profile ---
+
+
+@pytest.mark.django_db
+def test_get_or_create_mailing_list_profile_creates_new():
+    """get_or_create_mailing_list_profile creates new profile and returns (profile, True)."""
+    from cppa_user_tracker.models import MailingListProfile
+
+    profile, created = services.get_or_create_mailing_list_profile(
+        display_name="New Sender",
+        email="sender@example.com",
+    )
+    assert created is True
+    assert profile.display_name == "New Sender"
+    assert profile.emails.filter(email="sender@example.com").exists()
+    assert MailingListProfile.objects.filter(display_name="New Sender").count() == 1
+
+
+@pytest.mark.django_db
+def test_get_or_create_mailing_list_profile_gets_existing():
+    """get_or_create_mailing_list_profile returns existing profile when display_name and email match."""
+    services.get_or_create_mailing_list_profile(
+        display_name="Existing",
+        email="existing@example.com",
+    )
+    profile2, created2 = services.get_or_create_mailing_list_profile(
+        display_name="Existing",
+        email="existing@example.com",
+    )
+    assert created2 is False
+    assert profile2.display_name == "Existing"
+    assert profile2.emails.filter(email="existing@example.com").exists()
+
+
+@pytest.mark.django_db
+def test_get_or_create_mailing_list_profile_empty_display_name_raises():
+    """get_or_create_mailing_list_profile raises ValueError for empty display_name."""
+    with pytest.raises(ValueError, match="display_name must not be empty"):
+        services.get_or_create_mailing_list_profile(
+            display_name="", email="a@example.com"
+        )
+    with pytest.raises(ValueError, match="display_name must not be empty"):
+        services.get_or_create_mailing_list_profile(
+            display_name="   ", email="a@example.com"
+        )
+
+
+@pytest.mark.django_db
+def test_get_or_create_mailing_list_profile_creates_without_email():
+    """get_or_create_mailing_list_profile creates profile when email is empty (no email added)."""
+
+    profile, created = services.get_or_create_mailing_list_profile(
+        display_name="No Email Sender",
+        email="",
+    )
+    assert created is True
+    assert profile.display_name == "No Email Sender"
+    assert profile.emails.count() == 0
+
+
+@pytest.mark.django_db
+def test_get_or_create_mailing_list_profile_strips_display_name_and_email():
+    """get_or_create_mailing_list_profile strips whitespace from display_name and email."""
+    profile, created = services.get_or_create_mailing_list_profile(
+        display_name="  Trimmed  ",
+        email="  trimmed@example.com  ",
+    )
+    assert created is True
+    assert profile.display_name == "Trimmed"
+    assert profile.emails.filter(email="trimmed@example.com").exists()
