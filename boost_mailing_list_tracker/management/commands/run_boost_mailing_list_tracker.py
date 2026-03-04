@@ -226,14 +226,14 @@ class Command(BaseCommand):
                     processed, skipped = _process_existing_workspace_json(list_name)
                     total_existing += processed
                     total_skipped += skipped
-                if total_existing:
-                    self.stdout.write(
-                        f"Processed {total_existing} existing message JSON(s) from workspace."
-                    )
-                    logger.info(
-                        "run_boost_mailing_list_tracker: processed %s existing JSON(s)",
-                        total_existing,
-                    )
+
+                self.stdout.write(
+                    f"Processed {total_existing} existing message JSON(s) from workspace. {total_skipped} skipped."
+                )
+                logger.info(
+                    "run_boost_mailing_list_tracker: processed %s existing JSON(s)",
+                    total_existing,
+                )
 
             # Phase 2: fetch from API
             if not (start_date and start_date.strip()):
