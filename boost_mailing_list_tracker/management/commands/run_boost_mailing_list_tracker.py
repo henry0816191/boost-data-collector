@@ -124,10 +124,10 @@ def _persist_email(email_data: dict) -> tuple[bool, bool]:
     )
     if error_reason:
         logger.warning(
-            "Skipping row with %s: msg_id=%s, list_name=%s",
-            error_reason,
+            "Incomplete email: msg_id=%s, list_name=%s, reason=%s",
             msg_id,
             list_name,
+            error_reason,
         )
     return was_created, False
 
