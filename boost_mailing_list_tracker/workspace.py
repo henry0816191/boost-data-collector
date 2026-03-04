@@ -72,7 +72,7 @@ def iter_existing_message_jsons(list_name: str):
     messages_dir = get_workspace_root() / _safe_msg_id(list_name) / "messages"
     if not messages_dir.is_dir():
         return
-    for path in messages_dir.glob("*.json"):
+    for path in messages_dir.rglob("*.json"):
         if path.name.startswith("."):
             continue
         yield path
@@ -93,5 +93,5 @@ def iter_all_list_dirs():
 def iter_all_existing_message_jsons():
     """Yield (list_name, path) for every message JSON in the workspace."""
     for list_name, messages_dir in iter_all_list_dirs():
-        for path in messages_dir.glob("*.json"):
+        for path in messages_dir.rglob("*.json"):
             yield list_name, path
