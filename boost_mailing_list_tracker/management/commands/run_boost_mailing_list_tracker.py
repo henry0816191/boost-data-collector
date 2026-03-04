@@ -89,47 +89,58 @@ def _persist_email(email_data: dict) -> tuple[bool, bool]:
     if MailingListMessage.objects.filter(msg_id=msg_id).exists():
         return False, True
 
+    list_name = _clean_text(email_data.get("list_name", "")).strip()
     sender_name = _clean_text(email_data.get("sender_name", "")).strip()
     sender_address = _clean_text(email_data.get("sender_address", "")).strip()
-    if not sender_address or "@" not in sender_address:
-        logger.debug(
-            "Skipping row with missing/invalid sender_address: msg_id=%s", msg_id
-        )
-        return False, True
 
     display_name = sender_name or "Unknown Sender"
     if display_name == "Unknown Sender" and sender_address and "@" in sender_address:
         display_name = sender_address.split("@")[0] or display_name
 
     sent_at_str = _clean_text(email_data.get("sent_at", "")).strip()
+    error_reason = None
     try:
         sent_at = parse_datetime(sent_at_str) if sent_at_str else None
     except (TypeError, ValueError):
-        logger.debug(
-            "Skipping row with invalid sent_at %r: msg_id=%s", sent_at_str, msg_id
-        )
-        return False, True
+        sent_at = None
+        error_reason = "invalid sent_at"
     if sent_at_str and sent_at is None:
-        logger.debug(
-            "Skipping row with unparseable sent_at %r: msg_id=%s", sent_at_str, msg_id
+        error_reason = "invalid sent_at"
+
+    if not sender_address:
+        error_reason = "missing sender_address"
+
+    try:
+        profile, _ = get_or_create_mailing_list_profile(
+            email=sender_address,
+            display_name=display_name,
+        )
+
+        _, was_created = get_or_create_mailing_list_message(
+            sender=profile,
+            msg_id=msg_id,
+            parent_id=_clean_text(email_data.get("parent_id", "")),
+            thread_id=_clean_text(email_data.get("thread_id", "")),
+            subject=_clean_text(email_data.get("subject", "")),
+            content=_clean_text(email_data.get("content", "")),
+            list_name=list_name,
+            sent_at=sent_at,
+        )
+    except Exception as e:
+        logger.exception(
+            "Failed to persist message (msg_id=%s, list_name=%s): %s",
+            msg_id,
+            list_name,
+            e,
         )
         return False, True
-
-    profile, _ = get_or_create_mailing_list_profile(
-        email=sender_address,
-        display_name=display_name,
-    )
-
-    _, was_created = get_or_create_mailing_list_message(
-        sender=profile,
-        msg_id=msg_id,
-        parent_id=_clean_text(email_data.get("parent_id", "")),
-        thread_id=_clean_text(email_data.get("thread_id", "")),
-        subject=_clean_text(email_data.get("subject", "")),
-        content=_clean_text(email_data.get("content", "")),
-        list_name=_clean_text(email_data.get("list_name", "")).strip(),
-        sent_at=sent_at,
-    )
+    if error_reason:
+        logger.warning(
+            "Incomplete email: msg_id=%s, list_name=%s, reason=%s",
+            msg_id,
+            list_name,
+            error_reason,
+        )
     return was_created, False
 
 
@@ -141,10 +152,12 @@ def _process_existing_workspace_json(list_name: str) -> tuple[int, int]:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             formatted_data = format_email(data)
+            fail_this_file = False
             for formatted_email in formatted_data:
                 try:
                     _persist_email(formatted_email)
                 except Exception:
+                    fail_this_file = True
                     logger.exception(
                         "Failed to persist message from %s (msg_id=%s, subject=%s)",
                         path,
@@ -152,7 +165,8 @@ def _process_existing_workspace_json(list_name: str) -> tuple[int, int]:
                         formatted_email.get("subject", "?"),
                     )
                     skipped += 1
-            path.unlink()
+            if not fail_this_file:
+                path.unlink()
             processed += 1
         except Exception as e:
             logger.exception("Failed to process %s: %s", path, e)
