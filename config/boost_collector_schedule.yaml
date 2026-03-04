@@ -1,0 +1,38 @@
+# Boost collector schedule (see docs/Workflow.md)
+# Each group must have default_time: 24h "HH:MM" in project timezone (America/Los_Angeles)
+
+groups:
+  github:
+    default_time: "09:10"
+    tasks:
+      - command: run_boost_library_tracker
+        schedule: monthly
+        on: 1
+      - command: run_boost_usage_tracker
+        schedule: daily
+
+  # slack:
+  #   default_time: "05:00"
+  #   tasks:
+  #     - command: run_cppa_slack_tracker
+  #       schedule: daily
+
+  # Example: weekly on Monday (use "mon" or "monday")
+  # - command: run_some_weekly_command
+  #   schedule: weekly
+  #   on: monday
+  # Example: monthly on the 3rd
+  # - command: run_monthly_report
+  #   schedule: monthly
+  #   on: 3
+  # Example: run when a new version release is detected (event-triggered, not in Beat)
+  # - command: run_on_release_sync
+  #   schedule: on_release
+  # Example: run every 15 minutes (use interval only for minutes; at most 3 hours / 180 min)
+  # - command: run_poller
+  #   schedule: interval
+  #   minutes: 15
+  # Example: pass default args to the command
+  # - command: run_export
+  #   schedule: daily
+  #   args: ["--format", "json"]

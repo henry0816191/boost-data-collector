@@ -36,6 +36,7 @@ pytest_plugins = [
     "boost_usage_tracker.tests.fixtures",
     "boost_mailing_list_tracker.tests.fixtures",
     "workflow.tests.fixtures",
+    "boost_collector_runner.tests.fixtures",
 ]
 
 

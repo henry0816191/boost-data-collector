@@ -7,7 +7,6 @@ from pathlib import Path
 
 import environ
 
-from celery.schedules import crontab
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -37,6 +36,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Project apps (github_ops before github_activity_tracker - tracker depends on ops)
     "workflow",
+    "boost_collector_runner",  # YAML-driven schedule; run_collectors / run_scheduled_collectors
     "cppa_user_tracker",
     "github_ops",
     "operations",
@@ -282,14 +282,18 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "America/Los_Angeles"
 
-# Daily at 1:00 AM Pacific (PST/PDT)
-CELERY_BEAT_SCHEDULE = {
-    "run-all-collectors-daily": {
-        "task": "workflow.tasks.run_all_collectors_task",
-        "schedule": crontab(hour=1, minute=0),
-    },
-}
+# Schedule from YAML (boost_collector_runner); fallback to workflow daily if YAML missing
+BOOST_COLLECTOR_SCHEDULE_YAML = BASE_DIR / "config" / "boost_collector_schedule.yaml"
+try:
+    from boost_collector_runner.schedule_config import get_beat_schedule
 
+    CELERY_BEAT_SCHEDULE = get_beat_schedule()
+except Exception:
+    import logging
+
+    logging.getLogger(__name__).error(
+        "Could not load boost collector schedule from YAML.",
+    )
 # Conditionally add Discord/Slack handlers for error notifications
 if ENABLE_ERROR_NOTIFICATIONS:
     if DISCORD_WEBHOOK_URL:

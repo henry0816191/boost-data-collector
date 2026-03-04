@@ -2,35 +2,113 @@
 
 ## Overview
 
-The **Boost Data Collector** is a Django project with multiple Django apps. The main workflow is driven by Django's `manage.py` and management commands (or by a Celery task that runs the same workflow). It can run on a set day (e.g. via Celery Beat). Each data-collection or processing step is a Django management command (e.g. `python manage.py run_boost_library_tracker`). The project uses one virtual environment and one database; all apps share the same Django settings and `INSTALLED_APPS`. All sub-apps run one after another - no parallel execution. This document covers: main application workflow and processes, project setup and initialization, and branching strategy for the repository.
+The **Boost Data Collector** is a Django project with multiple Django apps. The main workflow is driven by Django's `manage.py` and management commands (or by Celery tasks that run the same commands). Each data-collection or processing step is a Django management command (e.g. `python manage.py run_boost_library_tracker`). The project uses one virtual environment and one database; all apps share the same Django settings and `INSTALLED_APPS`. Collectors run one after another—no parallel execution.
 
-## 1. Main application workflow and processes
+You can run collectors in two ways:
+
+- **workflow app** – Fixed list: `python manage.py run_all_collectors`. Celery Beat can run `workflow.tasks.run_all_collectors_task` on a schedule.
+- **boost_collector_runner app** – YAML-driven schedule: `config/boost_collector_schedule.yaml` defines groups, schedule types (daily, weekly, monthly, on_release), and optional args. Use `python manage.py run_scheduled_collectors --schedule daily` (or weekly/monthly/on_release). Celery Beat is built from the YAML so adding or reordering collectors requires no code changes—only editing the YAML.
+
+This document covers: main workflow process, Boost Collector Runner and YAML schedule, project details, execution order, error handling, and branching.
+
+## 1. Main workflow process
 
 ### How the workflow runs
 
-The main task runs once per day at a set time (e.g. Celery Beat, cron, or manually: `python manage.py run_all_collectors`). Each Django app exposes one or more tasks or management commands (e.g. `run_boost_library_tracker`). The main task runs them in a fixed order, one after another - only one app task runs at a time. That avoids write conflicts and keeps data dependencies between apps in order.
+The main task runs at a set time (e.g. Celery Beat) or on demand. Each Django app exposes one or more management commands (e.g. `run_boost_library_tracker`). The runner runs them in order, one at a time, to avoid write conflicts and keep data dependencies in order.
 
-1. Start - Trigger the main task at the scheduled time.
-2. Run app tasks in order - For each app task in the list: run it (e.g. `run_boost_library_tracker`), wait for it to finish, check exit code (0 = success, non-zero = failure), record the result; then run the next. You can optionally stop on first failure.
-3. Finalize - Log how many app tasks ran and how many succeeded or failed; report the summary to maintainers (e.g. by email, Slack, or log); exit with an overall success or failure code.
+1. **Start** – Trigger the run (Beat, cron, or `python manage.py run_all_collectors` / `run_scheduled_collectors`).
+2. **Run commands in order** – For each command: run it, wait for completion, check exit code (0 = success, non-zero = failure), then run the next. Optionally stop on first failure.
+3. **Finalize** – Log how many succeeded or failed; exit with an overall success or failure code.
 
-## 2. Project details
+## 2. Boost Collector Runner and YAML schedule
+
+The **boost_collector_runner** app runs collectors from a single config file so you can add, reorder, or reschedule tasks without changing Python code.
+
+### Config file
+
+- **Path:** `config/boost_collector_schedule.yaml`
+- **Setting:** `BOOST_COLLECTOR_SCHEDULE_YAML` in `config/settings.py` (defaults to that path).
+
+### Schedule types
+
+| Type | Meaning |
+|------|--------|
+| **daily** | Run every day at the group's (or task's) time. |
+| **weekly** | Run once per week. Use **on** with a weekday: `monday`, `mon`, `tuesday`, `tue`, etc. |
+| **monthly** | Run once per month on a given date. Use **on** with day of month (1–31). |
+| **interval** | Run every N **minutes**. Use **minutes** (1–180). **Use interval only for minutes; at most 3 hours.** Suitable for short periodic runs (e.g. every 15 min). |
+| **on_release** | Run when a new version release is detected. Not driven by Celery Beat; trigger manually or from release-detection code (e.g. `run_scheduled_collectors_task.delay(schedule_kind="on_release")`). |
+
+### Structure
+
+- **groups:** Each group has **default_time** (required; 24h `"HH:MM"`, project timezone America/Los_Angeles) and a **tasks** list.
+- **Each task:**
+  - **command** (required) – Management command name (e.g. `run_boost_library_tracker`).
+  - **schedule** (required) – `daily` | `weekly` | `monthly` | `interval` | `on_release`.
+  - **on** – For **weekly**: weekday name (`monday` or `mon`, etc.). For **monthly**: day of month (1–31). Omit for daily, interval, and on_release.
+  - **minutes** – For **interval** only: run every N minutes (1–180; at most 3 hours). Use interval only for minute-based runs.
+  - **enabled** (optional) – `true` (default) or `false` to skip without removing the entry.
+  - **args** (optional) – List of strings passed to the command (e.g. `["--format", "json"]`).
+
+  Tasks do not have their own **time**; the group's **default_time** is when that group's tasks run. Within a group, tasks run sequentially. Each group has its own Celery Beat entry so groups can run in parallel on different workers. Interval tasks are not part of a group; they have separate Beat entries and run independently.
+
+### Example (excerpt)
+
+```yaml
+groups:
+  github:
+    default_time: "04:10"
+    tasks:
+      - command: run_boost_library_tracker
+        schedule: daily
+      - command: run_boost_usage_tracker
+        schedule: weekly
+        on: monday
+  reporting:
+    default_time: "06:00"
+    tasks:
+      - command: run_monthly_report
+        schedule: monthly
+        on: 3
+      - command: run_on_release_sync
+        schedule: on_release
+      - command: run_export
+        schedule: daily
+        args: ["--format", "json"]
+```
+
+### Running from the command line
+
+- **Daily:** `python manage.py run_scheduled_collectors --schedule daily` (all groups) or `--schedule daily --group github` (one group).
+- **Weekly (e.g. Monday):** `python manage.py run_scheduled_collectors --schedule weekly --day-of-week monday` or add `--group <name>` for one group.
+- **Monthly (e.g. 3rd):** `python manage.py run_scheduled_collectors --schedule monthly --day-of-month 3` or add `--group <name>` for one group.
+- **Interval (e.g. every 15 min):** `python manage.py run_scheduled_collectors --schedule interval --interval-minutes 15` (runs all interval tasks with that minutes; no group).
+- **On release:** `python manage.py run_scheduled_collectors --schedule on_release`
+
+Add `--stop-on-failure` to stop after the first failing command.
+
+### Celery Beat
+
+`CELERY_BEAT_SCHEDULE` is built from the YAML: one Beat entry **per group** for daily/weekly/monthly (so groups run in parallel), and one entry per interval-minutes for interval tasks (run independently, not tied to a group). Tasks with `schedule: on_release` are not in Beat; trigger them when your release-detection logic runs.
+
+## 3. Project details
 
 - Framework - Django. One Django project with multiple Django apps; all apps share the same settings and database.
 - ORM - Django ORM. All data access goes through Django models and the ORM; migrations are used for schema changes.
 - Database - PostgreSQL. The project uses one PostgreSQL database (e.g. `boost_dashboard`); there are no separate databases or schema-based isolation per app.
-- Task scheduling - Celery and Celery Beat run the main task once per day at **1:00 AM PST** (America/Los_Angeles) via the `workflow.tasks.run_all_collectors_task` task; Redis is the message broker. You can also run the workflow by hand via `python manage.py run_all_collectors` instead of Celery. Start the worker with `celery -A config worker -l info` and the scheduler with `celery -A config beat -l info`.
+- Task scheduling – Celery and Celery Beat run tasks on a schedule (e.g. daily at 1:00 AM PST). When using **boost_collector_runner**, the Beat schedule is generated from `config/boost_collector_schedule.yaml`; otherwise the **workflow** app’s single daily task is used. Redis is the message broker. Run by hand: `python manage.py run_all_collectors` or `python manage.py run_scheduled_collectors --schedule daily`. Start the worker with `celery -A config worker -l info` and the scheduler with `celery -A config beat -l info`.
 - Configuration - Django settings (e.g. `settings.py`); environment variables for database URL, credentials, and API keys (e.g. via `django-environ` or `python-decouple`).
 - Structure - One Django project (e.g. `config/` or project root with `manage.py`, `settings.py`). Multiple Django apps (see table below); each app can expose management commands in `management/commands/`. All apps are in `INSTALLED_APPS` and use the shared database.
 
 ## Execution order of app tasks
 
-The main task runs each app's task one after another. The order is set in the workflow (e.g. in `run_all_collectors` or in the Celery task). Order matters:
+The runner executes each app's command one after another. Order is defined by the **workflow** app's fixed list (`run_all_collectors`) or by the **boost_collector_runner** YAML (order of groups and order of tasks within each group). Order matters:
 
 - Data dependencies - App tasks that produce reference or core data (e.g. Boost Library Tracker, GitHub Activity) run before app tasks that use that data (e.g. Boost Usage Tracker).
 - Shared reference data - App tasks that own reference tables (e.g. language, license) run early so other app tasks can read that data.
 
-Typical order: data-collection app tasks first, then processing or transform, then analysis or reporting. The exact list is configured in the main task.
+Typical order: data-collection first, then processing or transform, then analysis or reporting. When using the YAML, set the order by arranging groups and tasks in `config/boost_collector_schedule.yaml`.
 
 ## Error handling
 
