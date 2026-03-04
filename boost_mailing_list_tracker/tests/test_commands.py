@@ -1,7 +1,5 @@
 """Tests for boost_mailing_list_tracker management commands."""
 
-from datetime import datetime, timezone
-
 import pytest
 
 from boost_mailing_list_tracker.models import MailingListMessage, MailingListName
@@ -76,7 +74,9 @@ def test_persist_email_skips_duplicate_msg_id():
     was_created2, skipped2 = _persist_email(email_data)
     assert was_created2 is False
     assert skipped2 is True
-    assert MailingListMessage.objects.filter(msg_id="<duplicate@example.com>").count() == 1
+    assert (
+        MailingListMessage.objects.filter(msg_id="<duplicate@example.com>").count() == 1
+    )
 
 
 @pytest.mark.django_db
@@ -86,11 +86,15 @@ def test_persist_email_skips_invalid_sent_at():
         _persist_email,
     )
 
-    email_data = _valid_email_data(msg_id="<bad-date@example.com>", sent_at_str="not-a-date")
+    email_data = _valid_email_data(
+        msg_id="<bad-date@example.com>", sent_at_str="not-a-date"
+    )
     was_created, skipped = _persist_email(email_data)
     assert was_created is False
     assert skipped is True
-    assert not MailingListMessage.objects.filter(msg_id="<bad-date@example.com>").exists()
+    assert not MailingListMessage.objects.filter(
+        msg_id="<bad-date@example.com>"
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -128,4 +132,9 @@ def test_command_handle_dry_run_exits_cleanly(capsys):
     ):
         call_command("run_boost_mailing_list_tracker", "--dry-run")
     out, _ = capsys.readouterr()
-    assert "dry" in out.lower() or "fetch" in out.lower() or "No emails" in out or len(out) >= 0
+    assert (
+        "dry" in out.lower()
+        or "fetch" in out.lower()
+        or "No emails" in out
+        or len(out) >= 0
+    )
