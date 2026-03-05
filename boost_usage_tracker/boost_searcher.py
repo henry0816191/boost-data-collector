@@ -395,16 +395,16 @@ def _fetch_repo_files_task(
             if not file_info:
                 continue
             content = file_info.get("content", "")
-            headers = extract_boost_includes(content)
-            if not headers:
-                continue
+            # headers = extract_boost_includes(content)
+            # if not headers:
+            #     continue
             found.append(
                 FileSearchResult(
                     repo_full_name=repo_name,
                     file_path=path,
                     content=content,
                     commit_date=file_info.get("commit_date"),
-                    boost_headers=headers,
+                    boost_headers=[],
                 )
             )
         if FILE_FETCH_DELAY > 0:
@@ -443,10 +443,10 @@ def _search_boost_include_by_query(
             repo_to_paths: dict[str, list[str]] = defaultdict(list)
             for item in items:
                 path = item.get("path", "")
-                if "/boost/" in path.lower():
+                if "/boost/" in path.lower() or path.lower().startswith("boost/"):
                     continue
                 repo_name = item.get("repository", {}).get("full_name", "")
-                if not repo_name:
+                if not repo_name or repo_name.lower().startswith("boostorg/"):
                     continue
                 key = (repo_name, path)
                 if key in seen_candidates:

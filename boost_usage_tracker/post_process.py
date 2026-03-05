@@ -155,6 +155,12 @@ def process_single_repo(
                 and file_result.commit_date <= db_last_commit_date
             ):
                 seen_file_paths.add(source_file.pk)
+                logger.debug(
+                    "Skipping file %s in %s: already processed. File ID: %s",
+                    file_result.file_path,
+                    repo_full_name,
+                    source_file.pk,
+                )
                 continue
             header_paths = extract_boost_includes(file_result.content or "")
             if not header_paths:
