@@ -350,7 +350,6 @@ def get_beat_schedule():
     and one per interval_minutes. Group batch runs daily + weekly(today) + monthly(today) + on_release(if new) together.
     Returns a dict suitable for settings.CELERY_BEAT_SCHEDULE.
     If the YAML file does not exist or is invalid, returns {} (no beat schedule).
-    If the YAML file does not exist or is invalid, returns {} (no beat schedule).
     """
     from datetime import timedelta
 
