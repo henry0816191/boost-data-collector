@@ -194,7 +194,7 @@ def fetch_messages(
         tzinfo=timezone.utc,
     )
     latest_ts = str(range_end.timestamp())
-    all_messages = []
+    messages = []
     cursor = None
     while True:
         kwargs = {
@@ -214,33 +214,29 @@ def fetch_messages(
             )
             break
         batch = data.get("messages", [])
-        all_messages.extend(batch)
+        for msg in batch:
+            created_d = _ts_to_utc_date(msg.get("ts"))
+            if start_date is not None:
+                if created_d and start_date <= created_d <= end_date:
+                    messages.append(msg)
+                    continue
+                edited = msg.get("edited") or {}
+                edited_d = _ts_to_utc_date(edited.get("ts"))
+                if edited_d and start_date <= edited_d <= end_date:
+                    messages.append(msg)
+            else:
+                if created_d and created_d <= end_date:
+                    messages.append(msg)
+                    continue
+                edited = msg.get("edited") or {}
+                edited_d = _ts_to_utc_date(edited.get("ts"))
+                if edited_d and edited_d <= end_date:
+                    messages.append(msg)
         if not batch:
             break
         cursor = (data.get("response_metadata") or {}).get("next_cursor")
         if not cursor:
             break
-
-    # Filter by date: [start_date, end_date] or <= end_date when start_date is None
-    messages = []
-    for msg in all_messages:
-        created_d = _ts_to_utc_date(msg.get("ts"))
-        if start_date is not None:
-            if created_d and start_date <= created_d <= end_date:
-                messages.append(msg)
-                continue
-            edited = msg.get("edited") or {}
-            edited_d = _ts_to_utc_date(edited.get("ts"))
-            if edited_d and start_date <= edited_d <= end_date:
-                messages.append(msg)
-        else:
-            if created_d and created_d <= end_date:
-                messages.append(msg)
-                continue
-            edited = msg.get("edited") or {}
-            edited_d = _ts_to_utc_date(edited.get("ts"))
-            if edited_d and edited_d <= end_date:
-                messages.append(msg)
     return messages
 
 
