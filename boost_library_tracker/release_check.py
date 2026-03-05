@@ -47,9 +47,15 @@ def has_new_boost_release() -> bool:
     """
     try:
         token = get_github_token(use="scraping")
-        if not token:
-            logger.warning("No GitHub token; cannot check for new Boost release")
-            return False
+    except ValueError as e:
+        logger.warning("No GitHub token; cannot check for new Boost release: %s", e)
+        return False
+
+    if not token:
+        logger.warning("No GitHub token; cannot check for new Boost release")
+        return False
+
+    try:
         client = GitHubAPIClient(token)
         existing = set(BoostVersion.objects.values_list("version", flat=True))
         page = 1
@@ -71,9 +77,6 @@ def has_new_boost_release() -> bool:
             if len(page_releases) < per_page:
                 break
             page += 1
-    except ValueError as e:
-        logger.warning("No GitHub token; cannot check for new Boost release: %s", e)
-        return False
     except Exception as e:
         logger.warning("Failed to check for new Boost release: %s", e)
         return False

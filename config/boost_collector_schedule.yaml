@@ -1,6 +1,6 @@
 # Boost collector schedule (see docs/Workflow.md)
 # default_time is in America/Los_Angeles (CELERY_TIMEZONE). Use 24h "HH:MM".
-# 04:10 Pacific = 12:10 UTC (during PST); 12:00 Pacific = 12:00 PST as requested.
+# If needed, convert to UTC based on DST (PST/PDT) for operational checks.
 
 groups:
   github:

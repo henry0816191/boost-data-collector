@@ -11,6 +11,7 @@ a group run; they get separate Beat entries and run independently.
 """
 
 import logging
+import calendar
 from pathlib import Path
 
 import yaml
@@ -126,7 +127,19 @@ def _validate_task(task, group_id):
             )
     if schedule == "monthly":
         on_val = task.get("on") if "on" in task else task.get("day_of_month")
-        if on_val is None or not (1 <= int(on_val) <= 31):
+        if on_val is None:
+            raise ValueError(
+                f"Task {command!r} in group {group_id!r}: "
+                f"'schedule: monthly' requires 'on' (1-31, day of month)"
+            )
+        try:
+            day_int = int(on_val)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Task {command!r} in group {group_id!r}: "
+                f"'schedule: monthly' requires 'on' (1-31, day of month)"
+            ) from None
+        if not (1 <= day_int <= 31):
             raise ValueError(
                 f"Task {command!r} in group {group_id!r}: "
                 f"'schedule: monthly' requires 'on' (1-31, day of month)"
@@ -238,12 +251,16 @@ def get_tasks_for_schedule(
     day_of_month=None,
     interval_minutes=None,
     group_id=None,
+    month=None,
+    year=None,
 ):
     """
     Return list of (group_id, task_dict) for tasks matching the given schedule.
     Only enabled tasks. Preserves task order within each group.
     When group_id is set, only tasks from that group are returned (use for daily/weekly/monthly per-group runs).
     For interval, group_id should be None so all interval tasks with that minutes run in one independent task.
+    For monthly: when month and year are provided, a task with day_of_month > last day of that month
+    (e.g. 30 or 31) runs on the last day of the month (e.g. Feb 28/29).
     """
     if schedule_kind not in SCHEDULE_TYPES:
         raise ValueError(f"schedule_kind must be one of {SCHEDULE_TYPES}")
@@ -262,10 +279,13 @@ def get_tasks_for_schedule(
             raise ValueError("day_of_month must be 1-31")
     if schedule_kind == "interval" and interval_minutes is None:
         raise ValueError("interval_minutes required for schedule_kind='interval'")
-    if schedule_kind == "interval" and not (
-        1 <= int(interval_minutes) <= INTERVAL_MINUTES_MAX
-    ):
-        raise ValueError(f"interval_minutes must be 1-{INTERVAL_MINUTES_MAX}")
+    if schedule_kind == "interval":
+        try:
+            interval_minutes_int = int(interval_minutes)
+        except (TypeError, ValueError):
+            raise ValueError("interval_minutes must be an integer") from None
+        if not (1 <= interval_minutes_int <= INTERVAL_MINUTES_MAX):
+            raise ValueError(f"interval_minutes must be 1-{INTERVAL_MINUTES_MAX}")
 
     day_of_week_full = _normalize_day_of_week(day_of_week) if day_of_week else None
     day_of_month_int = int(day_of_month) if day_of_month is not None else None
@@ -284,7 +304,13 @@ def get_tasks_for_schedule(
                 if (t.get("day_of_week") or "").lower() != (day_of_week_full or ""):
                     continue
             if schedule_kind == "monthly":
-                if int(t.get("day_of_month", 0)) != day_of_month_int:
+                task_day = int(t.get("day_of_month", 0))
+                if month is not None and year is not None:
+                    _, last_day = calendar.monthrange(year, month)
+                    effective_day = min(task_day, last_day)
+                else:
+                    effective_day = task_day
+                if effective_day != day_of_month_int:
                     continue
             if schedule_kind == "interval":
                 if int(t.get("minutes", 0)) != interval_minutes_int:

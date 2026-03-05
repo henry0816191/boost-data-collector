@@ -78,15 +78,25 @@ class Command(BaseCommand):
             )
         )
         tasks.extend(
-            get_tasks_for_schedule("monthly", day_of_month=today_day, group_id=group_id)
+            get_tasks_for_schedule(
+                "monthly",
+                day_of_month=today_day,
+                group_id=group_id,
+                month=today.month,
+                year=today.year,
+            )
         )
         try:
             from boost_library_tracker.release_check import has_new_boost_release
 
             if has_new_boost_release():
                 tasks.extend(get_tasks_for_schedule("on_release", group_id=group_id))
-        except ImportError:
-            pass
+        except ImportError as e:
+            logger.warning(
+                "Skipping on_release tasks for group=%s: release_check import failed (%s)",
+                group_id,
+                e,
+            )
         return tasks
 
     def handle(self, *args, **options):
@@ -132,14 +142,20 @@ class Command(BaseCommand):
             group_id = (
                 group_id if schedule_kind not in ("interval", "on_release") else None
             )
+            kwargs = dict(
+                schedule_kind=schedule_kind,
+                day_of_week=day_of_week,
+                day_of_month=day_of_month,
+                interval_minutes=interval_minutes,
+                group_id=group_id,
+            )
+            if schedule_kind == "monthly" and day_of_month is not None:
+                tz_name = getattr(settings, "CELERY_TIMEZONE", "UTC")
+                today = datetime.now(ZoneInfo(tz_name)).date()
+                kwargs["month"] = today.month
+                kwargs["year"] = today.year
             try:
-                tasks = get_tasks_for_schedule(
-                    schedule_kind,
-                    day_of_week=day_of_week,
-                    day_of_month=day_of_month,
-                    interval_minutes=interval_minutes,
-                    group_id=group_id,
-                )
+                tasks = get_tasks_for_schedule(**kwargs)
             except FileNotFoundError as e:
                 raise CommandError(str(e)) from e
             except ValueError as e:

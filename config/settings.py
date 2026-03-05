@@ -282,7 +282,7 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "America/Los_Angeles"
 
-# Schedule from YAML (boost_collector_runner); fallback to workflow daily if YAML missing
+# Schedule from YAML (boost_collector_runner); on load error fall back to empty beat schedule ({})
 BOOST_COLLECTOR_SCHEDULE_YAML = BASE_DIR / "config" / "boost_collector_schedule.yaml"
 try:
     from boost_collector_runner.schedule_config import get_beat_schedule
