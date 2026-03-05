@@ -24,6 +24,8 @@ COLLECTOR_COMMANDS = [
 
 
 class Command(BaseCommand):
+    """Run a fixed list of collector commands in order; for YAML-driven runs use run_scheduled_collectors."""
+
     help = (
         "Run all collector commands in order (fixed list). Exit 0 only if all succeed."
     )
@@ -36,6 +38,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """Run each collector command in order; stop on first failure if --stop-on-failure."""
         stop_on_failure = options["stop_on_failure"]
         results = []
         exit_code = 0

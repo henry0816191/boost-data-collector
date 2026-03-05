@@ -54,6 +54,7 @@ def _normalize_day_of_week(val):
 
 
 def _get_yaml_path():
+    """Return Path to the boost collector schedule YAML (from settings or default config path)."""
     from django.conf import settings
 
     path = getattr(settings, "BOOST_COLLECTOR_SCHEDULE_YAML", None)
@@ -246,8 +247,17 @@ def get_tasks_for_schedule(
         raise ValueError(f"schedule_kind must be one of {SCHEDULE_TYPES}")
     if schedule_kind == "weekly" and day_of_week is None:
         raise ValueError("day_of_week required for schedule_kind='weekly'")
+    if schedule_kind == "weekly" and _normalize_day_of_week(day_of_week) is None:
+        raise ValueError("day_of_week must be monday..sunday or mon..sun")
     if schedule_kind == "monthly" and day_of_month is None:
         raise ValueError("day_of_month required for schedule_kind='monthly'")
+    if schedule_kind == "monthly":
+        try:
+            day_of_month = int(day_of_month)
+        except (TypeError, ValueError):
+            raise ValueError("day_of_month must be an integer") from None
+        if not (1 <= day_of_month <= 31):
+            raise ValueError("day_of_month must be 1-31")
     if schedule_kind == "interval" and interval_minutes is None:
         raise ValueError("interval_minutes required for schedule_kind='interval'")
     if schedule_kind == "interval" and not (

@@ -291,9 +291,10 @@ try:
 except Exception:
     import logging
 
-    logging.getLogger(__name__).error(
+    logging.getLogger(__name__).exception(
         "Could not load boost collector schedule from YAML.",
     )
+    CELERY_BEAT_SCHEDULE = {}
 # Conditionally add Discord/Slack handlers for error notifications
 if ENABLE_ERROR_NOTIFICATIONS:
     if DISCORD_WEBHOOK_URL:

@@ -45,15 +45,15 @@ def has_new_boost_release() -> bool:
     if all known releases are already in the DB, or on API/network errors.
     Pre-releases (beta, rc, etc.) are ignored.
     """
-    token = get_github_token()
-    if not token:
-        logger.warning("No GitHub token; cannot check for new Boost release")
-        return False
-    client = GitHubAPIClient(token)
-    existing = set(BoostVersion.objects.values_list("version", flat=True))
-    page = 1
-    per_page = 100
     try:
+        token = get_github_token(use="scraping")
+        if not token:
+            logger.warning("No GitHub token; cannot check for new Boost release")
+            return False
+        client = GitHubAPIClient(token)
+        existing = set(BoostVersion.objects.values_list("version", flat=True))
+        page = 1
+        per_page = 100
         while True:
             page_releases = client.rest_request(
                 f"/repos/{MAIN_OWNER}/{MAIN_REPO}/releases",
@@ -71,6 +71,9 @@ def has_new_boost_release() -> bool:
             if len(page_releases) < per_page:
                 break
             page += 1
+    except ValueError as e:
+        logger.warning("No GitHub token; cannot check for new Boost release: %s", e)
+        return False
     except Exception as e:
         logger.warning("Failed to check for new Boost release: %s", e)
         return False

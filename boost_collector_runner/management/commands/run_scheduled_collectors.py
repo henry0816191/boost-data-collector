@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
+    """Run collectors from config/boost_collector_schedule.yaml for a given schedule (daily, weekly, monthly, interval, on_release)."""
+
     help = (
         "Run collectors from YAML schedule. "
         "Use --schedule daily|weekly|monthly|on_release|interval; weekly needs --day-of-week; monthly needs --day-of-month; interval needs --interval-minutes (1-180)."
@@ -85,6 +87,7 @@ class Command(BaseCommand):
         return tasks
 
     def handle(self, *args, **options):
+        """Resolve tasks from YAML (group batch or single schedule), run them sequentially, exit non-zero on failure."""
         schedule_kind = options["schedule"]
         day_of_week = options.get("day_of_week")
         day_of_month = options.get("day_of_month")

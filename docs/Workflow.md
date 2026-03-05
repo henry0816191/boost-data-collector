@@ -34,7 +34,7 @@ The **boost_collector_runner** app runs collectors from a single config file so 
 
 | Type | Meaning |
 |------|--------|
-| **daily** | Run every day at the group's (or task's) time. |
+| **daily** | Run every day at the group's default_time. |
 | **weekly** | Run once per week. Use **on** with a weekday: `monday`, `mon`, `tuesday`, `tue`, etc. |
 | **monthly** | Run once per month on a given date. Use **on** with day of month (1–31). |
 | **interval** | Run every N **minutes**. Use **minutes** (1–180). **Use interval only for minutes; at most 3 hours.** Suitable for short periodic runs (e.g. every 15 min). |
