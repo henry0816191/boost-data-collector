@@ -79,7 +79,7 @@ def sync_channels(
 
         tid = team_id or team.team_id
         try:
-            data = get_slack_client(team_id=tid).conversations_info(channel_id)
+            data = get_slack_client(team_id=tid).conversations_info(channel=channel_id)
         except Exception:
             logger.exception("conversations.info raised for channel_id=%s", channel_id)
             return 0, 1
