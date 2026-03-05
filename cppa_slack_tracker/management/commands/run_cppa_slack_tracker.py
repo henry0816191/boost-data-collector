@@ -130,7 +130,7 @@ class Command(BaseCommand):
         # Run the requested sync(s). Each of --sync-users, --sync-channels,
         # --sync-channel-users, and --sync-messages runs its corresponding sync
         # when set; multiple flags can be combined. If none are set, default to
-        # syncing messages only.
+        # syncing users, channels, and messages.
         if options.get("sync_users"):
             self.sync_users(options, team)
         if options.get("sync_channels"):
@@ -151,88 +151,98 @@ class Command(BaseCommand):
             self.sync_messages(options, team)
 
     def _print_dry_run(self, options, team_id: str) -> None:
-        """Print what would be synced when --dry-run is set."""
-        self.stdout.write(self.style.WARNING("Dry run: no changes will be made."))
-        self.stdout.write(f"  Team ID: {team_id}")
+        """Log what would be synced when --dry-run is set."""
+        logger.warning("Dry run: no changes will be made.")
+        logger.info("  Team ID: %s", team_id)
         channel_id = (options.get("channel_id") or "").strip() or None
         if channel_id:
-            self.stdout.write(f"  Channel ID: {channel_id}")
+            logger.info("  Channel ID: %s", channel_id)
         printed = False
         if options.get("sync_users"):
-            self.stdout.write("  Would run: sync users")
+            logger.info("  Would run: sync users")
             printed = True
         if options.get("sync_channels"):
-            self.stdout.write(
-                "  Would run: sync channels"
-                + (f" (channel_id={channel_id})" if channel_id else " (all channels)")
+            logger.info(
+                "  Would run: sync channels%s",
+                f" (channel_id={channel_id})" if channel_id else " (all channels)",
             )
             printed = True
         if options.get("sync_channel_users"):
-            self.stdout.write(
-                "  Would run: sync channel memberships"
-                + (f" (channel_id={channel_id})" if channel_id else " (all channels)")
+            logger.info(
+                "  Would run: sync channel memberships%s",
+                f" (channel_id={channel_id})" if channel_id else " (all channels)",
             )
             printed = True
         if options.get("sync_messages"):
             start_str = (options.get("start_date") or "").strip() or "from DB or today"
             end_str = (options.get("end_date") or "").strip() or "today"
-            self.stdout.write(
-                f"  Would run: sync messages (start={start_str}, end={end_str})"
+            logger.info(
+                "  Would run: sync messages (start=%s, end=%s)",
+                start_str,
+                end_str,
             )
             if options.get("messages_json"):
-                self.stdout.write(
-                    f"  Would load legacy messages from: {options.get('messages_json')}"
+                logger.info(
+                    "  Would load legacy messages from: %s",
+                    options.get("messages_json"),
                 )
             printed = True
         if printed:
             return
-        self.stdout.write("  Would run: sync messages only (default)")
+        logger.info("  Would run: sync users, channels, and messages (default)")
+        logger.info("    channel memberships require --sync-channel-users")
         if channel_id:
-            self.stdout.write(f"    (channel_id={channel_id})")
+            logger.info("    (channel_id=%s)", channel_id)
         start_str = (options.get("start_date") or "").strip() or "from DB or today"
         end_str = (options.get("end_date") or "").strip() or "today"
-        self.stdout.write(f"    start={start_str}, end={end_str}")
+        logger.info("    start=%s, end=%s", start_str, end_str)
 
     def sync_users(self, _options, team: SlackTeam):
         """Sync users via sync.sync_users (workspace users.json or fetch_user_list)."""
         team_slug = team.team_name
-        self.stdout.write(
-            f"Syncing users (team_slug={team_slug}, team_id={team.team_id})..."
+        logger.info(
+            "Syncing users (team_slug=%s, team_id=%s)...",
+            team_slug,
+            team.team_id,
         )
         success_count, error_count = sync_users(
             team_slug,
             team_id=team.team_id,
             include_bots=True,
         )
-        self.stdout.write(
-            self.style.SUCCESS(f"Synced {success_count} users, {error_count} errors")
+        logger.info(
+            "Synced %s users, %s errors",
+            success_count,
+            error_count,
         )
 
     def sync_channels(self, options, team: SlackTeam):
         """Sync channels via sync.sync_channels (workspace channels.json or fetch_channel_list)."""
         channel_id = (options.get("channel_id") or "").strip() or None
-        self.stdout.write("Syncing channels...")
+        logger.info("Syncing channels...")
         success_count, error_count = sync_channels(
             team,
             channel_id=channel_id,
             team_id=team.team_id,
         )
-        self.stdout.write(
-            self.style.SUCCESS(f"Synced {success_count} channels, {error_count} errors")
+        logger.info(
+            "Synced %s channels, %s errors",
+            success_count,
+            error_count,
         )
 
     def sync_channel_users(self, options, team: SlackTeam):
         """Sync channel memberships via sync.sync_channel_users."""
         channel_id = (options.get("channel_id") or "").strip() or None
-        self.stdout.write("Syncing channel memberships...")
+        logger.info("Syncing channel memberships...")
         success_count, error_count = sync_channel_users(
             team,
             channel_id=channel_id,
         )
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Synced {success_count} channel member lists, {error_count} errors"
-            )
+        logger.info(
+            "Synced %s channel member lists, %s errors",
+            success_count,
+            error_count,
         )
 
     def _load_messages_from_json_path(self, path: str) -> list[dict]:
@@ -277,9 +287,7 @@ class Command(BaseCommand):
             team, channel_id=(options.get("channel_id") or "").strip() or None
         )
         if not channels:
-            self.stdout.write(
-                self.style.WARNING("No channels to sync. Sync channels first.")
-            )
+            logger.warning("No channels to sync. Sync channels first.")
             return
 
         start_date_str = (options.get("start_date") or "").strip() or None
@@ -292,8 +300,9 @@ class Command(BaseCommand):
         if messages_json_path and os.path.exists(messages_json_path):
             all_loaded = self._load_messages_from_json_path(messages_json_path)
             if all_loaded:
-                self.stdout.write(
-                    f"Loaded {len(all_loaded)} message(s) from --messages-json; saving to DB..."
+                logger.info(
+                    "Loaded %s message(s) from --messages-json; saving to DB...",
+                    len(all_loaded),
                 )
                 channel_by_id = {c.channel_id: c for c in channels}
                 load_failures = 0
@@ -326,18 +335,20 @@ class Command(BaseCommand):
                         )
                         load_failures += 1
                 if load_failures:
-                    self.stdout.write(
-                        self.style.WARNING(
-                            f"{load_failures} message(s) failed to import from --messages-json."
-                        )
+                    logger.warning(
+                        "%s message(s) failed to import from --messages-json.",
+                        load_failures,
                     )
 
         start_d = start_dt.date() if start_dt is not None else None
         end_d = end_dt.date() if end_dt is not None else None
 
-        self.stdout.write("Syncing messages per channel...")
+        logger.info("Syncing messages per channel...")
         for channel in channels:
             s, e = sync_messages(channel, start_date=start_d, end_date=end_d)
-            self.stdout.write(
-                self.style.SUCCESS(f"  #{channel.channel_name}: {s} saved, {e} errors")
+            logger.info(
+                "  #%s: %s saved, %s errors",
+                channel.channel_name,
+                s,
+                e,
             )

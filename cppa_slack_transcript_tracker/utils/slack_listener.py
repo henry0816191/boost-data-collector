@@ -52,8 +52,16 @@ class SlackListener:
     """Slack Event Listener using Slack Bolt."""
 
     def __init__(self, bot_token=None, app_token=None):
-        team_id = getattr(settings, "SLACK_TEAM_ID", None) or None
-        self.bot_token = bot_token or get_slack_bot_token(team_id=team_id)
+        if bot_token:
+            self.bot_token = bot_token
+        else:
+            try:
+                team_id = (
+                    getattr(settings, "SLACK_TEAM_ID", None) or ""
+                ).strip() or None
+            except Exception:
+                team_id = None
+            self.bot_token = get_slack_bot_token(team_id=team_id)
         self.app_token = app_token or get_slack_app_token()
         if not self.bot_token:
             raise ValueError("Missing SLACK_BOT_TOKEN. Set it in .env file.")
