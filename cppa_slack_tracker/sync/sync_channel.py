@@ -52,9 +52,7 @@ def _process_channel_info(ch: dict, team: SlackTeam) -> bool:
     """
     if not ch.get("id"):
         return False
-    channel, _ = get_or_create_slack_channel(
-        ch, team, creator_user_id=ch.get("creator")
-    )
+    channel, _ = get_or_create_slack_channel(ch, team)
     return channel is not None
 
 

@@ -198,7 +198,7 @@ class Command(BaseCommand):
         logger.info("    start=%s, end=%s", start_str, end_str)
 
     def sync_users(self, _options, team: SlackTeam):
-        """Sync users via sync.sync_users (workspace users.json or fetch_user_list)."""
+        """Sync users via sync.sync_users (fetch_user_list from Slack API)."""
         team_slug = team.team_name
         logger.info(
             "Syncing users (team_slug=%s, team_id=%s)...",

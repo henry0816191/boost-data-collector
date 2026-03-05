@@ -95,7 +95,6 @@ class TestSlackService:
         channel, _ = get_or_create_slack_channel(
             sample_slack_channel_data,
             sample_slack_team,
-            creator_user_id="U12345678",
         )
 
         assert channel.channel_id == "C87654321"
