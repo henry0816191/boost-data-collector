@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.conf import settings
 from django.core.management import call_command, get_commands
-from django.core.management.base import CommandError
 
 
 @pytest.mark.django_db
@@ -57,11 +56,15 @@ def test_dashboard_command_runs_generation_only(dashboard_cmd_name, tmp_path):
 
 
 @pytest.mark.django_db
-def test_dashboard_command_publish_requires_target_repo(dashboard_cmd_name, tmp_path):
+def test_dashboard_command_publish_with_owner_repo_calls_publish_via_raw_clone(
+    dashboard_cmd_name, tmp_path
+):
+    """When --publish and settings have owner/repo, _publish_via_raw_clone is called."""
     fake_analyzer = MagicMock()
     fake_analyzer.run.return_value = {}
     fake_analyzer.report_file = tmp_path / "Boost_Usage_Report_total.md"
     fake_analyzer.stars_min_threshold = 10
+    (tmp_path / "index.html").write_text("<html/>")
 
     with patch(
         "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.BoostUsageDashboardAnalyzer",
@@ -70,46 +73,127 @@ def test_dashboard_command_publish_requires_target_repo(dashboard_cmd_name, tmp_
         "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.write_summary_report"
     ), patch(
         "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.render_dashboard_html"
+    ), patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.Command._publish_via_raw_clone"
+    ) as publish_raw_mock, patch.object(
+        settings,
+        "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER",
+        "myorg",
+    ), patch.object(
+        settings,
+        "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO",
+        "my-repo",
+    ), patch.object(
+        settings,
+        "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH",
+        "",
+    ), patch(
+        "github_ops.git_ops.clone_repo"
+    ), patch(
+        "github_ops.git_ops.pull"
+    ), patch(
+        "github_ops.git_ops.push"
     ):
-        with pytest.raises(CommandError, match="--publish requires --target-repo"):
-            call_command(
-                dashboard_cmd_name,
-                "--publish",
-                "--output-dir",
-                str(tmp_path),
-            )
-
-
-@pytest.mark.django_db
-def test_dashboard_command_calls_publish_when_enabled(dashboard_cmd_name, tmp_path):
-    fake_analyzer = MagicMock()
-    fake_analyzer.run.return_value = {}
-    fake_analyzer.report_file = tmp_path / "Boost_Usage_Report_total.md"
-    fake_analyzer.stars_min_threshold = 10
-
-    with patch(
-        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.BoostUsageDashboardAnalyzer",
-        return_value=fake_analyzer,
-    ), patch(
-        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.write_summary_report"
-    ), patch(
-        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.render_dashboard_html"
-    ), patch(
-        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.Command._publish"
-    ) as publish_mock:
         call_command(
             dashboard_cmd_name,
             "--publish",
-            "--target-repo",
-            "org/repo",
             "--target-branch",
             "gh-pages",
             "--output-dir",
             str(tmp_path),
         )
 
-    publish_mock.assert_called_once_with(
-        output_dir=Path(tmp_path),
-        target_repo="org/repo",
-        branch="gh-pages",
-    )
+    publish_raw_mock.assert_called_once()
+    call_kw = publish_raw_mock.call_args[1]
+    assert call_kw["owner"] == "myorg"
+    assert call_kw["repo"] == "my-repo"
+    assert call_kw["branch"] == "gh-pages"
+    assert call_kw["output_dir"] == Path(tmp_path).resolve()
+
+
+@pytest.mark.django_db
+def test_dashboard_command_publish_uses_branch_from_settings_when_set(
+    dashboard_cmd_name, tmp_path
+):
+    """When BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH is set, it is passed to _publish_via_raw_clone."""
+    fake_analyzer = MagicMock()
+    fake_analyzer.run.return_value = {}
+    fake_analyzer.report_file = tmp_path / "report.md"
+    fake_analyzer.stars_min_threshold = 10
+
+    with patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.BoostUsageDashboardAnalyzer",
+        return_value=fake_analyzer,
+    ), patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.write_summary_report"
+    ), patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.render_dashboard_html"
+    ), patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.Command._publish_via_raw_clone"
+    ) as publish_raw_mock, patch.object(
+        settings,
+        "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER",
+        "org",
+    ), patch.object(
+        settings,
+        "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO",
+        "repo",
+    ), patch.object(
+        settings,
+        "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH",
+        "publish-branch",
+    ), patch(
+        "github_ops.git_ops.clone_repo"
+    ), patch(
+        "github_ops.git_ops.pull"
+    ), patch(
+        "github_ops.git_ops.push"
+    ):
+        call_command(
+            dashboard_cmd_name,
+            "--publish",
+            "--target-branch",
+            "main",
+            "--output-dir",
+            str(tmp_path),
+        )
+
+    assert publish_raw_mock.call_args[1]["branch"] == "publish-branch"
+
+
+@pytest.mark.django_db
+def test_dashboard_command_publish_no_owner_repo_does_not_call_publish(
+    dashboard_cmd_name, tmp_path
+):
+    """When --publish but owner or repo missing in settings, _publish_via_raw_clone is not called."""
+    fake_analyzer = MagicMock()
+    fake_analyzer.run.return_value = {}
+    fake_analyzer.report_file = tmp_path / "report.md"
+    fake_analyzer.stars_min_threshold = 10
+
+    with patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.BoostUsageDashboardAnalyzer",
+        return_value=fake_analyzer,
+    ), patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.write_summary_report"
+    ), patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.render_dashboard_html"
+    ), patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.Command._publish_via_raw_clone"
+    ) as publish_raw_mock, patch.object(
+        settings,
+        "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER",
+        "",
+    ), patch.object(
+        settings,
+        "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO",
+        "",
+    ):
+        call_command(
+            dashboard_cmd_name,
+            "--publish",
+            "--output-dir",
+            str(tmp_path),
+        )
+
+    publish_raw_mock.assert_not_called()

@@ -1,5 +1,6 @@
 """
-Git and content operations for GitHub: clone, push, fetch one file, upload file or folder.
+Git and content operations for GitHub: clone, pull, push (with optional add/commit),
+fetch one file, upload file or folder.
 All apps use this module (and github_ops.client) for GitHub operations.
 """
 
@@ -135,14 +136,44 @@ def push(
     remote: str = "origin",
     branch: Optional[str] = None,
     *,
+    commit_message: Optional[str] = None,
+    add_paths: Optional[list[str | Path]] = None,
     token: Optional[str] = None,
 ) -> None:
     """
     Push to remote. Uses push token by default.
+    If commit_message is provided, runs git add, git commit, then push; otherwise only push.
+    add_paths: paths to add (relative to repo_dir); if None, adds all (git add .). Used only when commit_message is set.
     """
     repo_dir = Path(repo_dir)
     if token is None:
         token = get_github_token(use="push")
+
+    if commit_message is not None:
+        add_targets = ["."] if add_paths is None else [str(Path(p)) for p in add_paths]
+        logger.info("Adding and committing in %s", repo_dir)
+        subprocess.run(
+            ["git", "-C", str(repo_dir), "add"] + add_targets,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        commit_result = subprocess.run(
+            ["git", "-C", str(repo_dir), "commit", "-m", commit_message],
+            capture_output=True,
+            text=True,
+        )
+        if commit_result.returncode != 0:
+            out = (commit_result.stderr or "") + (commit_result.stdout or "")
+            if "nothing to commit" not in out:
+                raise subprocess.CalledProcessError(
+                    commit_result.returncode,
+                    ["git", "commit", "-m", commit_message],
+                    commit_result.stdout,
+                    commit_result.stderr,
+                )
+            logger.info("Nothing to commit in %s", repo_dir)
+
     result = subprocess.run(
         ["git", "-C", str(repo_dir), "remote", "get-url", remote],
         capture_output=True,
@@ -155,6 +186,42 @@ def push(
     if branch:
         cmd.append(branch)
     logger.info("Pushing %s %s", repo_dir, branch or "(current)")
+    subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+
+def pull(
+    repo_dir: str | Path,
+    branch: Optional[str] = None,
+    *,
+    remote: str = "origin",
+    token: Optional[str] = None,
+) -> None:
+    """
+    Pull from remote. Uses push token by default.
+    branch: branch to pull (e.g. main); if given, checks out that branch first then pulls.
+    """
+    repo_dir = Path(repo_dir)
+    if token is None:
+        token = get_github_token(use="push")
+    if branch:
+        subprocess.run(
+            ["git", "-C", str(repo_dir), "checkout", branch],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    result = subprocess.run(
+        ["git", "-C", str(repo_dir), "remote", "get-url", remote],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    remote_url = result.stdout.strip()
+    auth_url = _url_with_token(remote_url, token)
+    cmd = ["git", "-C", str(repo_dir), "pull", auth_url]
+    if branch:
+        cmd.append(branch)
+    logger.info("Pulling %s %s", repo_dir, branch or "(current)")
     subprocess.run(cmd, check=True, capture_output=True, text=True)
 
 
@@ -191,9 +258,7 @@ def upload_file(
     """
     local_file_path = Path(local_file_path)
     if not local_file_path.is_file():
-        logger.error(
-            "Local file not found or is a directory: %s", local_file_path
-        )
+        logger.error("Local file not found or is a directory: %s", local_file_path)
         return None
     if client is None:
         client = get_github_client(use="write")
@@ -237,6 +302,8 @@ def upload_folder_to_github(
     """
     Upload a local folder to a GitHub repo via Git Data API (blobs, tree, commit, ref).
     Uses write token. Creates one commit with all files from the folder.
+    No need to clone the repo; upload is done entirely via the API.
+    Note: Performance scales with file count (e.g. ~200 files can take 2+ minutes).
 
     Returns:
         {"success": True, "message": "..."} on success,
@@ -288,13 +355,12 @@ def upload_folder_to_github(
 
         # Create blobs in parallel (one request per file; when one finishes, next starts)
         tree_items = []
-        with ThreadPoolExecutor(
-            max_workers=_UPLOAD_FOLDER_MAX_WORKERS
-        ) as executor:
+        with ThreadPoolExecutor(max_workers=_UPLOAD_FOLDER_MAX_WORKERS) as executor:
             futures = {
-                executor.submit(
-                    _create_blob_with_retry, base, token, rp, b64
-                ): (rp, b64)
+                executor.submit(_create_blob_with_retry, base, token, rp, b64): (
+                    rp,
+                    b64,
+                )
                 for rp, b64 in file_items
             }
             for fut in as_completed(futures):
@@ -323,9 +389,7 @@ def upload_folder_to_github(
         new_commit = r.json()["sha"]
 
         ref_data = {"sha": new_commit}
-        r = session.patch(
-            f"{base}/git/refs/heads/{branch}", json=ref_data, timeout=30
-        )
+        r = session.patch(f"{base}/git/refs/heads/{branch}", json=ref_data, timeout=30)
         r.raise_for_status()
 
         logger.info(

@@ -1,4 +1,4 @@
-"""Tests for github_ops git_ops (clone, push, fetch_file_content)."""
+"""Tests for github_ops git_ops (clone, push, pull, fetch_file_content)."""
 
 from unittest.mock import MagicMock, patch
 
@@ -6,6 +6,7 @@ from github_ops.git_ops import (
     _url_with_token,
     clone_repo,
     fetch_file_content,
+    pull,
     push,
 )
 
@@ -142,6 +143,54 @@ def test_push_uses_get_github_token_when_token_not_provided(tmp_path):
                 MagicMock(),
             ]
             push(tmp_path, "origin")
+    get_token.assert_called_once_with(use="push")
+
+
+# --- pull ---
+
+
+def test_pull_with_branch_runs_checkout_then_pull(tmp_path):
+    """pull with branch runs git checkout <branch> then git pull <url> <branch>."""
+    with patch("github_ops.git_ops.subprocess.run") as run_mock:
+        run_mock.side_effect = [
+            MagicMock(),
+            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
+            MagicMock(),
+        ]
+        pull(tmp_path, branch="main", token="t")
+    assert run_mock.call_count == 3
+    calls = [c[0][0] for c in run_mock.call_args_list]
+    assert "checkout" in calls[0]
+    assert calls[0][-1] == "main"
+    assert "pull" in calls[2]
+    assert "main" in calls[2]
+
+
+def test_pull_without_branch_does_not_run_checkout(tmp_path):
+    """pull without branch does not run git checkout."""
+    with patch("github_ops.git_ops.subprocess.run") as run_mock:
+        run_mock.side_effect = [
+            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
+            MagicMock(),
+        ]
+        pull(tmp_path, token="t")
+    calls = [c[0][0] for c in run_mock.call_args_list]
+    checkout_calls = [c for c in calls if "checkout" in c]
+    assert len(checkout_calls) == 0
+
+
+def test_pull_uses_get_github_token_when_token_not_provided(tmp_path):
+    """pull calls get_github_token(use='push') when token is None."""
+    with patch(
+        "github_ops.git_ops.get_github_token", return_value="push_tok"
+    ) as get_token:
+        with patch("github_ops.git_ops.subprocess.run") as run_mock:
+            run_mock.side_effect = [
+                MagicMock(),
+                MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
+                MagicMock(),
+            ]
+            pull(tmp_path, branch="main")
     get_token.assert_called_once_with(use="push")
 
 

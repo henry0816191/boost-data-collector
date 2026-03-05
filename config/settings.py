@@ -168,6 +168,20 @@ GITHUB_SLACK_HUDDLE_REPO_NAME = (
     env("GITHUB_SLACK_HUDDLE_REPO_NAME", default="") or ""
 ).strip()
 
+# Settings for publishing boost_library_usage_dashboard
+BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER = (
+    env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER", default="") or ""
+).strip()
+BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO = (
+    env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO", default="") or ""
+).strip()
+BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_TOKEN = (
+    env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_TOKEN", default="") or ""
+).strip() or GITHUB_TOKEN_WRITE
+BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH = (
+    env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH", default="") or ""
+).strip() or "main"
+
 # Slack (bot + app token for operations.slack_ops and cppa_slack_transcript_tracker)
 SLACK_BOT_TOKEN = (env("SLACK_BOT_TOKEN", default="") or "").strip()
 SLACK_APP_TOKEN = (env("SLACK_APP_TOKEN", default="") or "").strip()
