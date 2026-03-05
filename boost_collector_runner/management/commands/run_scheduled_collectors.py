@@ -10,6 +10,7 @@ import sys
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import yaml
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
@@ -122,9 +123,7 @@ class Command(BaseCommand):
         if schedule_kind == "daily":
             try:
                 tasks = self._get_group_batch_tasks(group_id)
-            except FileNotFoundError as e:
-                raise CommandError(str(e)) from e
-            except ValueError as e:
+            except (FileNotFoundError, ValueError, yaml.YAMLError) as e:
                 raise CommandError(str(e)) from e
         else:
             if schedule_kind == "on_release":
@@ -155,9 +154,7 @@ class Command(BaseCommand):
                 kwargs["year"] = today.year
             try:
                 tasks = get_tasks_for_schedule(**kwargs)
-            except FileNotFoundError as e:
-                raise CommandError(str(e)) from e
-            except ValueError as e:
+            except (FileNotFoundError, ValueError, yaml.YAMLError) as e:
                 raise CommandError(str(e)) from e
 
         if not tasks:
