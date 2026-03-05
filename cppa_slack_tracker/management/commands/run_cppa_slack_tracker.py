@@ -17,9 +17,10 @@ from typing import Optional
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from cppa_slack_tracker.models import SlackChannel, SlackTeam
+from cppa_slack_tracker.models import SlackTeam
 from cppa_slack_tracker.services import save_slack_message
 from cppa_slack_tracker.sync import (
+    get_channels_to_sync,
     sync_channel_users,
     sync_channels,
     sync_messages,
@@ -141,6 +142,8 @@ class Command(BaseCommand):
             and not options.get("sync_channel_users")
             and not options.get("sync_messages")
         ):
+            self.sync_users(options, team)
+            self.sync_channels(options, team)
             self.sync_messages(options, team)
 
     def _print_dry_run(self, options, team_id: str) -> None:
@@ -228,19 +231,6 @@ class Command(BaseCommand):
             )
         )
 
-    def _channels_to_sync(self, options, team: SlackTeam) -> list[SlackChannel]:
-        """Return list of channels to sync messages for (one or all in team)."""
-        channel_id = (options.get("channel_id") or "").strip() or None
-        if channel_id:
-            try:
-                return [SlackChannel.objects.get(team=team, channel_id=channel_id)]
-            except SlackChannel.DoesNotExist:
-                logger.warning(
-                    "Channel %s not found. Syncing all channels in team.",
-                    channel_id,
-                )
-        return list(SlackChannel.objects.filter(team=team).order_by("channel_id"))
-
     def _load_messages_from_json_path(self, path: str) -> list[dict]:
         """Load message dicts from a JSON file or from JSON files in a directory."""
         messages = []
@@ -268,7 +258,8 @@ class Command(BaseCommand):
                         _append_payload(data)
                     except (OSError, json.JSONDecodeError):
                         logger.exception(
-                            "Skipping invalid legacy messages JSON: %s", file_path
+                            "Skipping invalid legacy messages JSON: %s",
+                            file_path,
                         )
         return messages
 
@@ -277,7 +268,9 @@ class Command(BaseCommand):
         Sync messages via sync.sync_messages (workspace JSONs, then fetch by day).
         Optional legacy: load from --messages-json path and save to DB first.
         """
-        channels = self._channels_to_sync(options, team)
+        channels = get_channels_to_sync(
+            team, channel_id=(options.get("channel_id") or "").strip() or None
+        )
         if not channels:
             self.stdout.write(
                 self.style.WARNING("No channels to sync. Sync channels first.")

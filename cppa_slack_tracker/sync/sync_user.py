@@ -123,10 +123,9 @@ def sync_users(
             if _process_user_info(user_data, include_bots=include_bots):
                 success_count += 1
         except Exception as e:
-            user_id = user_data.get("id") if isinstance(user_data, dict) else None
             logger.warning(
                 "Failed to sync user %s: %s",
-                user_id,
+                user_data.get("id"),
                 e,
             )
             error_count += 1
