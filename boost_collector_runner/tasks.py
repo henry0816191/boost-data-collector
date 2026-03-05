@@ -60,6 +60,6 @@ def run_scheduled_collectors_task(
                 code,
             )
             raise
-    except Exception as e:
-        logger.exception("run_scheduled_collectors_task failed: %s", e)
+    except Exception:
+        logger.exception("run_scheduled_collectors_task failed")
         raise

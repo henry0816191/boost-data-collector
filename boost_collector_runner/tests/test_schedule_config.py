@@ -267,11 +267,11 @@ def test_validate_task_not_dict():
 
 def test_validate_task_command_missing():
     """Task without command or with empty command raises ValueError."""
-    with pytest.raises(ValueError, match="must have 'command' \\(non-empty string\\)"):
+    with pytest.raises(ValueError, match=r"must have 'command' \(non-empty string\)"):
         _validate_task({"schedule": "daily"}, "g1")
-    with pytest.raises(ValueError, match="must have 'command' \\(non-empty string\\)"):
+    with pytest.raises(ValueError, match=r"must have 'command' \(non-empty string\)"):
         _validate_task({"command": "", "schedule": "daily"}, "g1")
-    with pytest.raises(ValueError, match="must have 'command' \\(non-empty string\\)"):
+    with pytest.raises(ValueError, match=r"must have 'command' \(non-empty string\)"):
         _validate_task({"command": 123, "schedule": "daily"}, "g1")
 
 
@@ -380,12 +380,12 @@ def test_validate_task_args_not_list():
 
 def test_validate_task_args_element_not_string():
     """Task with args containing non-string element raises ValueError."""
-    with pytest.raises(ValueError, match="'args\\[0\\]' must be a string"):
+    with pytest.raises(ValueError, match=r"'args\[0\]' must be a string"):
         _validate_task(
             {"command": "c1", "schedule": "daily", "args": [123]},
             "g1",
         )
-    with pytest.raises(ValueError, match="'args\\[1\\]' must be a string"):
+    with pytest.raises(ValueError, match=r"'args\[1\]' must be a string"):
         _validate_task(
             {"command": "c1", "schedule": "daily", "args": ["--ok", None]},
             "g1",

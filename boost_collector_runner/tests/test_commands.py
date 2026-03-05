@@ -63,8 +63,6 @@ def test_run_scheduled_collectors_daily_runs_tasks_from_yaml(tmp_path, settings)
 @pytest.mark.django_db
 def test_run_scheduled_collectors_requires_schedule():
     """run_scheduled_collectors without --schedule raises CommandError."""
-    from django.core.management import call_command
-
     out = StringIO()
     err = StringIO()
     with pytest.raises(CommandError) as exc_info:
