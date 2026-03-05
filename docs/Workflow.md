@@ -7,7 +7,7 @@ The **Boost Data Collector** is a Django project with multiple Django apps. The 
 You can run collectors in two ways:
 
 - **workflow app** – Fixed list: `python manage.py run_all_collectors`. Celery Beat can run `workflow.tasks.run_all_collectors_task` on a schedule.
-- **boost_collector_runner app** – YAML-driven schedule: `config/boost_collector_schedule.yaml` defines groups, schedule types (daily, weekly, monthly, on_release), and optional args. Use `python manage.py run_scheduled_collectors --schedule daily` (or weekly/monthly/on_release). Celery Beat is built from the YAML so adding or reordering collectors requires no code changes—only editing the YAML.
+- **boost_collector_runner app** – YAML-driven schedule: `config/boost_collector_schedule.yaml` defines groups, schedule types (daily, weekly, monthly, interval, on_release), and optional args. Use `python manage.py run_scheduled_collectors --schedule daily` (or weekly/monthly/interval/on_release). Celery Beat is built from the YAML so adding or reordering collectors requires no code changes—only editing the YAML.
 
 This document covers: main workflow process, Boost Collector Runner and YAML schedule, project details, execution order, error handling, and branching.
 
@@ -51,7 +51,7 @@ The **boost_collector_runner** app runs collectors from a single config file so 
   - **enabled** (optional) – `true` (default) or `false` to skip without removing the entry.
   - **args** (optional) – List of strings passed to the command (e.g. `["--format", "json"]`).
 
-  Tasks do not have their own **time**; the group's **default_time** is when that group's tasks run. Within a group, tasks run sequentially. Each group has its own Celery Beat entry so groups can run in parallel on different workers. Interval tasks are not part of a group; they have separate Beat entries and run independently.
+  Tasks do not have their own **time**; the group's **default_time** is when that group's non-interval tasks run. Within a group, tasks run sequentially. Each group has its own Celery Beat entry so groups can run in parallel on different workers. Interval tasks are configured under groups but excluded from the group batch; they get separate Beat entries and run independently.
 
 ### Example (excerpt)
 

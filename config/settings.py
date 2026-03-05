@@ -36,7 +36,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Project apps (github_ops before github_activity_tracker - tracker depends on ops)
     "workflow",
-    "boost_collector_runner",  # YAML-driven schedule; run_collectors / run_scheduled_collectors
+    "boost_collector_runner",  # YAML-driven schedule; run_scheduled_collectors
     "cppa_user_tracker",
     "github_ops",
     "operations",

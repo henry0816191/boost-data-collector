@@ -98,15 +98,7 @@ def _normalize_task(task, group_id, group_default_time):
         if m is not None:
             t["minutes"] = int(m)
 
-    if "args" in t and not isinstance(t["args"], list):
-        raise ValueError(f"Task {t.get('command')!r}: 'args' must be a list of strings")
-    # Each element = one CLI token (e.g. ['--sync-message', '--from-library', 'asio'])
-    if "args" in t:
-        for i, a in enumerate(t["args"]):
-            if not isinstance(a, str):
-                raise ValueError(
-                    f"Task {t.get('command')!r}: 'args[{i}]' must be a string"
-                )
+    # args already validated in _validate_task (list of strings)
     return t
 
 
@@ -161,6 +153,16 @@ def _validate_task(task, group_id):
         raise ValueError(
             f"Task {command!r} in group {group_id!r}: 'enabled' must be boolean"
         )
+    if "args" in task and not isinstance(task["args"], list):
+        raise ValueError(
+            f"Task {command!r} in group {group_id!r}: 'args' must be a list of strings"
+        )
+    if "args" in task:
+        for i, a in enumerate(task["args"]):
+            if not isinstance(a, str):
+                raise ValueError(
+                    f"Task {command!r} in group {group_id!r}: 'args[{i}]' must be a string"
+                )
 
 
 def load_config(path=None):

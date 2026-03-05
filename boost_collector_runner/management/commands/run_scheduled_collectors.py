@@ -7,8 +7,10 @@ Exits with 0 only when all succeed; non-zero on any failure.
 
 import logging
 import sys
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 
@@ -64,7 +66,8 @@ class Command(BaseCommand):
 
     def _get_group_batch_tasks(self, group_id):
         """Return list of (group_id, task_dict) for this group: daily + weekly(today) + monthly(today) + on_release(if new release)."""
-        today = date.today()
+        tz_name = getattr(settings, "CELERY_TIMEZONE", "UTC")
+        today = datetime.now(ZoneInfo(tz_name)).date()
         today_weekday = today.strftime("%A").lower()
         today_day = today.day
         tasks = []
@@ -168,6 +171,16 @@ class Command(BaseCommand):
                 call_command(name, *args)
                 results.append((name, 0))
                 self.stdout.write(self.style.SUCCESS(f"  {name}: success"))
+            except SystemExit as e:
+                code = e.code if isinstance(e.code, int) else 1
+                results.append((name, code))
+                if code == 0:
+                    self.stdout.write(self.style.SUCCESS(f"  {name}: success"))
+                else:
+                    logger.error("%s exited with code %s", name, code)
+                    exit_code = code
+                    if stop_on_failure:
+                        break
             except CommandError as e:
                 code = getattr(e, "returncode", 1) or 1
                 results.append((name, code))
