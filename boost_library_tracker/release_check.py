@@ -78,7 +78,7 @@ def has_new_boost_release() -> bool:
             if len(page_tags) < per_page:
                 break
             page += 1
-    except Exception as e:
-        logger.warning("Failed to check for new Boost release: %s", e)
+    except Exception:
+        logger.exception("Failed to check for new Boost release")
         return False
     return False

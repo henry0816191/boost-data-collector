@@ -94,15 +94,18 @@ class Command(BaseCommand):
                 data=data,
             )
         )
+        on_release_tasks = get_tasks_for_schedule(
+            "on_release", group_id=group_id, data=data
+        )
+        if not on_release_tasks:
+            return tasks
         try:
             from boost_library_tracker.release_check import (
                 has_new_boost_release,
             )
 
             if has_new_boost_release():
-                tasks.extend(
-                    get_tasks_for_schedule("on_release", group_id=group_id, data=data)
-                )
+                tasks.extend(on_release_tasks)
         except ImportError as e:
             logger.warning(
                 "Skipping on_release tasks for group=%s: release_check import failed (%s)",
@@ -145,15 +148,20 @@ class Command(BaseCommand):
                     from boost_library_tracker.release_check import (
                         has_new_boost_release,
                     )
+
+                    if not has_new_boost_release():
+                        logger.info(
+                            "run_scheduled_collectors: no new Boost release; skipping on_release tasks."
+                        )
+                        return
                 except ImportError as e:
                     raise CommandError(
                         "on_release requires boost_library_tracker (install and add to INSTALLED_APPS)."
                     ) from e
-                if not has_new_boost_release():
-                    logger.info(
-                        "run_scheduled_collectors: no new Boost release; skipping on_release tasks."
-                    )
-                    return
+                except Exception as e:
+                    raise CommandError(
+                        f"Failed to check for new Boost release: {e}"
+                    ) from e
             kwargs = dict(
                 schedule_kind=schedule_kind,
                 day_of_week=day_of_week,

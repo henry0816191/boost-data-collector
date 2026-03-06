@@ -34,27 +34,30 @@ def get_github_token(
         # Only include non-empty strings (skip whitespace-only or non-string entries)
         tokens = [t.strip() for t in raw_tokens if isinstance(t, str) and t.strip()]
         if not tokens:
-            token = getattr(settings, "GITHUB_TOKEN", None) or os.environ.get(
-                "GITHUB_TOKEN", ""
-            )
+            token = (
+                getattr(settings, "GITHUB_TOKEN", None)
+                or os.environ.get("GITHUB_TOKEN", "")
+                or ""
+            ).strip()
             if not token:
                 raise ValueError(
                     "No scraping token: set GITHUB_TOKENS_SCRAPING or GITHUB_TOKEN."
                 )
-            return (token or "").strip()
+            return token
         global _scraping_token_cycle
         if _scraping_token_cycle is None:
             _scraping_token_cycle = itertools.cycle(tokens)
         return next(_scraping_token_cycle)
     if use in ("push", "create_pr", "write"):
-        token = getattr(settings, "GITHUB_TOKEN_WRITE", None) or ""
-        if not token:
-            token = getattr(settings, "GITHUB_TOKEN", None) or os.environ.get(
-                "GITHUB_TOKEN", ""
-            )
+        token = (
+            getattr(settings, "GITHUB_TOKEN_WRITE", None)
+            or getattr(settings, "GITHUB_TOKEN", None)
+            or os.environ.get("GITHUB_TOKEN", "")
+            or ""
+        ).strip()
         if not token:
             raise ValueError("No write token: set GITHUB_TOKEN_WRITE or GITHUB_TOKEN.")
-        return (token or "").strip()
+        return token
     raise ValueError(
         f"Unknown use: {use!r}. Use 'scraping', 'push', 'create_pr', or 'write'."
     )
