@@ -9,9 +9,9 @@ import pytest
 
 
 @pytest.fixture
-def app_id():
-    """Default app_id for sync_to_pinecone tests (IntegerField in DB)."""
-    return 1
+def app_type():
+    """Default app_type for sync_to_pinecone tests (CharField in DB)."""
+    return "slack"
 
 
 @pytest.fixture

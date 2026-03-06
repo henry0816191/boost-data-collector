@@ -39,9 +39,13 @@ def _get_ingestion() -> PineconeIngestion:
 
 
 # Type alias for the preprocessing function that callers must supply.
-# Signature: (failed_ids: list[str], final_sync_at: datetime | None) -> tuple[list[dict], bool]
+# Signature:
+#   - legacy: (failed_ids, final_sync_at) -> (raw_documents, is_chunked)
+#   - metadata update: (failed_ids, final_sync_at) -> (raw_documents, is_chunked, metas_to_update)
 PreprocessFn = Callable[
-    [list[str], Optional[datetime]], tuple[list[dict[str, Any]], bool]
+    [list[str], Optional[datetime]],
+    tuple[list[dict[str, Any]], bool]
+    | tuple[list[dict[str, Any]], bool, list[dict[str, Any]]],
 ]
 
 
@@ -49,10 +53,12 @@ def _empty_sync_result() -> dict[str, Any]:
     """Return the standard empty sync result dict."""
     return {
         "upserted": 0,
+        "updated": 0,
         "total": 0,
         "failed_count": 0,
         "failed_ids": [],
         "errors": [],
+        "update_errors": [],
     }
 
 
@@ -91,16 +97,17 @@ def _extract_new_failed_ids(result: dict[str, Any]) -> list[str]:
 
 
 def sync_to_pinecone(
-    app_id: int,
+    app_type: str,
     namespace: str,
     preprocess_fn: PreprocessFn,
 ) -> dict[str, Any]:
-    """Run a full Pinecone sync cycle for *app_id*.
+    """Run a full Pinecone sync cycle for *app_type*.
 
     This is the **public API** that other apps call.
 
     Args:
-        app_id: Identifies the data source (e.g. 1, 2, 3). Stored as IntegerField in
+        app_type: Identifies the data source (e.g. "slack", "mailing"). Stored as
+            CharField in
             PineconeFailList and PineconeSyncStatus.
         namespace: Pinecone namespace to upsert into.
         preprocess_fn: A callable returning ``(list[dict], is_chunked)``. Each dict
@@ -108,30 +115,45 @@ def sync_to_pinecone(
             ``doc_id`` or ``url``. See docs/Pinecone_preprocess_guideline.md.
 
     Returns:
-        dict with keys: upserted, total, failed_count, failed_ids, errors.
+        dict with keys: upserted, updated, total, failed_count, failed_ids,
+        errors, update_errors.
     """
-    logger.info("sync_to_pinecone: starting app_id=%s namespace=%s", app_id, namespace)
+    logger.info(
+        "sync_to_pinecone: starting app_type=%s namespace=%s", app_type, namespace
+    )
 
-    failed_ids = services.get_failed_ids(app_id)
-    final_sync_at = services.get_final_sync_at(app_id)
+    failed_ids = services.get_failed_ids(app_type)
+    final_sync_at = services.get_final_sync_at(app_type)
     logger.debug(
-        "app_id=%s: %d previously failed IDs, final_sync_at=%s",
-        app_id,
+        "app_type=%s: %d previously failed IDs, final_sync_at=%s",
+        app_type,
         len(failed_ids),
         final_sync_at,
     )
 
-    raw_documents, is_chunked = preprocess_fn(failed_ids, final_sync_at)
+    preprocess_result = preprocess_fn(failed_ids, final_sync_at)
+    if len(preprocess_result) == 2:
+        raw_documents, is_chunked = preprocess_result
+        metas_to_update: list[dict[str, Any]] = []
+    elif len(preprocess_result) == 3:
+        raw_documents, is_chunked, metas_to_update = preprocess_result
+    else:
+        raise ValueError(
+            "preprocess_fn must return either "
+            "(raw_documents, is_chunked) or "
+            "(raw_documents, is_chunked, metas_to_update)"
+        )
     if not raw_documents:
         logger.info(
-            "sync_to_pinecone: preprocess returned 0 documents for app_id=%s", app_id
+            "sync_to_pinecone: preprocess returned 0 documents for app_type=%s",
+            app_type,
         )
-        services.update_sync_status(app_id)
+        services.update_sync_status(app_type)
         return _empty_sync_result()
 
     documents = _build_documents_from_raw(raw_documents)
     if not documents:
-        services.update_sync_status(app_id)
+        services.update_sync_status(app_type)
         return _empty_sync_result()
 
     ingestion = _get_ingestion()
@@ -139,27 +161,42 @@ def sync_to_pinecone(
         documents=documents, namespace=namespace, is_chunked=is_chunked
     )
 
-    new_failed_ids = _extract_new_failed_ids(result)
-    with transaction.atomic():
-        services.clear_failed_ids(app_id)
-        if new_failed_ids:
-            services.record_failed_ids(app_id, new_failed_ids)
-        logger.warning(
-            "app_id=%s: %d source IDs recorded as failed", app_id, len(new_failed_ids)
+    update_result: dict[str, Any] = {"updated": 0, "errors": []}
+    if metas_to_update:
+        documents = _build_documents_from_raw(metas_to_update)
+        if not documents:
+            services.update_sync_status(app_type)
+            return _empty_sync_result()
+
+        update_result = ingestion.update_documents(
+            documents=documents, namespace=namespace, is_chunked=is_chunked
         )
 
-    services.update_sync_status(app_id)
+    new_failed_ids = _extract_new_failed_ids(result)
+    with transaction.atomic():
+        services.clear_failed_ids(app_type)
+        if new_failed_ids:
+            services.record_failed_ids(app_type, new_failed_ids)
+        logger.warning(
+            "app_type=%s: %d source IDs recorded as failed",
+            app_type,
+            len(new_failed_ids),
+        )
+
+    services.update_sync_status(app_type)
 
     summary = {
         "upserted": result.get("upserted", 0),
+        "updated": update_result.get("updated", 0),
         "total": result.get("total", 0),
         "failed_count": len(result.get("failed_documents", [])),
         "failed_ids": new_failed_ids,
         "errors": result.get("errors", []),
+        "update_errors": update_result.get("errors", []),
     }
     logger.info(
-        "sync_to_pinecone: app_id=%s finished — upserted=%d, total=%d, failed=%d",
-        app_id,
+        "sync_to_pinecone: app_type=%s finished — upserted=%d, total=%d, failed=%d",
+        app_type,
         summary["upserted"],
         summary["total"],
         summary["failed_count"],

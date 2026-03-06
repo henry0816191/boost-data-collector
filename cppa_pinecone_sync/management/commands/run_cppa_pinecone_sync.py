@@ -1,11 +1,11 @@
 """
 Management command: run_cppa_pinecone_sync
 
-Runs Pinecone sync for a single (app_id, namespace, preprocessor) when invoked
+Runs Pinecone sync for a single (app_type, namespace, preprocessor) when invoked
 with all three parameters (e.g. by another app or scheduler).
 
 Usage:
-    python manage.py run_cppa_pinecone_sync --app-id 1 --namespace slack-Cpplang --preprocessor myapp.preprocessors.slack_preprocess
+    python manage.py run_cppa_pinecone_sync --app-type slack --namespace slack-Cpplang --preprocessor myapp.preprocessors.slack_preprocess
     python manage.py run_cppa_pinecone_sync   # no args: hint only (run-all not yet implemented)
 """
 
@@ -37,61 +37,61 @@ def _resolve_preprocessor(dotted_path: str):
 
 class Command(BaseCommand):
     help = (
-        "Run CPPA Pinecone Sync. Pass --app-id, --namespace and --preprocessor to run "
+        "Run CPPA Pinecone Sync. Pass --app-type, --namespace and --preprocessor to run "
         "sync_to_pinecone for one source; other apps can call sync_to_pinecone() directly."
     )
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--app-id",
-            type=int,
+            "--app-type",
+            type=str,
             default=None,
-            help="App ID (e.g. 1, 2, 3). Required with --namespace and --preprocessor.",
+            help="App type (e.g. 'slack', 'mailing'). Required with --namespace and --preprocessor.",
         )
         parser.add_argument(
             "--namespace",
             type=str,
             default=None,
-            help="Pinecone namespace to upsert into. Required when --app-id is set.",
+            help="Pinecone namespace to upsert into. Required when --app-type is set.",
         )
         parser.add_argument(
             "--preprocessor",
             type=str,
             default=None,
-            help="Dotted path to preprocess function (e.g. 'myapp.preprocessors.slack_preprocess'). Required when --app-id is set.",
+            help="Dotted path to preprocess function (e.g. 'myapp.preprocessors.slack_preprocess'). Required when --app-type is set.",
         )
 
     def handle(self, *args, **options):
-        app_id = options.get("app_id")
+        app_type = (options.get("app_type") or "").strip() or None
         namespace = (options.get("namespace") or "").strip() or None
         preprocessor_path = (options.get("preprocessor") or "").strip() or None
 
-        if app_id is not None and not (namespace and preprocessor_path):
+        if app_type is not None and not (namespace and preprocessor_path):
             raise CommandError(
-                "When --app-id is set, both --namespace and --preprocessor are required."
+                "When --app-type is set, both --namespace and --preprocessor are required."
             )
-        if (namespace or preprocessor_path) and app_id is None:
+        if (namespace or preprocessor_path) and app_type is None:
             raise CommandError(
-                "When --namespace or --preprocessor is set, --app-id is required."
+                "When --namespace or --preprocessor is set, --app-type is required."
             )
 
-        if app_id is None:
+        if app_type is None:
             raise CommandError(
-                "No --app-id/--namespace/--preprocessor given. "
-                "Run with --app-id, --namespace and --preprocessor to sync one source; "
+                "No --app-type/--namespace/--preprocessor given. "
+                "Run with --app-type, --namespace and --preprocessor to sync one source; "
                 "or register sources and run 'all' (not yet implemented)."
             )
 
         logger.info(
-            "run_cppa_pinecone_sync: starting app_id=%s namespace=%s preprocessor=%s",
-            app_id,
+            "run_cppa_pinecone_sync: starting app_type=%s namespace=%s preprocessor=%s",
+            app_type,
             namespace,
             preprocessor_path,
         )
 
         try:
             preprocess_fn = _resolve_preprocessor(preprocessor_path)
-            result = sync_to_pinecone(app_id, namespace, preprocess_fn)
+            result = sync_to_pinecone(app_type, namespace, preprocess_fn)
             logger.info(
                 "CPPA Pinecone Sync completed: upserted=%s, total=%s, failed_count=%s",
                 result["upserted"],

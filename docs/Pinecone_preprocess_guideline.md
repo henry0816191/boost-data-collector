@@ -10,7 +10,7 @@ Other apps call:
 from cppa_pinecone_sync.sync import sync_to_pinecone
 
 result = sync_to_pinecone(
-    app_id=1,                  # e.g. 1, 2, 3
+    app_type="slack",          # e.g. "slack", "mailing"
     namespace="your_namespace",
     preprocess_fn=your_preprocess_fn,
 )
@@ -18,7 +18,7 @@ result = sync_to_pinecone(
 
 The sync pipeline will:
 
-1. Load **failed IDs** and **last sync time** for this app (by `app_id`) from the database.
+1. Load **failed IDs** and **last sync time** for this app (by `app_type`) from the database.
 2. Call your **preprocess function** with those two inputs.
 3. Upsert the documents you return to Pinecone (with chunking and validation as needed).
 4. Update the fail list and sync status in the database.

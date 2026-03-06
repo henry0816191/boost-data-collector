@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 ("failed_id", models.CharField(db_index=True, max_length=255)),
-                ("app_id", models.IntegerField(db_index=True)),
+                ("app_type", models.CharField(db_index=True, max_length=64)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
@@ -48,8 +48,8 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 (
-                    "app_id",
-                    models.IntegerField(db_index=True, unique=True),
+                    "app_type",
+                    models.CharField(db_index=True, max_length=64, unique=True),
                 ),
                 (
                     "final_sync_at",
@@ -60,7 +60,7 @@ class Migration(migrations.Migration):
             ],
             options={
                 "db_table": "cppa_pinecone_sync_pineconesyncstatus",
-                "ordering": ["app_id"],
+                "ordering": ["app_type"],
                 "verbose_name": "Pinecone sync status",
                 "verbose_name_plural": "Pinecone sync statuses",
             },

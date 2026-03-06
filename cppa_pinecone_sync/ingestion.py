@@ -196,6 +196,16 @@ class PineconeIngestion:
             "failed_documents": [],
         }
 
+    @staticmethod
+    def _empty_update_result() -> dict[str, Any]:
+        """Return result dict when there are no documents to update."""
+        return {
+            "updated": 0,
+            "total": 0,
+            "errors": [],
+            "failed_documents": [],
+        }
+
     # ------------------------------------------------------------------
     # Chunk validation
     # ------------------------------------------------------------------
@@ -307,21 +317,34 @@ class PineconeIngestion:
             metadata = doc.metadata or {}
             if metadata.get("title"):
                 text = f"Title: {metadata['title']}\n\n{text}"
-
-            original_doc_id = metadata.get(
-                "doc_id", metadata.get("url", f"doc_{batch_start_idx}_{len(records)}")
+            doc_id = self._build_hashed_doc_id(
+                metadata=metadata,
+                text=text,
+                batch_start_idx=batch_start_idx,
+                record_idx=len(records),
             )
-            if "start_index" in metadata:
-                original_doc_id = f"{original_doc_id}_{metadata['start_index']}"
-            else:
-                original_doc_id = f"{original_doc_id}_{text[:50]}_{len(text)}"
-
-            doc_id = hashlib.md5(original_doc_id.encode()).hexdigest()
             record: dict[str, Any] = {"id": doc_id, "chunk_text": text}
             record.update(metadata)
             record.pop("table_ids", None)
             records.append(record)
         return records
+
+    @staticmethod
+    def _build_hashed_doc_id(
+        metadata: dict[str, Any],
+        text: str,
+        batch_start_idx: int,
+        record_idx: int,
+    ) -> str:
+        original_doc_id = metadata.get(
+            "doc_id", metadata.get("url", f"doc_{batch_start_idx}_{record_idx}")
+        )
+        if "start_index" in metadata:
+            original_doc_id = f"{original_doc_id}_{metadata['start_index']}"
+        else:
+            original_doc_id = f"{original_doc_id}_{text[:50]}_{len(text)}"
+
+        return hashlib.md5(original_doc_id.encode()).hexdigest()
 
     @staticmethod
     def _mark_batch_failed(
@@ -349,6 +372,146 @@ class PineconeIngestion:
         self._upsert_to_index(
             self.sparse_index, records, namespace, batch_num, "sparse"
         )
+
+    # ------------------------------------------------------------------
+    # Metadata update
+    # ------------------------------------------------------------------
+
+    def update_documents(
+        self,
+        documents: list[Document],
+        namespace: Optional[str] = None,
+        is_chunked: bool = False,
+    ) -> dict[str, Any]:
+        """Update metadata for existing documents in Pinecone indexes.
+
+        Args:
+            documents: List of langchain Document objects.
+            namespace: Pinecone namespace.
+            is_chunked: If True, skip text splitting (documents are already chunked).
+
+        Returns:
+            dict with keys: updated, total, errors, failed_documents.
+        """
+        if not documents:
+            logger.warning("No documents to update metadata")
+            return self._empty_update_result()
+
+        self._ensure_indexes_ready()
+        chunked = (
+            documents if is_chunked else self.text_splitter.split_documents(documents)
+        )
+        updated_count, errors, failed_docs = self._update_all_batches(chunked, namespace)
+        return {
+            "updated": updated_count,
+            "total": len(documents),
+            "errors": errors,
+            "failed_documents": failed_docs,
+        }
+
+    def _update_all_batches(
+        self,
+        documents: list[Document],
+        namespace: Optional[str],
+    ) -> tuple[int, list[str], list[dict[str, Any]]]:
+        updated_count, errors, failed_docs = 0, [], []
+
+        for i in range(0, len(documents), self.batch_size):
+            batch = documents[i : i + self.batch_size]
+            batch_num = i // self.batch_size + 1
+
+            batch_updates = self._prepare_batch_updates(batch, i)
+            if not batch_updates:
+                logger.warning("Update batch %d: no valid records", batch_num)
+                continue
+
+            batch_failed_count = 0
+            for update in batch_updates:
+                try:
+                    self._update_single_record(update, namespace)
+                    updated_count += 1
+                except Exception as e:
+                    error_msg = (
+                        f"Error updating metadata for batch {batch_num} "
+                        f"record {update['id']}: {e}"
+                    )
+                    logger.error(error_msg)
+                    errors.append(error_msg)
+                    failed_docs.append(
+                        {
+                            "ids": update.get("ids", ""),
+                            "reason": f"Metadata update failed: {e}",
+                        }
+                    )
+                    batch_failed_count += 1
+
+            logger.info(
+                "Updated metadata for batch %d: %d/%d documents",
+                batch_num,
+                len(batch_updates) - batch_failed_count,
+                len(batch_updates),
+            )
+
+        return updated_count, errors, failed_docs
+
+    def _prepare_batch_updates(
+        self, batch: list[Document], batch_start_idx: int
+    ) -> list[dict[str, Any]]:
+        updates: list[dict[str, Any]] = []
+        for doc in batch:
+            text = doc.page_content.strip() if doc.page_content else ""
+            if not self._is_valid_chunk(text):
+                continue
+
+            metadata = dict(doc.metadata or {})
+            if metadata.get("title"):
+                text = f"Title: {metadata['title']}\n\n{text}"
+
+            doc_id = self._build_hashed_doc_id(
+                metadata=metadata,
+                text=text,
+                batch_start_idx=batch_start_idx,
+                record_idx=len(updates),
+            )
+
+            source_ids = metadata.get("table_ids", "")
+            metadata.pop("table_ids", None)
+            updates.append({"id": doc_id, "set_metadata": metadata, "ids": source_ids})
+
+        return updates
+
+    def _update_single_record(
+        self, update: dict[str, Any], namespace: Optional[str]
+    ) -> None:
+        self._ensure_indexes_ready()
+        record_id = update["id"]
+        set_metadata = update["set_metadata"]
+
+        self._update_index_record(
+            self.dense_index, record_id, set_metadata, namespace, "dense"
+        )
+        self._update_index_record(
+            self.sparse_index, record_id, set_metadata, namespace, "sparse"
+        )
+
+    @staticmethod
+    def _update_index_record(
+        index: Any,
+        record_id: str,
+        set_metadata: dict[str, Any],
+        namespace: Optional[str],
+        index_type: str,
+    ) -> None:
+        try:
+            index.update(id=record_id, set_metadata=set_metadata, namespace=namespace)
+        except Exception as e:
+            logger.error(
+                "Failed to update metadata in %s index for id=%s: %s",
+                index_type,
+                record_id,
+                e,
+            )
+            raise
 
     @staticmethod
     def _upsert_to_index(
