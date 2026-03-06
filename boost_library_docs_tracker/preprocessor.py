@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Any
 
 from .models import BoostDocContent
-from . import services, workspace
+from . import workspace
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,8 @@ def preprocess_for_pinecone(
     For each selected record:
       - Resolves first_version / last_version from the FK fields on BoostDocContent.
       - Loads page content from the workspace file.
-      - Marks the BoostDocContent row as is_upserted=True.
+      - Returns source ids in metadata["ids"] so the caller can mark
+        BoostDocContent.is_upserted=True only after a successful Pinecone upsert.
 
     Returns (documents, is_chunked=False).
     doc_id in metadata is the content_hash of the BoostDocContent row.
@@ -47,7 +48,7 @@ def preprocess_for_pinecone(
     if not records:
         return [], False
 
-    documents = _build_documents(records)
+    documents, _ids_to_mark = _build_documents(records)
     return documents, False
 
 
@@ -117,8 +118,8 @@ def _get_library_name(doc_content: BoostDocContent) -> str:
 
 def _build_documents(
     records: list[BoostDocContent],
-) -> list[dict[str, Any]]:
-    """Build raw document dicts, apply skip rules, mark rows as upserted."""
+) -> tuple[list[dict[str, Any]], list[int]]:
+    """Build raw document dicts and return source ids selected for upsert."""
     documents: list[dict[str, Any]] = []
     ids_to_mark: list[int] = []
 
@@ -156,11 +157,4 @@ def _build_documents(
         )
         ids_to_mark.append(doc_content.pk)
 
-    if ids_to_mark:
-        services.set_doc_content_upserted_by_ids(ids_to_mark, True)
-        logger.info(
-            "Marked %d BoostDocContent rows as is_upserted=True.",
-            len(ids_to_mark),
-        )
-
-    return documents
+    return documents, ids_to_mark

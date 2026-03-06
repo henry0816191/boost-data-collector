@@ -8,13 +8,17 @@ from django.db import models
 
 class BoostDocContent(models.Model):
     """
-    Globally unique doc page by URL.
-    One row per URL regardless of library or Boost version.
-    content_hash (SHA-256 of page text) is used to detect changes between scrape runs.
-    Page content is NOT stored in the DB; it lives in the workspace files.
-    first_version_id / last_version_id track the earliest and latest Boost version
-    in which this page was observed.
-    is_upserted tracks whether this page has been successfully upserted to Pinecone.
+    One row per unique document content, keyed by content_hash (not URL).
+
+    Our aim is to avoid repeating the same content: the unique key is content_hash
+    (SHA-256 of the page text). The same URL may produce a new row if the content
+    changes; identical content at different URLs or versions shares one row.
+    url is stored for reference and workspace lookup but is not the uniqueness
+    constraint. Page content is NOT stored in the DB; it lives in the workspace files.
+
+    first_version / last_version track the earliest and latest Boost version in
+    which this content was observed. is_upserted tracks whether it has been
+    successfully upserted to Pinecone.
     """
 
     url = models.TextField(db_index=True)

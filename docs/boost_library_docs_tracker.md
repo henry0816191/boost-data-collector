@@ -1,6 +1,6 @@
 # boost_library_docs_tracker
 
-Django app that scrapes all Boost library documentation by version, stores the extracted text in the database, and upserts to Pinecone. Re-runs automatically when a new Boost version is released.
+Django app that scrapes Boost library documentation by version, writes metadata and content hashes into **BoostDocContent** (extracted text lives in workspace files, not the DB), links pages to library-versions via **BoostLibraryDocumentation**, and upserts to Pinecone. Sync state is tracked on **BoostDocContent** (`is_upserted`). Re-runs when new Boost versions are released; restart logic uses `BoostDocContent.is_upserted` to re-run upserts for failed or new rows.
 
 ---
 
@@ -49,9 +49,9 @@ boost_library_docs_tracker/
 
 See [Schema.md](Schema.md) section 10 for the full ER diagram. Summary:
 
-**`BoostDocContent`** — One globally unique row per URL, shared across all versions and libraries. Stores `page_content`, `content_hash` (SHA-256), and `scraped_at`. Content is updated in place when the hash changes on a re-scrape. Because pages are global, unchanged content is never duplicated even when the same URL appears in a new version.
+**`BoostDocContent`** — One row per unique document content, keyed by `content_hash` (SHA-256 of page text). Stores `url`, `content_hash`, `first_version_id`, `last_version_id`, `is_upserted`, `scraped_at`, `created_at`. Page content is **not** stored in the DB; it is kept in workspace files. The unique key is `content_hash` so the same content is never duplicated; the same URL may produce a new row if content changes. Restart/sync logic: select rows where `is_upserted=False` (or in `failed_ids`) and re-run Pinecone upserts; after success, set `is_upserted=True`.
 
-**`BoostLibraryDocumentation`** — Join table between `BoostLibraryVersion` (section 3 of schema) and `BoostDocContent`. One row per (library-version, page) pair. Tracks `status` (`pending` / `running` / `completed` / `failed`) and `page_count` (total pages discovered for that library-version). Restart logic: skip any (library-version, page) pair whose status is already `completed`.
+**`BoostLibraryDocumentation`** — Join table between `BoostLibraryVersion` (section 3 of schema) and `BoostDocContent`. One row per (library-version, doc_content) pair; it only records which pages were found under a given (library, version). No status, page_count, or sync fields; sync state lives on `BoostDocContent`.
 
 ---
 
@@ -83,66 +83,58 @@ Added to `COLLECTOR_COMMANDS` in `workflow/management/commands/run_all_collector
 
 | Argument | Default | Description |
 |---|---|---|
-| `--version VERSION` | auto-detect | Force a specific Boost version instead of querying GitHub API. |
+| `--versions VERSION [VERSION ...]` | latest from DB | One or more Boost versions to scrape. Must match `BoostVersion.version` (e.g. `boost-1.85.0` when populated from GitHub tags). |
 | `--library LIBRARY` | all | Scrape only one library by name. Useful for debugging. |
 | `--dry-run` | off | Fetch and parse pages but do not write to DB or Pinecone. |
 | `--skip-pinecone` | off | Write to DB but skip the Pinecone upsert step. |
-| `--max-pages N` | 500 | Per-library page cap for the BFS crawl. |
+| `--max-pages N` | 100 | Per-library page cap for the BFS crawl. |
+| `--use-local` | off | Download source zip and walk local HTML instead of HTTP crawl. |
+| `--cleanup-extract` | off | Delete extracted source tree after each version (only with `--use-local`). |
 
 ### Execution steps
 
-1. **Detect version** — Use `--version` if given; otherwise query `BoostVersion` in the DB for the latest version with a non-null `version_created_at`.
-2. **Discover libraries** — Call `_get_library_list(version)` to read all `(library_name, doc_root_url, lib_key, lib_doc)` tuples from `BoostLibraryVersion` and `BoostLibrary` tables (no HTTP required).
-3. **Per-library scrape loop** — For each `BoostLibraryVersion` (filtered by `--library` if given):
-   - Call `services.get_pending_docs_for_library_version(library_version_id)` — if all docs are already `completed`, skip this library (restart logic).
-   - Call `fetcher.crawl_library_pages(doc_root_url)`, compute `content_hash = sha256(page_text)` for each URL.
-   - For each page: call `services.get_or_create_doc_content(url, page_content, content_hash)` → returns `(BoostDocContent, change_type)`.
-   - Call `services.link_content_to_library_version(library_version_id, doc_content_id, page_count)` to record the relation.
-4. **Pinecone sync** — Unless `--skip-pinecone` or `--dry-run`: call `services.get_docs_pending_sync()`, upsert each page's content to Pinecone (or metadata-only if content unchanged), call `services.mark_doc_synced(doc)` or `services.mark_doc_failed(doc)`.
-5. **Complete** — Log summary and exit 0. On unhandled exception, log and exit non-zero.
+1. **Resolve versions** — Use `--versions` if given; otherwise query `BoostVersion` for the latest version with non-null `version_created_at`. Sort old→new.
+2. **Discover libraries** — For each version, call `_get_library_list(version)` to read `(library_name, doc_root_url, lib_key, lib_doc)` from `BoostLibraryVersion` and `BoostLibrary`.
+3. **Per-library scrape** — For each library (optionally filtered by `--library`): fetch pages via `fetcher.crawl_library_pages` or `fetcher.walk_library_html` (if `--use-local`). For each page: save text to workspace, compute `content_hash`, call `services.get_or_create_doc_content(url, content_hash, version_id=boost_version_id)` → returns `(BoostDocContent, change_type)`. Call `services.link_content_to_library_version(library_version_id, doc_content_id)` to create the **BoostLibraryDocumentation** join row (idempotent).
+4. **Pinecone sync** — Unless `--skip-pinecone` or `--dry-run`: run `sync_to_pinecone` with `preprocess_for_pinecone`. The preprocessor selects **BoostDocContent** rows where `is_upserted=False` or in `failed_ids`, loads page content from workspace, builds vectors, and sets `BoostDocContent.is_upserted=True` on success. Failed IDs from the sync result are set back to `is_upserted=False` for retry.
+5. **Complete** — Log summary and exit 0.
 
-### Restart and resume logic
+### Restart and sync logic
 
-- **Library-version level:** `services.get_pending_docs_for_library_version()` returns only rows not yet `completed`; libraries already fully scraped are skipped.
-- **Page level:** `get_or_create_doc_content` is idempotent — if the URL exists and the hash is the same, only `scraped_at` is updated; no duplicate rows.
-- **Pinecone level:** `get_docs_pending_sync()` returns only rows with `status in (pending, failed)`; already-synced rows are skipped automatically.
+- **Scrape:** No per-row “pending” skip; each run (re)scrapes and updates or creates **BoostDocContent** by `content_hash`, and ensures **BoostLibraryDocumentation** join rows exist.
+- **Pinecone:** Driven by **BoostDocContent.is_upserted**. Rows with `is_upserted=False` (or in `failed_ids`) are (re)upserted; on success `is_upserted` is set to `True`. On sync failure, failed **BoostDocContent** IDs are set to `is_upserted=False` so the next run retries them.
 
 ---
 
 ## Pinecone document shape
 
-One Pinecone vector per `BoostDocContent` row. The vector ID is the page URL (deterministic, used for dedup and update-in-place). Metadata is populated from the `BoostLibraryDocumentation` row and its linked `BoostLibraryVersion`.
+One Pinecone vector per **BoostDocContent** row. The preprocessor selects rows with `BoostDocContent.is_upserted=False` (or in `failed_ids`), loads page content from the workspace, and builds one document per row. Metadata is taken from **BoostDocContent** (url, content_hash, first_version, last_version) and from the linked **BoostLibraryDocumentation** / **BoostLibraryVersion** for library name.
 
 | Field | Value |
 |---|---|
-| `id` | Page URL |
-| `page_content` | Extracted plain text (embedded) |
+| `metadata.doc_id` | `BoostDocContent.content_hash` |
 | `metadata.url` | Page URL |
-| `metadata.library_name` | Library name from linked `BoostLibrary` |
-| `metadata.boost_version` | Version string from linked `BoostVersion` |
-| `metadata.content_hash` | SHA-256 of `page_content` |
+| `metadata.first_version` / `metadata.last_version` | Version strings from **BoostDocContent** FKs |
+| `metadata.library_name` | From a **BoostLibraryDocumentation** relation’s library |
+| `metadata.ids` | **BoostDocContent** PK (for failure reporting) |
+| `content` | Page text loaded from workspace |
 
-**Upsert logic (driven by `BoostLibraryDocumentation.status`):**
-
-| `change_type` from `get_or_create_doc_content` | Pinecone action |
-|---|---|
-| `"created"` or `"content_changed"` | Re-embed `page_content` and full upsert |
-| `"unchanged"` | No Pinecone action needed (content identical) |
-
-Relations with `status == "failed"` are retried on the next run.
+**Upsert logic (driven by BoostDocContent.is_upserted):** Only rows with `is_upserted=False` or in the retry `failed_ids` list are sent to Pinecone. After a successful upsert, `BoostDocContent.is_upserted` is set to `True`. If the sync reports failures, those **BoostDocContent** IDs are set back to `is_upserted=False` so the next run retries them.
 
 ---
 
 ## Scheduling
 
-The app runs inside the existing daily Celery Beat schedule (1:00 AM Pacific) via `run_all_collectors`. On most days the target version is already `completed` and the command exits in seconds. On a release day a full scrape runs for the new version.
+The app runs inside the existing daily Celery Beat schedule (1:00 AM Pacific) via `run_all_collectors`. On most days there is no new version and the command finishes quickly; on a release day a full scrape runs for the new version. Pinecone upserts run for any **BoostDocContent** with `is_upserted=False` or in the failure retry list.
 
-For a manual backfill of older versions:
+For a manual backfill of specific versions, pass values that match **BoostVersion.version** in the database (often the GitHub tag form with a `boost-` prefix):
 
 ```bash
-python manage.py run_boost_library_docs_tracker --version 1.85.0
-python manage.py run_boost_library_docs_tracker --version 1.86.0
+python manage.py run_boost_library_docs_tracker --versions boost-1.85.0
+python manage.py run_boost_library_docs_tracker --versions boost-1.85.0 boost-1.86.0
 ```
+
+If your **BoostVersion** rows use bare version strings (e.g. `1.85.0`), use those instead. The command looks up versions with `BoostVersion.objects.get(version=...)`, so the value must match exactly.
 
 ---
 

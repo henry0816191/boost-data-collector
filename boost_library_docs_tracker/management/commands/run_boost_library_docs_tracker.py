@@ -393,21 +393,35 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR(f"Pinecone sync error: {exc}"))
             return
 
+        successful_ids = result.get("successful_source_ids", [])
+        int_successful_ids: list[int] = []
+        for sid in successful_ids:
+            try:
+                int_successful_ids.append(int(sid))
+            except (ValueError, TypeError):
+                logger.warning("Ignoring non-integer successful_source_id: %r", sid)
+        if int_successful_ids:
+            services.set_doc_content_upserted_by_ids(int_successful_ids, True)
+            logger.info(
+                "Marked %d BoostDocContent rows as is_upserted=True "
+                "after successful Pinecone upsert.",
+                len(int_successful_ids),
+            )
+
         failed_ids = result.get("failed_ids", [])
-        if failed_ids:
-            int_failed_ids = []
-            for fid in failed_ids:
-                try:
-                    int_failed_ids.append(int(fid))
-                except (ValueError, TypeError):
-                    logger.warning("Ignoring non-integer failed_id: %r", fid)
-            if int_failed_ids:
-                services.set_doc_content_upserted_by_ids(int_failed_ids, False)
-                logger.warning(
-                    "Marked %d BoostDocContent rows as is_upserted=False "
-                    "due to Pinecone failures.",
-                    len(int_failed_ids),
-                )
+        int_failed_ids: list[int] = []
+        for fid in failed_ids:
+            try:
+                int_failed_ids.append(int(fid))
+            except (ValueError, TypeError):
+                logger.warning("Ignoring non-integer failed_id: %r", fid)
+        if int_failed_ids:
+            services.set_doc_content_upserted_by_ids(int_failed_ids, False)
+            logger.warning(
+                "Marked %d BoostDocContent rows as is_upserted=False "
+                "due to Pinecone failures.",
+                len(int_failed_ids),
+            )
 
         self.stdout.write(
             self.style.SUCCESS(
