@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
@@ -11,9 +12,29 @@ from django.db.models import Avg, Count, Max, Min
 
 from boost_usage_tracker.models import BoostUsage
 
-ACTIVITY_DERIVATION_WEIGHT = 0.4
-ACTIVITY_TREND_WEIGHT = 0.3
-ACTIVITY_MOMENTUM_WEIGHT = 0.3
+_ENV_ACTIVITY_DERIVATION = "BOOST_DASHBOARD_ACTIVITY_DERIVATION_WEIGHT"
+_ENV_ACTIVITY_TREND = "BOOST_DASHBOARD_ACTIVITY_TREND_WEIGHT"
+_ENV_ACTIVITY_MOMENTUM = "BOOST_DASHBOARD_ACTIVITY_MOMENTUM_WEIGHT"
+_DEFAULT_DERIVATION = 0.4
+_DEFAULT_TREND = 0.3
+_DEFAULT_MOMENTUM = 0.3
+
+
+def _float_from_env(key: str, default: float) -> float:
+    raw = os.getenv(key, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+ACTIVITY_DERIVATION_WEIGHT = _float_from_env(
+    _ENV_ACTIVITY_DERIVATION, _DEFAULT_DERIVATION
+)
+ACTIVITY_TREND_WEIGHT = _float_from_env(_ENV_ACTIVITY_TREND, _DEFAULT_TREND)
+ACTIVITY_MOMENTUM_WEIGHT = _float_from_env(_ENV_ACTIVITY_MOMENTUM, _DEFAULT_MOMENTUM)
 
 
 def calculate_library_metrics_by_file_usage(
