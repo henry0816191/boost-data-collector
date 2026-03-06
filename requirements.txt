@@ -11,6 +11,7 @@ redis>=5.0
 # boost_library_docs_tracker (HTML parsing, crawling)
 beautifulsoup4>=4.12
 lxml>=4.9
+pypandoc
 
 # cppa_pinecone_sync (vector index, chunking)
 pinecone>=5.0
