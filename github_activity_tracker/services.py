@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Optional
 
 from .models import (
+    CreatedReposByLanguage,
     GitCommit,
     GitCommitFileChange,
     GitHubFile,
@@ -49,6 +50,34 @@ def get_or_create_language(name: str) -> tuple[Language, bool]:
     if not (name and name.strip()):
         raise ValueError("Language name must not be empty.")
     return Language.objects.get_or_create(name=name.strip())
+
+
+def create_or_update_created_repos_by_language(
+    language: Language,
+    year: int,
+    all_repos: int,
+    significant_repos: int,
+) -> tuple[CreatedReposByLanguage, bool]:
+    """Create or update CreatedReposByLanguage for (language, year)."""
+    row, created = CreatedReposByLanguage.objects.get_or_create(
+        language=language,
+        year=year,
+        defaults={
+            "all_repos": all_repos,
+            "significant_repos": significant_repos,
+        },
+    )
+    if not created:
+        update_fields: list[str] = []
+        if row.all_repos != all_repos:
+            row.all_repos = all_repos
+            update_fields.append("all_repos")
+        if row.significant_repos != significant_repos:
+            row.significant_repos = significant_repos
+            update_fields.append("significant_repos")
+        if update_fields:
+            row.save(update_fields=update_fields + ["updated_at"])
+    return row, created
 
 
 # --- License ---

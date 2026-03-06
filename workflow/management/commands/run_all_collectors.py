@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 COLLECTOR_COMMANDS = [
     "run_boost_library_tracker",
     "run_boost_library_docs_tracker",
+    "run_boost_library_usage_dashboard",
+    "run_boost_usage_tracker",
+    "run_boost_mailing_list_tracker",
     "run_discord_exporter",
 ]
 

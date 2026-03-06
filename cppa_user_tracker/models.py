@@ -137,7 +137,7 @@ class SlackUser(BaseProfile):
         self.type = ProfileType.SLACK
         super().save(*args, **kwargs)
 
-    slack_user_id = models.CharField(max_length=64, db_index=True)
+    slack_user_id = models.CharField(max_length=64, unique=True)
     username = models.CharField(max_length=255, db_index=True, blank=True)
     display_name = models.CharField(max_length=255, db_index=True, blank=True)
     avatar_url = models.URLField(max_length=512, blank=True)

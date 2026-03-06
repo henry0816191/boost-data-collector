@@ -120,9 +120,11 @@ erDiagram
     GitHubRepository ||--o{ RepoLanguage : "has"
     GitHubRepository ||--o{ RepoLicense : "has"
     RepoLanguage }o--|| Language : "used_in"
+    Language ||--o{ CreatedReposByLanguage : "yearly_stats"
     License ||--o{ RepoLicense : "used_in"
 
     GitHubRepository {
+        int id PK
         int owner_account_id FK
         string repo_name "IX"
         int stars
@@ -162,11 +164,21 @@ erDiagram
         int license_id FK
         datetime created_at
     }
+
+    CreatedReposByLanguage {
+        int id PK
+        int language_id FK
+        int year "IX"
+        int all_repos
+        int significant_repos
+        datetime created_at
+        datetime updated_at
+    }
 ```
 
 **Note:** **GitHubRepository** is the base table with all repository fields.
 
-**Note:** Composite unique constraints should be applied on: (`owner_account_id`, `repo_name`) in GitHubRepository, (`repo_id`, `language_id`) in RepoLanguage, (`repo_id`, `license_id`) in RepoLicense.
+**Note:** Composite unique constraints should be applied on: (`owner_account_id`, `repo_name`) in GitHubRepository, (`repo_id`, `language_id`) in RepoLanguage, (`repo_id`, `license_id`) in RepoLicense, (`language_id`, `year`) in CreatedReposByLanguage.
 
 #### Part 2: Git Commit and Issues
 
@@ -458,9 +470,9 @@ erDiagram
     BoostExternalRepository ||--o{ BoostUsage : "has"
     BoostUsage }o--|| "BoostFile (defined in Boost Library Tracker)" : "Boost header file"
     BoostUsage }o--|| "GitHubFile (defined in GitHub Activity Tracker)" : "current file path"
+    BoostUsage ||--o{ BoostMissingHeaderTmp : "temporary missing header"
 
     BoostExternalRepository {
-        int id PK
         string boost_version "IX"
         boolean is_boost_embedded
         boolean is_boost_used
@@ -471,7 +483,7 @@ erDiagram
     BoostUsage {
         int id PK
         int repo_id FK
-        BigInt boost_header_id FK
+        BigInt boost_header_id FK "Nullable"
         BigInt file_path_id FK
         datetime last_commit_date "IX"
         date excepted_at
@@ -479,13 +491,24 @@ erDiagram
         datetime updated_at
     }
 
+    BoostMissingHeaderTmp {
+        int id PK
+        int usage_id FK "references BoostUsage.id"
+        string header_name
+        datetime created_at
+    }
+
 ```
+
+**Note:** `BoostMissingHeaderTmp` temporarily stores usage history when the Boost include path (`header_name`) does not yet exist in the Boost/GitHub file tables (e.g. `BoostFile` or `GitHubFile`). `usage_id` references `BoostUsage.id`. Once the header is added to the catalog, these records can be processed (e.g. backfilled into `BoostUsage` with a resolved `boost_header_id`) and optionally removed.
 
 **Note:** `BoostExternalRepository` extends `GitHubRepository` and only adds `boost_version`, `is_boost_embedded`, `is_boost_used`, `created_at`, `updated_at`. Repository identity and metadata (e.g. `owner`, `repo_name`, `stars`, `forks`, `description`, `repo_pushed_at`, `repo_created_at`, `repo_updated_at`) are inherited from GitHubRepository.
 
 **Note:** `BoostUsage` links each external repository to a Boost header file and to the file path where it is used: `boost_header_id` references `BoostFile` (defined in Boost Library Tracker; extends `GitHubFile`, only adds `library_id`) for the Boost header; `file_path_id` references `GitHubFile` (defined in GitHub Activity Tracker) for the current file path in that repo. This tracks which external repos use which Boost files and in which files they appear.
 
 **Note:** A composite unique constraint should be applied on (`repo_id`, `boost_header_id`, `file_path_id`) in BoostUsage.
+
+**Note:** `BoostMissingHeaderTmp.usage_id` references `BoostUsage.id` (FK). Consider an index on `usage_id` and on `header_name` for lookups and backfill.
 
 ---
 
