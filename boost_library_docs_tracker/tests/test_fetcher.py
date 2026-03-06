@@ -1,7 +1,7 @@
 """Tests for boost_library_docs_tracker.fetcher (unit tests with mocked HTTP)."""
 
+import pytest
 from unittest.mock import MagicMock, patch
-
 
 from boost_library_docs_tracker import fetcher
 
@@ -19,6 +19,19 @@ def _mock_html_response(html: str, final_url: str | None = None) -> MagicMock:
     resp.text = html
     resp.url = final_url or ""
     return resp
+
+
+@pytest.fixture(autouse=True)
+def _mock_pandoc(monkeypatch):
+    """Patch convert_html_to_markdown for all tests in this module.
+
+    The crawl/walk tests are about HTTP/file traversal logic, not conversion.
+    This avoids a hard dependency on pandoc being installed in CI.
+    """
+    monkeypatch.setattr(
+        "boost_library_docs_tracker.fetcher.convert_html_to_markdown",
+        lambda html: f"[converted]{html}",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +168,7 @@ def test_crawl_library_pages_follows_redirect_url(mock_get_session, _mock_sleep)
 @patch("boost_library_docs_tracker.fetcher.time.sleep", return_value=None)
 @patch("boost_library_docs_tracker.fetcher._get_session")
 def test_crawl_library_pages_returns_markdown(mock_get_session, _mock_sleep):
-    """crawl_library_pages returns converted markdown text, not raw HTML."""
+    """crawl_library_pages returns text from convert_html_to_markdown, not raw HTML."""
     root_url = "https://www.boost.org/doc/libs/1_87_0/libs/algorithm/"
     html = "<html><body><h1>Hello</h1><p>World</p></body></html>"
 
@@ -166,9 +179,6 @@ def test_crawl_library_pages_returns_markdown(mock_get_session, _mock_sleep):
     results = fetcher.crawl_library_pages(root_url, max_pages=1, delay_secs=0)
     assert len(results) == 1
     _url, text = results[0]
-    # Markdown output should not contain raw HTML tags
-    assert "<html>" not in text
-    assert "<body>" not in text
-    # Content should be preserved
-    assert "Hello" in text
-    assert "World" in text
+    # The autouse _mock_pandoc fixture returns "[converted]<original html>"
+    # so we verify conversion was applied (not raw HTML passed through unchanged)
+    assert text == f"[converted]{html}"
