@@ -5,6 +5,8 @@ from operations.md_ops.html_to_md import (
     convert_html_file_to_markdown,
     html_to_markdown,
 )
+from operations.md_ops.issue_to_md import issue_json_to_md
+from operations.md_ops.pr_to_md import pr_json_to_md
 from operations.md_ops.transcript import (
     generate_transcript_from_json,
     parse_datetime_range,
@@ -17,7 +19,9 @@ __all__ = [
     "convert_html_file_to_markdown",
     "generate_transcript_from_json",
     "html_to_markdown",
+    "issue_json_to_md",
     "parse_datetime_range",
     "parse_html_summary",
+    "pr_json_to_md",
     "write_huddle_transcript_md",
 ]

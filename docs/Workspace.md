@@ -12,6 +12,12 @@ workspace/                                    # WORKSPACE_DIR (configurable via 
 │       ├── issues/<issue_number>.json
 │       └── prs/<pr_number>.json
 ├── boost_library_tracker/                    # PDFs, converted files, etc.
+├── raw/
+│   └── boost_mailing_list_tracker/           # Raw API responses (kept, not removed)
+│       └── <list_name>/<msg_id>.json
+├── boost_mailing_list_tracker/               # Mailing list messages (see below)
+│   └── <list_name>/
+│       └── messages/<msg_id>.json            # Formatted cache (processed then removed)
 └── shared/                                   # Temp files used by more than one app
 ```
 
@@ -22,6 +28,14 @@ workspace/                                    # WORKSPACE_DIR (configurable via 
 3. **Persist and remove** – After saving an item to the database, **remove** its JSON file.
 
 So the workspace acts as a short-lived cache: files are deleted once they are in the DB.
+
+### boost_mailing_list_tracker sync flow
+
+1. **Process existing JSONs** – For each list, load every `messages/*.json` in that list's workspace folder, write to the database, then **remove** the file.
+2. **Fetch from API** – Fetch emails from Boost mailing list archives. For each item: **save raw API response** to `workspace/raw/boost_mailing_list_tracker/<list_name>/<msg_id>.json` (these **raw** files are **not** removed). Then save formatted data to `workspace/boost_mailing_list_tracker/<list_name>/messages/<msg_id>.json`, persist to DB, and remove the formatted file.
+3. **start_date** – If `start_date` is not provided, the fetcher uses the day after the latest `sent_at` in the database so only new emails are fetched.
+
+So: **raw/** = permanent archive of scraped API responses; **messages/** = short-lived cache (removed after DB persist).
 
 ## Configuration
 
@@ -60,6 +74,35 @@ for json_path in iter_existing_commit_jsons("boostorg", "boost"):
     ...
 ```
 
+**boost_mailing_list_tracker** (paths and iterators):
+
+```python
+from boost_mailing_list_tracker.workspace import (
+    get_workspace_root,
+    get_list_dir,
+    get_messages_dir,
+    get_message_json_path,
+    iter_existing_message_jsons,
+)
+
+# App workspace root (e.g. workspace/boost_mailing_list_tracker/)
+root = get_workspace_root()
+
+# List dir: workspace/boost_mailing_list_tracker/<list_name>/
+list_dir = get_list_dir("boost@lists.boost.org")
+
+# Path for message JSON: .../messages/<msg_id_safe>.json
+path = get_message_json_path("boost@lists.boost.org", "abc123")
+
+# Raw API responses (kept, not removed): workspace/raw/boost_mailing_list_tracker/<list_name>/<msg_id_safe>.json
+from boost_mailing_list_tracker.workspace import get_raw_json_path
+raw_path = get_raw_json_path("boost@lists.boost.org", "abc123")
+
+# Iterate existing message JSONs for a list (for "process workspace first" step)
+for json_path in iter_existing_message_jsons("boost@lists.boost.org"):
+    ...
+```
+
 **Generic (any app):**
 
 ```python
@@ -87,6 +130,7 @@ Use `--dry-run` to see what would be moved without changing files. For commits, 
 ## Conventions
 
 - **github_activity_tracker:** JSON cache for commits, issues, and PRs; files are removed after being saved to the DB.
+- **boost_mailing_list_tracker:** JSON cache for mailing list messages; files are removed after being saved to the DB.
 - **boost_library_tracker:** Downloaded PDFs, converted documents.
 - **shared:** Files that multiple apps read or write; clean up when no longer needed.
 

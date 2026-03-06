@@ -46,6 +46,44 @@ class Language(models.Model):
         ordering = ["name"]
 
 
+class CreatedReposByLanguage(models.Model):
+    """Yearly repository counts per language."""
+
+    language = models.ForeignKey(
+        Language,
+        on_delete=models.CASCADE,
+        related_name="created_repo_counts",
+        db_column="language_id",
+    )
+    year = models.IntegerField(db_index=True)
+    all_repos = models.IntegerField(default=0)
+    significant_repos = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "github_activity_tracker_createdreposbylanguage"
+        ordering = ["language", "year"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["language", "year"],
+                name="github_activity_tracker_created_lang_year_uniq",
+            ),
+            models.CheckConstraint(
+                check=models.Q(year__gte=0),
+                name="github_activity_tracker_created_lang_year_non_negative",
+            ),
+            models.CheckConstraint(
+                check=models.Q(all_repos__gte=0),
+                name="github_activity_tracker_created_lang_all_repos_non_negative",
+            ),
+            models.CheckConstraint(
+                check=models.Q(significant_repos__gte=0),
+                name="github_activity_tracker_created_lang_sig_repos_non_negative",
+            ),
+        ]
+
+
 class License(models.Model):
     """Reference: license name, spdx_id, url."""
 

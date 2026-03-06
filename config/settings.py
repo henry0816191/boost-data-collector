@@ -42,8 +42,12 @@ INSTALLED_APPS = [
     "operations",
     "github_activity_tracker",
     "boost_library_tracker",
+    "boost_library_usage_dashboard",
+    "boost_usage_tracker",
+    "boost_mailing_list_tracker",
     "cppa_pinecone_sync",
     "cppa_slack_transcript_tracker",
+    "cppa_slack_tracker",
     "discord_activity_tracker",
 ]
 
@@ -124,11 +128,19 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 WORKSPACE_DIR = Path(
     env("WORKSPACE_DIR", default=str(BASE_DIR / "workspace"))
 ).resolve()
+# Raw: unprocessed fetch output (e.g. raw/cppa_slack_tracker/<team_id>/<channel_id>/YYYY-MM-DD.json)
+_raw_dir_env = (env("RAW_DIR", default="") or "").strip()
+RAW_DIR = Path(_raw_dir_env or str(WORKSPACE_DIR / "raw")).resolve()
+RAW_DIR.mkdir(parents=True, exist_ok=True)
 _WORKSPACE_APP_SLUGS = (
     "github_activity_tracker",
     "boost_library_tracker",
+    "boost_library_usage_dashboard",
+    "boost_usage_tracker",
     "cppa_slack_transcript_tracker",
+    "cppa_slack_tracker",
     "discord_activity_tracker",
+    "boost_mailing_list_tracker",
     "shared",
 )
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)

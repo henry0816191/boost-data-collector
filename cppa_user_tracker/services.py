@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Optional, Protocol
 
+from django.db import transaction
 from django.db.models import Min
 
 from .models import (
@@ -23,6 +24,7 @@ from .models import (
     GitHubAccount,
     GitHubAccountType,
     MailingListProfile,
+    SlackUser,
     DiscordProfile,
 )
 
@@ -139,8 +141,6 @@ def get_or_create_mailing_list_profile(
     email_val = (email or "").strip()
     if not display_name_val:
         raise ValueError("display_name must not be empty.")
-    if not email_val:
-        raise ValueError("email must not be empty.")
 
     profile = (
         MailingListProfile.objects.filter(
@@ -156,7 +156,9 @@ def get_or_create_mailing_list_profile(
     profile = MailingListProfile.objects.create(
         display_name=display_name_val,
     )
-    add_email(profile, email_val, is_primary=True)
+    if email_val:
+        add_email(profile, email_val, is_primary=True)
+
     return profile, True
 
 
@@ -242,6 +244,45 @@ def _get_next_negative_github_account_id() -> int:
     )
     min_id = r.get("github_account_id__min")
     return (min_id - 1) if min_id is not None else -1
+
+
+@transaction.atomic
+def get_or_create_slack_user(user_data: dict[str, Any]) -> tuple[SlackUser, bool]:
+    """Get or create a SlackUser from Slack API user data. Returns (SlackUser, created).
+
+    If the user exists, updates username, display_name, and avatar_url from user_data.
+    Creates an Email linked to the user if profile.email is provided and not already
+    present. Does not create or link an Identity (that is handled separately).
+    Raises ValueError if user_data has no 'id'.
+    """
+    user_id = (user_data.get("id") or "").strip()
+    if not user_id:
+        raise ValueError("Slack user ID ('id') is required")
+    profile = user_data.get("profile") or {}
+    username = (user_data.get("name") or "").strip()
+    display_name = (user_data.get("real_name") or user_data.get("name") or "").strip()
+    avatar_url = (profile.get("image_72") or "").strip()
+    user, created = SlackUser.objects.get_or_create(
+        slack_user_id=user_id,
+        defaults={
+            "username": username,
+            "display_name": display_name,
+            "avatar_url": avatar_url,
+        },
+    )
+    if not created:
+        user.username = username or user.username
+        user.display_name = display_name or user.display_name
+        user.avatar_url = avatar_url or user.avatar_url
+        user.save()
+    email_str = (profile.get("email") or "").strip()
+    if email_str and not user.emails.filter(email=email_str).exists():
+        add_email(
+            user,
+            email_str,
+            is_primary=not user.emails.filter(is_active=True).exists(),
+        )
+    return user, created
 
 
 def get_or_create_unknown_github_account(

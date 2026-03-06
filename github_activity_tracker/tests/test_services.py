@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from github_activity_tracker import services
 from github_activity_tracker.models import (
+    CreatedReposByLanguage,
     IssueLabel,
     PullRequestLabel,
     RepoLanguage,
@@ -47,6 +48,43 @@ def test_get_or_create_language_strips_whitespace():
     lang, created = services.get_or_create_language("  Python  ")
     assert created is True
     assert lang.name == "Python"
+
+
+@pytest.mark.django_db
+def test_create_or_update_created_repos_by_language_creates(language):
+    """Creates a new yearly language row when missing."""
+    row, created = services.create_or_update_created_repos_by_language(
+        language=language,
+        year=2024,
+        all_repos=500,
+        significant_repos=50,
+    )
+    assert created is True
+    assert row.year == 2024
+    assert row.all_repos == 500
+    assert row.significant_repos == 50
+
+
+@pytest.mark.django_db
+def test_create_or_update_created_repos_by_language_updates_existing(language):
+    """Updates all_repos/significant_repos for existing (language, year)."""
+    existing = CreatedReposByLanguage.objects.create(
+        language=language,
+        year=2024,
+        all_repos=100,
+        significant_repos=10,
+    )
+    row, created = services.create_or_update_created_repos_by_language(
+        language=language,
+        year=2024,
+        all_repos=150,
+        significant_repos=15,
+    )
+    assert created is False
+    assert row.id == existing.id
+    row.refresh_from_db()
+    assert row.all_repos == 150
+    assert row.significant_repos == 15
 
 
 # --- get_or_create_license ---

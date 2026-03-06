@@ -116,19 +116,42 @@ def get_or_create_boost_version(
 def get_or_create_boost_library_version(
     library: BoostLibrary,
     version: BoostVersion,
-    cpp_version: str = "",
-    description: str = "",
+    cpp_version: str | None = None,
+    description: str | None = None,
+    key: str | None = None,
+    documentation: str | None = None,
 ) -> tuple[BoostLibraryVersion, bool]:
-    """Get or create BoostLibraryVersion for library + version. If exists, updates cpp_version and description."""
+    """Get or create BoostLibraryVersion for library + version. If exists, updates only fields that are provided (not None)."""
+    defaults = {}
+    if cpp_version is not None:
+        defaults["cpp_version"] = cpp_version
+    if description is not None:
+        defaults["description"] = description
+    if key is not None:
+        defaults["key"] = key
+    if documentation is not None:
+        defaults["documentation"] = documentation
     obj, created = BoostLibraryVersion.objects.get_or_create(
         library=library,
         version=version,
-        defaults={"cpp_version": cpp_version, "description": description},
+        defaults=defaults,
     )
     if not created:
-        obj.cpp_version = cpp_version
-        obj.description = description
-        obj.save(update_fields=["cpp_version", "description"])
+        update_fields = []
+        if cpp_version is not None:
+            obj.cpp_version = cpp_version
+            update_fields.append("cpp_version")
+        if description is not None:
+            obj.description = description
+            update_fields.append("description")
+        if key is not None:
+            obj.key = key
+            update_fields.append("key")
+        if documentation is not None:
+            obj.documentation = documentation
+            update_fields.append("documentation")
+        if update_fields:
+            obj.save(update_fields=[*update_fields, "updated_at"])
     return obj, created
 
 
@@ -206,3 +229,24 @@ def add_library_version_role(
         rel.is_author = rel.is_author or is_author
         rel.save()
     return rel, created
+
+
+def get_or_create_account_from_name(name: str) -> GitHubAccount:
+    """Get or create a GitHubAccount for a contributor name string (from libraries.json).
+
+    Looks up by username first. If not found, creates an unknown account with negative ID.
+    """
+    from cppa_user_tracker.services import (
+        get_or_create_unknown_github_account,
+    )
+    from cppa_user_tracker.models import GitHubAccount
+
+    name = (name or "").strip()
+    if not name:
+        return get_or_create_unknown_github_account()[0]
+
+    existing = GitHubAccount.objects.filter(username=name).first()
+    if existing:
+        return existing
+
+    return get_or_create_unknown_github_account(name=name)[0]

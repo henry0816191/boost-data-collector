@@ -3,7 +3,10 @@
 import pytest
 from django.db import IntegrityError
 
-from github_activity_tracker.models import GitHubRepository
+from github_activity_tracker.models import (
+    CreatedReposByLanguage,
+    GitHubRepository,
+)
 
 
 @pytest.mark.django_db
@@ -52,3 +55,21 @@ def test_license_creation(license_obj):
     assert license_obj.name == "BSL-1.0"
     assert license_obj.spdx_id == "BSL-1.0"
     assert license_obj.id is not None
+
+
+@pytest.mark.django_db
+def test_created_repos_by_language_unique_language_year(language):
+    """CreatedReposByLanguage enforces unique (language, year)."""
+    CreatedReposByLanguage.objects.create(
+        language=language,
+        year=2025,
+        all_repos=100,
+        significant_repos=10,
+    )
+    with pytest.raises(IntegrityError):
+        CreatedReposByLanguage.objects.create(
+            language=language,
+            year=2025,
+            all_repos=120,
+            significant_repos=12,
+        )

@@ -102,6 +102,19 @@ class SlackAPIClient:
         """Get channel info by ID."""
         return self._request("GET", "conversations.info", params={"channel": channel})
 
+    def conversations_members(
+        self,
+        channel: str,
+        limit: int = 200,
+        cursor: Optional[str] = None,
+    ) -> dict:
+        """List member IDs in a channel. Returns members array and response_metadata.next_cursor."""
+        safe_limit = max(1, min(limit, 1000))
+        params = {"channel": channel, "limit": safe_limit}
+        if cursor:
+            params["cursor"] = cursor
+        return self._request("GET", "conversations.members", params=params)
+
     def conversations_history(
         self,
         channel: str,
@@ -111,7 +124,8 @@ class SlackAPIClient:
         cursor: Optional[str] = None,
     ) -> dict:
         """Get message history for a channel."""
-        params = {"channel": channel, "limit": min(limit, 1000)}
+        safe_limit = max(1, min(limit, 1000))
+        params = {"channel": channel, "limit": safe_limit}
         if oldest:
             params["oldest"] = oldest
         if latest:
@@ -123,6 +137,26 @@ class SlackAPIClient:
     def users_info(self, user: str) -> dict:
         """Get user info by ID."""
         return self._request("GET", "users.info", params={"user": user})
+
+    def users_list(
+        self,
+        limit: int = 200,
+        cursor: Optional[str] = None,
+    ) -> dict:
+        """List users in the workspace. Returns members with profile, etc."""
+        safe_limit = max(1, min(limit, 1000))
+        params = {"limit": safe_limit}
+        if cursor:
+            params["cursor"] = cursor
+        return self._request("GET", "users.list", params=params)
+
+    def team_info(self) -> dict:
+        """Get workspace/team info. Returns team dict with id, name, etc. Requires team:read scope."""
+        return self._request("GET", "team.info")
+
+    def auth_test(self) -> dict:
+        """Check auth and get bot/team info. Returns team (name), team_id, url, etc. No extra scope."""
+        return self._request("POST", "auth.test")
 
     def files_info(
         self,
