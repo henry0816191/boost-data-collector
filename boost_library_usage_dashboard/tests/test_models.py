@@ -22,20 +22,30 @@ def test_boost_usage_meta_contract():
     assert BoostUsage._meta.db_table == "boost_usage_tracker_boostusage"
 
 
+# Exclude inherited GitHubRepository required fields when validating only BoostExternalRepository fields.
+_BOOST_EXT_REPO_EXCLUDE = [
+    "githubrepository_ptr",
+    "owner_account",
+    "repo_name",
+    "created_at",
+    "updated_at",
+]
+
+
 def test_boost_external_repository_boost_version_allows_empty_string():
     obj = BoostExternalRepository(boost_version="")
-    obj.full_clean(exclude=["githubrepository_ptr", "created_at", "updated_at"])
+    obj.full_clean(exclude=_BOOST_EXT_REPO_EXCLUDE)
 
 
 def test_boost_external_repository_boost_version_max_boundary_valid():
     obj = BoostExternalRepository(boost_version="x" * 64)
-    obj.full_clean(exclude=["githubrepository_ptr", "created_at", "updated_at"])
+    obj.full_clean(exclude=_BOOST_EXT_REPO_EXCLUDE)
 
 
 def test_boost_external_repository_boost_version_over_max_invalid():
     obj = BoostExternalRepository(boost_version="x" * 65)
     with pytest.raises(ValidationError):
-        obj.full_clean(exclude=["githubrepository_ptr", "created_at", "updated_at"])
+        obj.full_clean(exclude=_BOOST_EXT_REPO_EXCLUDE)
 
 
 def test_boost_usage_optional_fields_allow_null():
