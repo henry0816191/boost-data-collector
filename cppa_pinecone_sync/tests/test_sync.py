@@ -24,6 +24,8 @@ def test_empty_sync_result_structure():
         "total": 0,
         "failed_count": 0,
         "failed_ids": [],
+        "attempted_source_ids": [],
+        "successful_source_ids": [],
         "errors": [],
         "update_errors": [],
     }
