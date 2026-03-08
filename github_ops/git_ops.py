@@ -32,8 +32,11 @@ _thread_local = threading.local()
 
 
 def _get_worker_session(token: str) -> requests.Session:
-    """One session per thread for parallel blob creation."""
-    if not hasattr(_thread_local, "session"):
+    """One session per thread for parallel blob creation; keyed by token so different tokens get separate sessions."""
+    if (
+        not hasattr(_thread_local, "session")
+        or getattr(_thread_local, "_token", None) != token
+    ):
         s = requests.Session()
         s.headers.update(
             {
@@ -42,6 +45,7 @@ def _get_worker_session(token: str) -> requests.Session:
             }
         )
         _thread_local.session = s
+        _thread_local._token = token
     return _thread_local.session
 
 
@@ -371,21 +375,33 @@ def upload_folder_to_github(
 
         # Create blobs in parallel (each worker reads and encodes its file on demand)
         tree_items = []
+        blob_failures = []
         with ThreadPoolExecutor(max_workers=_UPLOAD_FOLDER_MAX_WORKERS) as executor:
             futures = {
                 executor.submit(_create_blob_with_retry, base, token, rp, lp): (rp, lp)
                 for rp, lp in file_items
             }
             for fut in as_completed(futures):
-                repo_path, blob_sha = fut.result()
-                tree_items.append(
-                    {
-                        "path": repo_path,
-                        "mode": "100644",
-                        "type": "blob",
-                        "sha": blob_sha,
-                    }
-                )
+                rp, lp = futures[fut]
+                try:
+                    repo_path, blob_sha = fut.result()
+                    tree_items.append(
+                        {
+                            "path": repo_path,
+                            "mode": "100644",
+                            "type": "blob",
+                            "sha": blob_sha,
+                        }
+                    )
+                except Exception as e:
+                    blob_failures.append((rp, e))
+        if blob_failures:
+            created_shas = [t["sha"] for t in tree_items]
+            failed_paths = [p for p, _ in blob_failures]
+            raise RuntimeError(
+                f"Blob creation failed for {len(blob_failures)} file(s): {failed_paths}. "
+                f"Created blobs (now orphaned): {created_shas[:5]}{'...' if len(created_shas) > 5 else ''}."
+            ) from blob_failures[0][1]
 
         tree_data = {"base_tree": base_tree, "tree": tree_items}
         r = session.post(f"{base}/git/trees", json=tree_data, timeout=30)
