@@ -180,7 +180,7 @@ BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_TOKEN = (
 ).strip() or GITHUB_TOKEN_WRITE
 BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH = (
     env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH", default="") or ""
-).strip() or "main"
+).strip()
 
 # Slack (bot + app token for operations.slack_ops and cppa_slack_transcript_tracker)
 SLACK_BOT_TOKEN = (env("SLACK_BOT_TOKEN", default="") or "").strip()

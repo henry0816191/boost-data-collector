@@ -113,6 +113,17 @@ class Command(BaseCommand):
         clone_dir = (
             Path(settings.RAW_DIR) / "boost_library_usage_dashboard" / owner / repo
         )
+        clone_dir = clone_dir.resolve()
+        output_dir = output_dir.resolve()
+        if (
+            clone_dir == output_dir
+            or clone_dir in output_dir.parents
+            or output_dir in clone_dir.parents
+        ):
+            raise CommandError(
+                "--output-dir must not overlap with the publish clone path: "
+                f"{clone_dir}"
+            )
         clone_dir.parent.mkdir(parents=True, exist_ok=True)
         token = (
             getattr(settings, "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_TOKEN", None)

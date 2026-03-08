@@ -328,7 +328,17 @@ def upload_folder_to_github(
         if client is not None:
             token = token or client.token
             base = f"{client.rest_base_url}/repos/{owner}/{repo}"
-            session = client.session
+            if token == getattr(client, "token", None):
+                session = client.session
+            else:
+                session = requests.Session()
+                session.headers.update(dict(client.session.headers))
+                session.headers.update(
+                    {
+                        "Authorization": f"token {token}",
+                        "Accept": "application/vnd.github.v3+json",
+                    }
+                )
         else:
             if token is None:
                 token = get_github_token(use="write")
