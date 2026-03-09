@@ -15,11 +15,6 @@ from operations.slack_ops.tokens import get_slack_client
 logger = logging.getLogger(__name__)
 
 
-def _get_client():
-    """Return the Slack API client from slack_ops."""
-    return get_slack_client()
-
-
 def fetch_user_list(
     _team_id: str,
     *,
@@ -31,7 +26,7 @@ def fetch_user_list(
     Returns list of member dicts (id, name, real_name, profile, ...).
     """
     if client is None:
-        client = _get_client()
+        client = get_slack_client(team_id=_team_id)
     members = []
     cursor = None
     while True:
@@ -53,13 +48,14 @@ def fetch_user_info(
     user_id: str,
     *,
     client=None,
+    team_id: Optional[str] = None,
 ) -> Optional[dict]:
     """
     Fetch detailed user info for user_id.
     Returns the Slack user object (id, name, real_name, profile, ...) or None on error.
     """
     if client is None:
-        client = _get_client()
+        client = get_slack_client(team_id=team_id)
     data = client.users_info(user_id)
     if not data.get("ok"):
         logger.warning(
@@ -83,7 +79,7 @@ def fetch_team_info(
     falls back to auth.test which returns team name without extra scope.
     """
     if client is None:
-        client = _get_client()
+        client = get_slack_client(team_id=team_id)
     data = client.team_info()
     if data.get("ok"):
         team = data.get("team")
@@ -118,7 +114,7 @@ def fetch_channel_list(
     The bot token is scoped to one workspace. Returns list of channel dicts (id, name, ...).
     """
     if client is None:
-        client = _get_client()
+        client = get_slack_client(team_id=_team_id)
     channels = []
     cursor = None
     while True:
@@ -153,33 +149,40 @@ def _ts_to_utc_date(ts: Optional[str]) -> Optional[date]:
 
 def fetch_messages(
     channel_id: str,
-    start_date: date | datetime,
+    start_date: date | datetime | None,
     end_date: date | datetime,
     *,
     client=None,
+    team_id: Optional[str] = None,
 ) -> list[dict]:
     """
-    Fetch all messages for a channel that were created or updated on any day
-    in [start_date, end_date] (inclusive, UTC).
+    Fetch all messages for a channel.
 
-    Uses conversations.history over the full range, then filters to messages
-    whose created or edited date falls within the range.
+    When start_date is set: messages in [start_date, end_date] (inclusive, UTC).
+    When start_date is None: all messages up to end_date (API called without oldest,
+    so from the beginning of the channel). Uses conversations.history, then filters
+    by created or edited date.
     """
     if client is None:
-        client = _get_client()
-    if isinstance(start_date, datetime):
-        start_date = start_date.astimezone(timezone.utc).date()
+        client = get_slack_client(team_id=team_id)
     if isinstance(end_date, datetime):
         end_date = end_date.astimezone(timezone.utc).date()
-    range_start = datetime(
-        start_date.year,
-        start_date.month,
-        start_date.day,
-        0,
-        0,
-        0,
-        tzinfo=timezone.utc,
-    )
+    if start_date is not None:
+        if isinstance(start_date, datetime):
+            start_date = start_date.astimezone(timezone.utc).date()
+        range_start = datetime(
+            start_date.year,
+            start_date.month,
+            start_date.day,
+            0,
+            0,
+            0,
+            tzinfo=timezone.utc,
+        )
+        oldest_ts: Optional[str] = str(range_start.timestamp())
+    else:
+        oldest_ts = None
+
     range_end = datetime(
         end_date.year,
         end_date.month,
@@ -190,18 +193,19 @@ def fetch_messages(
         999999,
         tzinfo=timezone.utc,
     )
-    oldest_ts = str(range_start.timestamp())
     latest_ts = str(range_end.timestamp())
-    all_messages = []
+    messages = []
     cursor = None
     while True:
-        data = client.conversations_history(
-            channel=channel_id,
-            limit=1000,
-            oldest=oldest_ts,
-            latest=latest_ts,
-            cursor=cursor,
-        )
+        kwargs = {
+            "channel": channel_id,
+            "limit": 1000,
+            "latest": latest_ts,
+            "cursor": cursor,
+        }
+        if oldest_ts is not None:
+            kwargs["oldest"] = oldest_ts
+        data = client.conversations_history(**kwargs)
         if not data.get("ok"):
             logger.warning(
                 "conversations.history failed for %s: %s",
@@ -210,23 +214,29 @@ def fetch_messages(
             )
             break
         batch = data.get("messages", [])
-        all_messages.extend(batch)
+        for msg in batch:
+            created_d = _ts_to_utc_date(msg.get("ts"))
+            if start_date is not None:
+                if created_d and start_date <= created_d <= end_date:
+                    messages.append(msg)
+                    continue
+                edited = msg.get("edited") or {}
+                edited_d = _ts_to_utc_date(edited.get("ts"))
+                if edited_d and start_date <= edited_d <= end_date:
+                    messages.append(msg)
+            else:
+                if created_d and created_d <= end_date:
+                    messages.append(msg)
+                    continue
+                edited = msg.get("edited") or {}
+                edited_d = _ts_to_utc_date(edited.get("ts"))
+                if edited_d and edited_d <= end_date:
+                    messages.append(msg)
         if not batch:
             break
         cursor = (data.get("response_metadata") or {}).get("next_cursor")
         if not cursor:
             break
-    # Keep only messages created or updated on some day in [start_date, end_date]
-    messages = []
-    for msg in all_messages:
-        created_d = _ts_to_utc_date(msg.get("ts"))
-        if created_d and start_date <= created_d <= end_date:
-            messages.append(msg)
-            continue
-        edited = msg.get("edited") or {}
-        edited_d = _ts_to_utc_date(edited.get("ts"))
-        if edited_d and start_date <= edited_d <= end_date:
-            messages.append(msg)
     return messages
 
 
@@ -234,13 +244,14 @@ def fetch_channel_user_list(
     channel_id: str,
     *,
     client=None,
+    team_id: Optional[str] = None,
 ) -> list[str]:
     """
     Fetch the list of user IDs that are members of the channel.
     Returns list of Slack user IDs (strings).
     """
     if client is None:
-        client = _get_client()
+        client = get_slack_client(team_id=team_id)
     user_ids = []
     cursor = None
     while True:
@@ -250,12 +261,15 @@ def fetch_channel_user_list(
             cursor=cursor,
         )
         if not data.get("ok"):
+            error = data.get("error", "unknown")
             logger.warning(
                 "conversations.members failed for %s: %s",
                 channel_id,
-                data.get("error", "unknown"),
+                error,
             )
-            break
+            raise RuntimeError(
+                f"conversations.members failed for channel_id={channel_id}: {error}"
+            )
         user_ids.extend(data.get("members", []))
         cursor = (data.get("response_metadata") or {}).get("next_cursor")
         if not cursor:

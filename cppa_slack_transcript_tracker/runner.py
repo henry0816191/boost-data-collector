@@ -5,6 +5,8 @@ Runs the Slack listener and huddle processing logic.
 
 import logging
 
+from django.conf import settings
+
 from cppa_slack_transcript_tracker.workspace import (
     get_workspace_root,
     set_working_directory,
@@ -30,7 +32,9 @@ def run_slack_huddle(bot_token=None, app_token=None):
         )
 
     try:
-        bot_token = bot_token or get_slack_bot_token()
+        team_id = (getattr(settings, "SLACK_TEAM_ID", None) or "").strip() or None
+        token = (bot_token or "").strip()
+        bot_token = token or get_slack_bot_token(team_id=team_id)
     except ValueError:
         bot_token = None
     try:

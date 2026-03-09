@@ -15,6 +15,8 @@ from datetime import datetime
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
+from django.conf import settings
+
 from operations.slack_ops import (
     get_slack_app_token,
     get_slack_bot_token,
@@ -50,7 +52,18 @@ class SlackListener:
     """Slack Event Listener using Slack Bolt."""
 
     def __init__(self, bot_token=None, app_token=None):
-        self.bot_token = bot_token or get_slack_bot_token()
+        token = (bot_token or "").strip()
+        if token:
+            self.bot_token = token
+        else:
+            try:
+                team_id = (
+                    getattr(settings, "SLACK_TEAM_ID", None) or ""
+                ).strip() or None
+            except Exception:
+                team_id = None
+            self.bot_token = get_slack_bot_token(team_id=team_id)
+        app_token = (app_token or "").strip()
         self.app_token = app_token or get_slack_app_token()
         if not self.bot_token:
             raise ValueError("Missing SLACK_BOT_TOKEN. Set it in .env file.")

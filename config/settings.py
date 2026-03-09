@@ -168,12 +168,34 @@ GITHUB_SLACK_HUDDLE_REPO_NAME = (
     env("GITHUB_SLACK_HUDDLE_REPO_NAME", default="") or ""
 ).strip()
 
+
 # Slack (bot + app token for operations.slack_ops and cppa_slack_transcript_tracker)
-SLACK_BOT_TOKEN = (env("SLACK_BOT_TOKEN", default="") or "").strip()
+# SLACK_BOT_TOKEN: built from env (prefixed vars). In settings it is a dict (team_id -> token).
+# Env: SLACK_TEAM_IDS=T01234,T05678 and SLACK_BOT_TOKEN_T01234=xoxb-..., etc.
+def _slack_bot_token_from_env():
+    """Build a dict of team_id -> bot token from SLACK_TEAM_IDS and SLACK_BOT_TOKEN_<team_id> env vars."""
+    out = {}
+    ids_raw = (env("SLACK_TEAM_IDS", default="") or "").strip()
+    if not ids_raw:
+        return out
+    for tid in ids_raw.split(","):
+        tid = tid.strip()
+        if not tid:
+            continue
+        key = f"SLACK_BOT_TOKEN_{tid}"
+        token = (env(key, default="") or "").strip()
+        if token:
+            out[tid] = token
+    return out
+
+
+SLACK_BOT_TOKEN = _slack_bot_token_from_env()
+
 SLACK_APP_TOKEN = (env("SLACK_APP_TOKEN", default="") or "").strip()
 # Optional: for cppa_slack_transcript_tracker (huddle transcript, token extraction)
 SLACK_TEAM_ID = (env("SLACK_TEAM_ID", default="") or "").strip()
-# Internal session tokens (xoxc/xoxd) are ToS-sensitive; only read when explicitly opted in.
+
+# Internal session tokens
 _allow_internal_slack_tokens = (
     env("ALLOW_INTERNAL_SLACK_TOKENS", default="") or ""
 ).strip().lower() == "true"

@@ -1,14 +1,12 @@
 """
 Sync Slack channels with the database.
 
-If workspace/cppa_slack_tracker/<team_slug>/channels.json exists, process it
-(channel by channel via _process_channel_info) then remove the file. Otherwise
-fetch channels via cppa_slack_tracker.fetcher.fetch_channel_list and sync.
+Fetches channels via cppa_slack_tracker.fetcher.fetch_channel_list (or
+conversations.info for a single channel_id) and syncs to the database.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Optional
 
@@ -18,7 +16,6 @@ from cppa_slack_tracker.services import (
     get_or_create_slack_channel,
     get_or_create_slack_team,
 )
-from cppa_slack_tracker.workspace import get_channels_json_path
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +52,7 @@ def _process_channel_info(ch: dict, team: SlackTeam) -> bool:
     """
     if not ch.get("id"):
         return False
-    channel, _ = get_or_create_slack_channel(
-        ch, team, creator_user_id=ch.get("creator")
-    )
+    channel, _ = get_or_create_slack_channel(ch, team)
     return channel is not None
 
 
@@ -72,11 +67,8 @@ def sync_channels(
     """
     Sync channels for a team to the database.
 
-    If channel_id is set, fetch only that channel (conversations.info). Otherwise
-    first checks workspace/cppa_slack_tracker/<team_slug>/channels.json; if it
-    exists, process and remove. If not, fetch via fetch_channel_list(team_id).
-
-    Returns (success_count, error_count).
+    If channel_id is set, fetch only that channel (conversations.info).
+    Otherwise fetch via fetch_channel_list(team_id). Returns (success_count, error_count).
     """
     success_count = 0
     error_count = 0
@@ -85,8 +77,9 @@ def sync_channels(
     if channel_id:
         from operations.slack_ops.tokens import get_slack_client
 
+        tid = team_id or team.team_id
         try:
-            data = get_slack_client().conversations_info(channel_id)
+            data = get_slack_client(team_id=tid).conversations_info(channel=channel_id)
         except Exception:
             logger.exception("conversations.info raised for channel_id=%s", channel_id)
             return 0, 1
@@ -104,52 +97,7 @@ def sync_channels(
             logger.warning("Failed to sync channel %s: %s", channel_id, e)
             return 0, 1
 
-    channels_path = get_channels_json_path(team.team_name)
-    channels_from_file = None
-    if channels_path.exists():
-        try:
-            data = json.loads(channels_path.read_text(encoding="utf-8"))
-            if isinstance(data, list):
-                channels_from_file = data
-            else:
-                logger.warning(
-                    "Unexpected format in %s (not a list); removing file",
-                    channels_path,
-                )
-                try:
-                    channels_path.unlink()
-                except OSError as unlink_e:
-                    logger.warning("Failed to remove %s: %s", channels_path, unlink_e)
-        except Exception as e:
-            logger.exception("Failed to load %s: %s", channels_path, e)
-            try:
-                channels_path.unlink()
-            except OSError as unlink_e:
-                logger.warning("Failed to remove %s: %s", channels_path, unlink_e)
-
-        if channels_from_file is not None:
-            has_invalid_entry = False
-            for ch in channels_from_file:
-                if not isinstance(ch, dict):
-                    has_invalid_entry = True
-                    error_count += 1
-                    logger.warning("Skipping malformed channel payload: %r", ch)
-                    continue
-                try:
-                    if _process_channel_info(ch, team):
-                        success_count += 1
-                except Exception as e:
-                    logger.warning("Failed to sync channel %s: %s", ch.get("id"), e)
-                    error_count += 1
-            if not has_invalid_entry:
-                try:
-                    channels_path.unlink()
-                except OSError as e:
-                    logger.warning("Failed to remove %s: %s", channels_path, e)
-                return success_count, error_count
-            # Fall through to API fetch to recover from malformed file content
-
-    # No channels.json or load failed: fetch from API
+    # Fetch from API
     try:
         channels = fetch_channel_list(
             team_id or team.team_id,

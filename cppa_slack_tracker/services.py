@@ -73,14 +73,18 @@ _UNKNOWN_SLACK_USER_DATA = {
 }
 
 
-def _get_or_fetch_slack_user(user_id: str) -> SlackUser:
+def _get_or_fetch_slack_user(
+    user_id: str,
+    *,
+    team_id: Optional[str] = None,
+) -> SlackUser:
     """Get a Slack user from DB; if not found, fetch via fetch_user_info and upsert. Returns unknown user (id -1) if not found."""
     if user_id == _UNKNOWN_SLACK_USER_ID:
         return get_or_create_slack_user(_UNKNOWN_SLACK_USER_DATA)[0]
     try:
         return SlackUser.objects.get(slack_user_id=user_id)
     except SlackUser.DoesNotExist:
-        slack_user_data = fetch_user_info(user_id)
+        slack_user_data = fetch_user_info(user_id, team_id=team_id)
         if slack_user_data:
             return get_or_create_slack_user(slack_user_data)[0]
         return get_or_create_slack_user(_UNKNOWN_SLACK_USER_DATA)[0]
@@ -111,14 +115,14 @@ def get_or_create_slack_team(
 def get_or_create_slack_channel(
     slack_channel: dict[str, Any],
     team: SlackTeam,
-    creator_user_id: Optional[str] = None,
 ) -> tuple[Optional[SlackChannel], bool]:
     """Get or create a Slack channel. Returns (channel, created); channel is None when skipped."""
     if not slack_channel.get("id"):
         raise ValueError("Slack channel ID is required")
     creator = None
+    creator_user_id = slack_channel.get("creator")
     if creator_user_id:
-        creator = _get_or_fetch_slack_user(creator_user_id)
+        creator = _get_or_fetch_slack_user(creator_user_id, team_id=team.team_id)
     description = ""
     purpose = slack_channel.get("purpose")
     topic = slack_channel.get("topic")
@@ -267,7 +271,9 @@ def save_slack_message(
             logger.warning("Skipping channel_join without ts")
             return None
         if slack_message.get("user"):
-            user = _get_or_fetch_slack_user(slack_message["user"])
+            user = _get_or_fetch_slack_user(
+                slack_message["user"], team_id=channel.team.team_id
+            )
             add_channel_membership_change(
                 channel,
                 user.slack_user_id,
@@ -281,7 +287,9 @@ def save_slack_message(
             logger.warning("Skipping channel_leave without ts")
             return None
         if slack_message.get("user"):
-            user = _get_or_fetch_slack_user(slack_message["user"])
+            user = _get_or_fetch_slack_user(
+                slack_message["user"], team_id=channel.team.team_id
+            )
             add_channel_membership_change(
                 channel,
                 user.slack_user_id,
@@ -293,7 +301,9 @@ def save_slack_message(
     user: Optional[SlackUser] = None
     text: str
     if subtype == "file_comment":
-        user = _get_or_fetch_slack_user(slack_message.get("user", "") or "-1")
+        user = _get_or_fetch_slack_user(
+            slack_message.get("user", "") or "-1", team_id=channel.team.team_id
+        )
         text = slack_message.get("text", "")
         comment = slack_message.get("comment")
         if isinstance(comment, dict):
@@ -309,7 +319,7 @@ def save_slack_message(
             if slack_message.get("text") == "A file was commented on":
                 return None
             raise ValueError("User not found")
-        user = _get_or_fetch_slack_user(user_id)
+        user = _get_or_fetch_slack_user(user_id, team_id=channel.team.team_id)
 
     clean_text = text.replace("\x00", "").replace("\u0000", "")
     ts = slack_message.get("ts")
