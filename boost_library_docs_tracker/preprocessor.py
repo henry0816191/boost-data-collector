@@ -103,12 +103,15 @@ def _parse_int_ids(failed_ids: list[str]) -> list[int]:
 
 def _get_library_name(doc_content: BoostDocContent) -> str:
     """
-    Derive the library name for a BoostDocContent from its BoostLibraryDocumentation relations.
+    Derive the library name from the most recently created documentation relation.
+
+    A BoostDocContent row can be linked to multiple library/version rows over time,
+    so use the latest BoostLibraryDocumentation relation for the best current match.
     Returns an empty string if no relation is found.
     """
     rel = (
         doc_content.library_relations.select_related("boost_library_version__library")
-        .order_by("id")
+        .order_by("-created_at", "-id")
         .first()
     )
     if rel is None:
@@ -132,7 +135,7 @@ def _build_documents(
         )
 
         page_content = workspace.load_page_by_url(doc_content.url)
-        if not page_content:
+        if page_content is None:
             logger.warning(
                 "Workspace file missing for url=%s (doc_content_id=%d), skipping.",
                 doc_content.url,

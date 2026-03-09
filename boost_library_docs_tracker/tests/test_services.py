@@ -68,18 +68,24 @@ def test_get_or_create_doc_content_empty_url_raises():
 @pytest.mark.django_db
 def test_get_or_create_doc_content_updates_scraped_at_on_unchanged():
     """get_or_create_doc_content updates scraped_at even when content is unchanged."""
-    obj1, _ = services.get_or_create_doc_content(
-        url="https://example.com/page2",
-        content_hash="f" * 64,
-    )
-    old_scraped_at = obj1.scraped_at
-    obj2, change_type = services.get_or_create_doc_content(
-        url="https://example.com/page2",
-        content_hash="f" * 64,
-    )
+    from datetime import datetime, timezone
+    from unittest.mock import patch
+
+    t1 = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+    t2 = datetime(2024, 6, 1, 12, 0, 1, tzinfo=timezone.utc)
+    with patch("boost_library_docs_tracker.services._now", side_effect=[t1, t2]):
+        obj1, _ = services.get_or_create_doc_content(
+            url="https://example.com/page2",
+            content_hash="f" * 64,
+        )
+        old_scraped_at = obj1.scraped_at
+        obj2, change_type = services.get_or_create_doc_content(
+            url="https://example.com/page2",
+            content_hash="f" * 64,
+        )
     assert change_type == "unchanged"
     obj2.refresh_from_db()
-    assert obj2.scraped_at >= old_scraped_at
+    assert obj2.scraped_at > old_scraped_at
 
 
 @pytest.mark.django_db

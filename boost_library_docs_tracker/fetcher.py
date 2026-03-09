@@ -15,6 +15,7 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
+from .workspace import get_extract_dir
 from .html_to_md import convert_html_to_markdown  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -166,7 +167,7 @@ def _library_root_for_key(lib_key: str) -> Path:
 def get_start_path(lib_key: str, lib_documentation: str) -> Path:
     """
     Resolve first HTML path from BoostLibraryVersion.key/documentation.
-    Returned path is relative to extracted source root.
+    Returned path is relative to extracted source root("/libs(docs)/<lib_key>/").
     """
     lib_root = _library_root_for_key(lib_key)
     doc = (lib_documentation or "").strip()
@@ -184,9 +185,8 @@ def get_start_path(lib_key: str, lib_documentation: str) -> Path:
 
 
 def walk_library_html(
-    source_root: Path,
+    start_path: Path,
     lib_key: str,
-    lib_documentation: str,
     version: str,
     *,
     max_pages: int | None = None,
@@ -194,9 +194,9 @@ def walk_library_html(
     """
     Walk local HTML files for one library inside the extracted Boost source tree.
 
-    source_root:   top-level extracted dir, e.g. workspace/raw/.../boost_1_90_0/
+    start_path:   relative path to the library root in the extracted source tree, 
+                  e.g. Path("/libs/utility/doc/html/index.html")
     lib_key:       library key, e.g. 'utility'
-    lib_documentation: relative doc path from BoostLibraryVersion, e.g. 'doc/html/index.html'
     version:       Boost version string, e.g. '1.90.0'
 
     The canonical URL for each file is built as:
@@ -208,16 +208,13 @@ def walk_library_html(
     Returns a list of (canonical_url, page_text).
     """
     url_version = version.removeprefix("boost-").replace(".", "_")
-    start_file = get_start_path(lib_key, lib_documentation)
-    start_file = source_root / start_file
-
-    if not start_file.exists():
-        logger.warning("Doc entry point not found for %s; skipping.", lib_key)
-        return []
-
     base_url = f"{BOOST_ORG_BASE}/doc/libs/{url_version}/"
+
+    base_path = get_extract_dir() / f"boost_{url_version}"
+    start_file = base_path.resolve() / start_path
+    
     visited: set[Path] = set()
-    queue: deque[Path] = deque([start_file.resolve()])
+    queue: deque[Path] = deque([start_file])
     results: list[tuple[str, str]] = []
 
     while queue:
@@ -240,7 +237,7 @@ def walk_library_html(
             continue
 
         text = convert_html_to_markdown(html)
-        rel_path = file_path.relative_to(source_root).as_posix()
+        rel_path = file_path.relative_to(base_path).as_posix()
         canonical_url = base_url + rel_path
         results.append((canonical_url, text))
 
@@ -271,9 +268,11 @@ def walk_library_html(
 
 
 def crawl_library_pages(
-    doc_root_url: str,
+    start_path: Path,
+    lib_key: str,
+    version: str,
     *,
-    max_pages: int | None = DEFAULT_MAX_PAGES,
+    max_pages: int | None = None,
     delay_secs: float = DEFAULT_DELAY_SECS,
 ) -> list[tuple[str, str]]:
     """
@@ -286,7 +285,10 @@ def crawl_library_pages(
     """
     session = _get_session()
     visited: set[str] = set()
-    queue: deque[str] = deque([doc_root_url])
+    url_version = version.removeprefix("boost-").replace(".", "_")
+    base_url = f"{BOOST_ORG_BASE}/doc/libs/{url_version}/"
+    start_url = urljoin(base_url, start_path.as_posix())
+    queue: deque[str] = deque([start_url])
     results: list[tuple[str, str]] = []
 
     while queue and (max_pages is None or len(results) < max_pages):
@@ -325,7 +327,7 @@ def crawl_library_pages(
             abs_url = abs_url.split("#")[0]
             if (
                 abs_url not in visited
-                and abs_url.startswith(doc_root_url)
+                and abs_url.startswith(start_url)
                 and abs_url not in queue
             ):
                 queue.append(abs_url)
@@ -333,7 +335,7 @@ def crawl_library_pages(
     logger.debug(
         "Crawled %d pages for root %s (max_pages=%s)",
         len(results),
-        doc_root_url,
+        start_url,
         max_pages,
     )
     return results

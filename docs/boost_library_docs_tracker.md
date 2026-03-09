@@ -27,6 +27,9 @@ boost_library_docs_tracker/
 ├── models.py
 ├── services.py
 ├── fetcher.py
+├── html_to_md.py
+├── preprocessor.py
+├── workspace.py
 ├── management/
 │   ├── __init__.py
 │   └── commands/
@@ -34,11 +37,14 @@ boost_library_docs_tracker/
 │       └── run_boost_library_docs_tracker.py
 ├── migrations/
 │   ├── __init__.py
-│   └── 0001_initial.py
+│   ├── 0001_initial.py
+│   ├── 0002_remove_page_content_and_status_add_is_upserted.py
+│   └── 0003_redesign_per_schema_v10.py
 └── tests/
     ├── __init__.py
     ├── fixtures.py
     ├── test_models.py
+    ├── test_preprocessor.py
     ├── test_services.py
     └── test_fetcher.py
 ```
@@ -163,7 +169,7 @@ When adding this app to the project, do all of the following:
 3. Add the five `BOOST_DOCS_*` settings to `settings.py` and their env var defaults to `.env.example`.
 4. Add `"run_boost_library_docs_tracker"` to `COLLECTOR_COMMANDS` in `workflow/management/commands/run_all_collectors.py` (after `"run_boost_library_tracker"`).
 5. Add `beautifulsoup4` and `lxml` to `requirements.txt` (if not already present).
-6. Run `python manage.py makemigrations boost_library_docs_tracker` and `python manage.py migrate`.
+6. Run `python manage.py migrate` to apply the app’s committed migrations.
 
 ---
 

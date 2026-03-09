@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 APP_TYPE = "boost_library_docs"
 PINECONE_NAMESPACE = "boost_library_docs"
-DEFAULT_MAX_PAGES = 100
+DEFAULT_MAX_PAGES = 10
 
 
 class Command(BaseCommand):
@@ -173,7 +173,7 @@ class Command(BaseCommand):
         library_list = self._get_library_list(version)
         if library_filter:
             library_list = [
-                (n, u, k, d) for n, u, k, d in library_list if n == library_filter
+                (p, k) for p, k in library_list if k == library_filter
             ]
             if not library_list:
                 raise CommandError(
@@ -191,14 +191,12 @@ class Command(BaseCommand):
         boost_version_id = self._resolve_boost_version_id(version)
 
         total_pages = 0
-        for lib_name, doc_root_url, lib_key, lib_doc in library_list:
+        for start_path, lib_key in library_list:
             pages_count = self._process_library(
                 version=version,
-                lib_name=lib_name,
-                doc_root_url=doc_root_url,
                 lib_key=lib_key,
-                lib_doc=lib_doc,
-                source_root=source_root,
+                start_path=start_path,
+                use_local=use_local,
                 dry_run=dry_run,
                 max_pages=max_pages,
                 boost_version_id=boost_version_id,
@@ -217,6 +215,10 @@ class Command(BaseCommand):
         """
         zip_dir = workspace.get_zip_dir()
         extract_dir = workspace.get_extract_dir()
+
+        if zip_dir.exists():
+            self.stdout.write(f"[{version}] Source zip already exists at {zip_dir}")
+            return extract_dir
 
         try:
             zip_path = fetcher.download_source_zip(version, zip_dir)
@@ -239,66 +241,67 @@ class Command(BaseCommand):
         self,
         *,
         version,
-        lib_name,
-        doc_root_url,
         lib_key,
-        lib_doc,
-        source_root,
+        start_path,
+        use_local,
         dry_run,
         max_pages,
         boost_version_id,
     ) -> int:
         effective_max_pages = max_pages if dry_run else None
 
-        if source_root is not None:
+        if use_local:
             self.stdout.write(
-                f"  [{lib_name}] walking local HTML (key={lib_key!r}) ..."
+                f"  [{lib_key}] walking local HTML ..."
             )
             try:
                 pages = fetcher.walk_library_html(
-                    source_root=source_root,
+                    start_path=start_path,
                     lib_key=lib_key,
-                    lib_documentation=lib_doc,
                     version=version,
                     max_pages=effective_max_pages,
                 )
             except Exception as exc:
-                logger.error("[%s] local walk failed: %s", lib_name, exc)
+                logger.error("[%s] local walk failed: %s", lib_key, exc)
                 self.stdout.write(
-                    self.style.ERROR(f"  [{lib_name}] local walk error: {exc}")
+                    self.style.ERROR(f"  [{lib_key}] local walk error: {exc}")
                 )
                 return 0
         else:
-            self.stdout.write(f"  [{lib_name}] crawling {doc_root_url} ...")
+            self.stdout.write(f"  [{lib_key}] crawling {start_path} ...")
             try:
                 pages = fetcher.crawl_library_pages(
-                    doc_root_url, max_pages=effective_max_pages, delay_secs=0.3
+                    start_path=start_path,
+                    lib_key=lib_key,
+                    version=version,
+                    max_pages=effective_max_pages,
+                    delay_secs=0.3
                 )
             except Exception as exc:
-                logger.error("[%s] crawl failed: %s", lib_name, exc)
+                logger.error("[%s] crawl failed: %s", lib_key, exc)
                 self.stdout.write(
-                    self.style.ERROR(f"  [{lib_name}] crawl error: {exc}")
+                    self.style.ERROR(f"  [{lib_key}] crawl error: {exc}")
                 )
                 return 0
 
         page_count = len(pages)
-        self.stdout.write(f"  [{lib_name}] {page_count} pages found.")
+        self.stdout.write(f"  [{lib_key}] {page_count} pages found.")
 
         if dry_run:
             return page_count
 
-        lib_version_id = self._resolve_library_version_id(lib_name, version)
+        lib_version_id = self._resolve_library_version_id(lib_key, version)
         if lib_version_id is None:
             self.stdout.write(
                 self.style.WARNING(
-                    f"  [{lib_name}] BoostLibraryVersion not found in DB for {version}, skipping DB writes."
+                    f"  [{lib_key}] BoostLibraryVersion not found in DB for {version}, skipping DB writes."
                 )
             )
             return page_count
 
         self._save_pages_to_workspace_and_db(
             version=version,
-            lib_name=lib_name,
+            lib_name=lib_key,
             lib_version_id=lib_version_id,
             boost_version_id=boost_version_id,
             pages=pages,
@@ -394,6 +397,7 @@ class Command(BaseCommand):
             return
 
         successful_ids = result.get("successful_source_ids", [])
+        failed_ids = result.get("failed_ids", [])
         int_successful_ids: list[int] = []
         for sid in successful_ids:
             try:
@@ -437,7 +441,12 @@ class Command(BaseCommand):
 
     def _resolve_versions(self, versions_arg: list[str] | None) -> list[str]:
         if versions_arg:
-            versions = [v.strip() for v in versions_arg if v.strip()]
+            versions = [
+                v.strip() if v.strip().startswith("boost-") else "boost-" + v.strip()
+                for v in versions_arg
+                if v.strip()
+            ]
+
         else:
             self.stdout.write("Using latest Boost version from BoostVersion table...")
             latest = (
@@ -454,22 +463,13 @@ class Command(BaseCommand):
 
         return _sort_versions_by_db(versions)
 
-    def _get_library_list(self, version: str) -> list[tuple[str, str, str, str]]:
-        """Return (library_name, doc_root_url, lib_key, lib_doc) from BoostLibraryVersion and BoostLibrary tables.
-
-        lib_key     - lv.key stripped, falls back to library name.
-        lib_doc     - lv.documentation stripped (relative path inside the library tree).
-        doc_root_url - canonical HTTP base URL for the library (used when not using local zip).
-        """
+    def _get_library_list(self, version: str) -> list[tuple[Path, str]]:
         try:
             boost_version = BoostVersion.objects.get(version=version)
         except BoostVersion.DoesNotExist:
             raise CommandError(
                 f"Boost version '{version}' not found in DB. Run boost_library_tracker first."
             ) from None
-
-        url_version = version.replace(".", "_").replace("boost-", "")
-        base = fetcher.BOOST_ORG_BASE
 
         library_versions = (
             BoostLibraryVersion.objects.filter(version=boost_version)
@@ -478,12 +478,10 @@ class Command(BaseCommand):
         )
         result = []
         for lv in library_versions:
-            lib_name = lv.library.name
-            lib_key = lv.key.strip() if lv.key else lib_name
+            lib_key = lv.key.strip() if lv.key else lv.library.name
             lib_doc = (lv.documentation or "").strip()
-            index_url = f"{base}/doc/libs/{url_version}/libs/{lib_key}"
-            doc_root_url = urljoin(index_url, lib_doc) if lib_doc else index_url
-            result.append((lib_name, doc_root_url, lib_key, lib_doc))
+            start_path = fetcher.get_start_path(lib_key, lib_doc)
+            result.append((start_path, lib_key))
         return result
 
     def _resolve_library_version_id(self, lib_name: str, version: str) -> int | None:
