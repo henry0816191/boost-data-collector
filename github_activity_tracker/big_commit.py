@@ -222,15 +222,16 @@ def get_full_commit_files(
     Returns list of file dicts matching GitHub API shape.
     Raises exception if clone or git operations fail.
     """
+    # Ensure clone (once)
+    clone_path = ensure_repo_cloned(owner, repo)
+
     if parent_shas is None:
         # Resolve parents using git log if not provided
-        clone_path = ensure_repo_cloned(owner, repo)
-        import subprocess
         result = subprocess.run(
             ["git", "-C", str(clone_path), "log", "--pretty=%P", "-n", "1", commit_sha],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
         parent_shas = result.stdout.strip().split()
 
@@ -242,9 +243,6 @@ def get_full_commit_files(
             "Commit %s is initial commit, diffing against empty tree",
             commit_sha[:7],
         )
-
-    # Ensure clone
-    clone_path = ensure_repo_cloned(owner, repo)
 
     # Get full file list via github_ops
     logger.info("Getting full file list for commit %s via git", commit_sha[:7])

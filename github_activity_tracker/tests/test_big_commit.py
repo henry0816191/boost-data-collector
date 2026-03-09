@@ -103,7 +103,8 @@ def test_ensure_repo_cloned_clones_when_not_exists(tmp_path):
     clone_path = tmp_path / "owner_repo"
 
     with patch(
-        "github_activity_tracker.big_commit.get_clone_dir", return_value=clone_path
+        "github_activity_tracker.big_commit.get_clone_dir",
+        return_value=clone_path,
     ):
         with patch("github_activity_tracker.big_commit.clone_repo") as clone_mock:
             with patch("github_activity_tracker.big_commit.register_clone"):
@@ -120,7 +121,8 @@ def test_ensure_repo_cloned_fetches_when_exists(tmp_path):
     (clone_path / ".git").mkdir()
 
     with patch(
-        "github_activity_tracker.big_commit.get_clone_dir", return_value=clone_path
+        "github_activity_tracker.big_commit.get_clone_dir",
+        return_value=clone_path,
     ):
         with patch("github_activity_tracker.big_commit.subprocess.run") as run_mock:
             with patch("github_activity_tracker.big_commit.register_clone"):
@@ -133,7 +135,9 @@ def test_ensure_repo_cloned_fetches_when_exists(tmp_path):
     assert "fetch" in call_args
 
 
-def test_ensure_repo_cloned_removes_existing_non_git_dir_before_clone(tmp_path):
+def test_ensure_repo_cloned_removes_existing_non_git_dir_before_clone(
+    tmp_path,
+):
     """ensure_repo_cloned removes existing dir when it has no .git (avoids clone exit 128)."""
     clone_path = tmp_path / "owner_repo"
     clone_path.mkdir()
@@ -141,10 +145,12 @@ def test_ensure_repo_cloned_removes_existing_non_git_dir_before_clone(tmp_path):
     (clone_path / "some_file.txt").write_text("leftover")
 
     with patch(
-        "github_activity_tracker.big_commit.get_clone_dir", return_value=clone_path
+        "github_activity_tracker.big_commit.get_clone_dir",
+        return_value=clone_path,
     ):
         with patch(
-            "github_activity_tracker.big_commit.remove_clone_dir", return_value=True
+            "github_activity_tracker.big_commit.remove_clone_dir",
+            return_value=True,
         ) as remove_mock:
             with patch("github_activity_tracker.big_commit.clone_repo") as clone_mock:
                 with patch("github_activity_tracker.big_commit.register_clone"):
@@ -157,11 +163,6 @@ def test_ensure_repo_cloned_removes_existing_non_git_dir_before_clone(tmp_path):
 
 def test_get_full_commit_files_returns_files_list(tmp_path):
     """get_full_commit_files clones repo and returns file list."""
-    commit_data = {
-        "sha": "commit_sha",
-        "parents": [{"sha": "parent_sha"}],
-        "files": [{"filename": "file.txt"}] * 300,  # Truncated
-    }
 
     mock_files = [
         {
@@ -181,24 +182,27 @@ def test_get_full_commit_files_returns_files_list(tmp_path):
     ]
 
     with patch(
-        "github_activity_tracker.big_commit.ensure_repo_cloned", return_value=tmp_path
+        "github_activity_tracker.big_commit.ensure_repo_cloned",
+        return_value=tmp_path,
     ):
         with patch(
             "github_activity_tracker.big_commit.get_commit_file_changes",
             return_value=mock_files,
         ):
-            files = big_commit.get_full_commit_files("owner", "repo", commit_sha="commit_sha", parent_shas=["parent_sha"])
+            files = big_commit.get_full_commit_files(
+                "owner",
+                "repo",
+                commit_sha="commit_sha",
+                parent_shas=["parent_sha"],
+            )
 
     assert files == mock_files
 
 
-def test_get_full_commit_files_initial_commit_diffs_against_empty_tree(tmp_path):
+def test_get_full_commit_files_initial_commit_diffs_against_empty_tree(
+    tmp_path,
+):
     """get_full_commit_files for initial commit diffs against empty tree and returns full file list."""
-    commit_data = {
-        "sha": "abc123",
-        "parents": [],
-        "files": [{"filename": "file.txt"}],
-    }
     mock_files = [
         {
             "filename": "file1.txt",
@@ -216,13 +220,16 @@ def test_get_full_commit_files_initial_commit_diffs_against_empty_tree(tmp_path)
         },
     ]
     with patch(
-        "github_activity_tracker.big_commit.ensure_repo_cloned", return_value=tmp_path
+        "github_activity_tracker.big_commit.ensure_repo_cloned",
+        return_value=tmp_path,
     ):
         with patch(
             "github_activity_tracker.big_commit.get_commit_file_changes",
             return_value=mock_files,
         ) as mock_get_changes:
-            files = big_commit.get_full_commit_files("owner", "repo", commit_sha="abc123", parent_shas=[])
+            files = big_commit.get_full_commit_files(
+                "owner", "repo", commit_sha="abc123", parent_shas=[]
+            )
     assert files == mock_files
     # Initial commit: parent_sha should be the empty tree
     mock_get_changes.assert_called_once()
@@ -234,13 +241,16 @@ def test_get_full_commit_files_initial_commit_diffs_against_empty_tree(tmp_path)
 def test_get_full_commit_files_raises_on_git_failure(tmp_path):
     """get_full_commit_files raises RuntimeError when git diff fails."""
     with patch(
-        "github_activity_tracker.big_commit.ensure_repo_cloned", return_value=tmp_path
+        "github_activity_tracker.big_commit.ensure_repo_cloned",
+        return_value=tmp_path,
     ):
         with patch(
             "github_activity_tracker.big_commit.get_commit_file_changes",
             side_effect=RuntimeError("empty tree not found"),
         ):
             with pytest.raises(RuntimeError) as exc_info:
-                big_commit.get_full_commit_files("owner", "repo", commit_sha="abc123", parent_shas=[])
+                big_commit.get_full_commit_files(
+                    "owner", "repo", commit_sha="abc123", parent_shas=[]
+                )
     assert "abc123" in str(exc_info.value)
     assert "empty tree not found" in str(exc_info.value)

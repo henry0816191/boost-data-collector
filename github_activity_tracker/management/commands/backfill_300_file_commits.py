@@ -23,7 +23,6 @@ from github_activity_tracker.workspace import (
     get_registered_clones,
     remove_clone_dir,
 )
-from github_ops import get_github_client
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +63,7 @@ class Command(BaseCommand):
         total = len(commits_300) if limit > 0 else commits_300.count()
         if total == 0:
             self.stdout.write(
-                self.style.SUCCESS(
-                    "No commits with exactly 300 file changes found."
-                )
+                self.style.SUCCESS("No commits with exactly 300 file changes found.")
             )
             return
 
@@ -82,7 +79,6 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("Dry run: no changes made."))
             return
 
-        client = get_github_client()
         updated = 0
         failed = 0
 
@@ -93,36 +89,17 @@ class Command(BaseCommand):
                 repo_name = repo.repo_name
                 sha = commit_obj.commit_hash
 
-                self.stdout.write(
-                    f"Backfilling {owner}/{repo_name} {sha[:7]}..."
-                )
+                self.stdout.write(f"Backfilling {owner}/{repo_name} {sha[:7]}...")
 
                 try:
-                    # Fetch commit from API to get parents (required for get_full_commit_files)
-                    commit_data = client.rest_request(
-                        f"/repos/{owner}/{repo_name}/commits/{sha}"
-                    )
-                    if not commit_data:
-                        self.stdout.write(
-                            self.style.ERROR(
-                                f"  Could not fetch commit {sha} from API"
-                            )
-                        )
-                        failed += 1
-                        continue
-
-                    # Get full file list via clone + git diff
-                    parents = commit_data.get("parents") or []
-                    parent_shas = [p.get("sha") for p in parents if p.get("sha")]
+                    # Get full file list via clone + git diff (parents resolved via git log if needed)
                     full_files = big_commit.get_full_commit_files(
-                        owner, repo_name, commit_sha=sha, parent_shas=parent_shas
+                        owner, repo_name, commit_sha=sha
                     )
 
                     # Replace file changes in DB: delete existing, re-add with full list
                     with transaction.atomic():
-                        GitCommitFileChange.objects.filter(
-                            commit=commit_obj
-                        ).delete()
+                        GitCommitFileChange.objects.filter(commit=commit_obj).delete()
                         _process_commit_files(repo, commit_obj, full_files)
 
                     new_count = commit_obj.file_changes.count()
@@ -145,18 +122,14 @@ class Command(BaseCommand):
                     failed += 1
 
             self.stdout.write(
-                self.style.SUCCESS(
-                    f"Done. Updated {updated}, failed {failed}."
-                )
+                self.style.SUCCESS(f"Done. Updated {updated}, failed {failed}.")
             )
 
         finally:
             # Clean up cloned repos created during run
             clones = get_registered_clones()
             if clones:
-                self.stdout.write(
-                    f"Cleaning up {len(clones)} cloned repo(s)..."
-                )
+                self.stdout.write(f"Cleaning up {len(clones)} cloned repo(s)...")
                 for clone_path in clones:
                     if remove_clone_dir(clone_path):
                         logger.info("Removed clone: %s", clone_path)

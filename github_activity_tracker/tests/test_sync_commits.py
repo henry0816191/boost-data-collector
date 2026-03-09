@@ -45,7 +45,7 @@ def test_process_commit_files_creates_files_and_changes():
         },
         {
             "filename": "   ",  # Whitespace, should be skipped
-        }
+        },
     ]
 
     mock_github_file_1 = MagicMock()
@@ -54,20 +54,24 @@ def test_process_commit_files_creates_files_and_changes():
     mock_github_file_4 = MagicMock()
     mock_github_file_5 = MagicMock()
 
-    mock_create_file = MagicMock(side_effect=[
-        (mock_github_file_1, True),
-        (mock_github_file_2, False),
-        (mock_github_file_3, False),
-        (mock_github_file_4, True),
-        (mock_github_file_5, True),
-    ])
+    mock_create_file = MagicMock(
+        side_effect=[
+            (mock_github_file_1, True),
+            (mock_github_file_2, False),
+            (mock_github_file_3, False),
+            (mock_github_file_4, True),
+            (mock_github_file_5, True),
+        ]
+    )
 
     mock_add_change = MagicMock()
 
     with patch(
-        "github_activity_tracker.sync.commits.services.create_or_update_github_file", mock_create_file
+        "github_activity_tracker.sync.commits.services.create_or_update_github_file",
+        mock_create_file,
     ), patch(
-        "github_activity_tracker.sync.commits.services.add_commit_file_change", mock_add_change
+        "github_activity_tracker.sync.commits.services.add_commit_file_change",
+        mock_add_change,
     ):
         _process_commit_files(mock_repo, mock_commit, files)
 
