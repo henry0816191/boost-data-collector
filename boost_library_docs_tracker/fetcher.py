@@ -194,7 +194,7 @@ def walk_library_html(
     """
     Walk local HTML files for one library inside the extracted Boost source tree.
 
-    start_path:   relative path to the library root in the extracted source tree, 
+    start_path:   relative path to the library root in the extracted source tree,
                   e.g. Path("/libs/utility/doc/html/index.html")
     lib_key:       library key, e.g. 'utility'
     version:       Boost version string, e.g. '1.90.0'
@@ -212,7 +212,7 @@ def walk_library_html(
 
     base_path = get_extract_dir() / f"boost_{url_version}"
     start_file = base_path.resolve() / start_path
-    
+
     visited: set[Path] = set()
     queue: deque[Path] = deque([start_file])
     results: list[tuple[str, str]] = []

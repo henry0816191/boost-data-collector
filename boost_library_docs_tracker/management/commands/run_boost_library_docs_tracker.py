@@ -37,7 +37,6 @@ Usage examples:
 import hashlib
 import logging
 from pathlib import Path
-from urllib.parse import urljoin
 
 from django.apps import apps
 from django.core.management.base import BaseCommand, CommandError
@@ -172,9 +171,7 @@ class Command(BaseCommand):
 
         library_list = self._get_library_list(version)
         if library_filter:
-            library_list = [
-                (p, k) for p, k in library_list if k == library_filter
-            ]
+            library_list = [(p, k) for p, k in library_list if k == library_filter]
             if not library_list:
                 raise CommandError(
                     f"Library '{library_filter}' not found in Boost {version}."
@@ -251,9 +248,7 @@ class Command(BaseCommand):
         effective_max_pages = max_pages if dry_run else None
 
         if use_local:
-            self.stdout.write(
-                f"  [{lib_key}] walking local HTML ..."
-            )
+            self.stdout.write(f"  [{lib_key}] walking local HTML ...")
             try:
                 pages = fetcher.walk_library_html(
                     start_path=start_path,
@@ -275,13 +270,11 @@ class Command(BaseCommand):
                     lib_key=lib_key,
                     version=version,
                     max_pages=effective_max_pages,
-                    delay_secs=0.3
+                    delay_secs=0.3,
                 )
             except Exception as exc:
                 logger.error("[%s] crawl failed: %s", lib_key, exc)
-                self.stdout.write(
-                    self.style.ERROR(f"  [{lib_key}] crawl error: {exc}")
-                )
+                self.stdout.write(self.style.ERROR(f"  [{lib_key}] crawl error: {exc}"))
                 return 0
 
         page_count = len(pages)
