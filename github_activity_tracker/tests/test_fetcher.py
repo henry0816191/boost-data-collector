@@ -188,18 +188,19 @@ def test_fetch_comments_from_github_calls_correct_endpoint():
 
 
 def test_fetch_issues_from_github_yields_issue_dicts():
-    """fetch_issues_from_github yields issue dicts (excluding PRs)."""
+    """fetch_issues_from_github yields nested { issue_info, comments } dicts."""
     client = MagicMock()
-    # No "pull_request" key = plain issue (fetcher filters by "pull_request" in i)
-    # Must include updated_at/created_at or fetcher skips the issue
+    # List returns one issue; then full issue GET; then comments
     client.rest_request.side_effect = [
         [{"number": 1, "title": "Issue 1", "updated_at": "2024-06-01T00:00:00Z"}],
+        {"number": 1, "title": "Issue 1", "updated_at": "2024-06-01T00:00:00Z"},
         [],  # comments for issue 1
     ]
     items = list(fetch_issues_from_github(client, "o", "r"))
     assert len(items) == 1
-    assert items[0]["number"] == 1
+    assert items[0]["issue_info"]["number"] == 1
     assert "comments" in items[0]
+    assert items[0]["comments"] == []
 
 
 def test_fetch_issues_from_github_filters_out_pulls():
@@ -210,11 +211,12 @@ def test_fetch_issues_from_github_filters_out_pulls():
             {"number": 1, "pull_request": {}},
             {"number": 2, "updated_at": "2024-06-01T00:00:00Z"},
         ],
+        {"number": 2, "updated_at": "2024-06-01T00:00:00Z"},  # full issue for #2
         [],  # comments for issue 2
     ]
     items = list(fetch_issues_from_github(client, "o", "r"))
     assert len(items) == 1
-    assert items[0]["number"] == 2
+    assert items[0]["issue_info"]["number"] == 2
 
 
 def test_fetch_issues_from_github_stops_on_empty_page():
@@ -260,7 +262,7 @@ def test_fetch_pr_reviews_from_github_calls_pulls_comments():
 
 
 def test_fetch_pull_requests_from_github_yields_pr_dicts():
-    """fetch_pull_requests_from_github yields PR dicts with comments and reviews."""
+    """fetch_pull_requests_from_github yields nested { pr_info, comments, reviews } dicts."""
     client = MagicMock()
     client.rest_request.side_effect = [
         [
@@ -270,14 +272,21 @@ def test_fetch_pull_requests_from_github_yields_pr_dicts():
                 "created_at": "2024-05-01T00:00:00Z",
             },
         ],
+        {
+            "number": 1,
+            "updated_at": "2024-06-01T00:00:00Z",
+            "created_at": "2024-05-01T00:00:00Z",
+        },  # full PR
         [],  # comments for PR 1
         [],  # reviews for PR 1
     ]
     items = list(fetch_pull_requests_from_github(client, "o", "r"))
     assert len(items) == 1
-    assert items[0]["number"] == 1
+    assert items[0]["pr_info"]["number"] == 1
     assert "comments" in items[0]
     assert "reviews" in items[0]
+    assert items[0]["comments"] == []
+    assert items[0]["reviews"] == []
 
 
 def test_fetch_pull_requests_from_github_stops_on_empty_page():

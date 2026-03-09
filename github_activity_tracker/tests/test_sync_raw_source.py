@@ -72,7 +72,7 @@ def test_save_issue_raw_source_merges_comments_by_id(raw_source_tmp):
         },
     )
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["title"] == "New"
+    assert data["issue_info"]["title"] == "New"
     assert len(data["comments"]) == 2
     by_id = {c["id"]: c["body"] for c in data["comments"]}
     assert by_id[10] == "updated"
@@ -80,14 +80,15 @@ def test_save_issue_raw_source_merges_comments_by_id(raw_source_tmp):
 
 
 def test_save_issue_raw_source_writes_new_file(raw_source_tmp):
-    """save_issue_raw_source writes new issue JSON when file does not exist."""
+    """save_issue_raw_source writes new issue JSON when file does not exist (nested format)."""
     save_issue_raw_source(
         "owner", "repo", {"number": 2, "title": "Issue 2", "comments": []}
     )
     path = raw_source_tmp / "owner" / "repo" / "issues" / "2.json"
     assert path.exists()
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["number"] == 2
+    assert data["issue_info"]["number"] == 2
+    assert data["issue_info"]["title"] == "Issue 2"
     assert data["comments"] == []
 
 
@@ -118,7 +119,7 @@ def test_save_pr_raw_source_merges_comments_and_reviews_by_id(raw_source_tmp):
         },
     )
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["title"] == "New"
+    assert data["pr_info"]["title"] == "New"
     assert len(data["comments"]) == 1
     assert data["comments"][0]["body"] == "updated"
     assert len(data["reviews"]) == 2
@@ -128,7 +129,7 @@ def test_save_pr_raw_source_merges_comments_and_reviews_by_id(raw_source_tmp):
 
 
 def test_save_pr_raw_source_writes_new_file(raw_source_tmp):
-    """save_pr_raw_source writes new PR JSON when file does not exist."""
+    """save_pr_raw_source writes new PR JSON when file does not exist (nested format)."""
     save_pr_raw_source(
         "owner",
         "repo",
@@ -137,6 +138,7 @@ def test_save_pr_raw_source_writes_new_file(raw_source_tmp):
     path = raw_source_tmp / "owner" / "repo" / "prs" / "3.json"
     assert path.exists()
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert data["number"] == 3
+    assert data["pr_info"]["number"] == 3
+    assert data["pr_info"]["title"] == "PR 3"
     assert data["comments"] == []
     assert data["reviews"] == []
