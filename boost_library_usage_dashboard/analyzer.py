@@ -10,6 +10,7 @@ from django.apps import apps
 from django.db.models import Count, Min
 
 from boost_library_tracker.models import BoostLibrary, BoostLibraryVersion, BoostVersion
+from boost_usage_tracker.models import BoostExternalRepository, BoostUsage
 
 from .analyzer_libraries import (
     build_library_overview_data,
@@ -31,7 +32,6 @@ from .analyzer_output import (
     collect_dashboard_data,
     collect_top_repositories_for_dashboard,
 )
-from .models import BoostExternalRepository, BoostUsage
 from .utils import format_percent
 
 logger = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ class BoostUsageDashboardAnalyzer:
             for row in BoostUsage.objects.filter(  # pylint: disable=no-member
                 excepted_at__isnull=True,
                 repo__is_boost_used=True,
-                repo__githubrepository_ptr__stars__gte=self.stars_min_threshold,
+                repo__githubrepository_ptr__stars__gt=self.stars_min_threshold,
             )
             .values("repo_id")
             .annotate(usage_count=Count("id"))
@@ -85,7 +85,7 @@ class BoostUsageDashboardAnalyzer:
             )
             .filter(
                 is_boost_used=True,
-                githubrepository_ptr__stars__gte=self.stars_min_threshold,
+                githubrepository_ptr__stars__gt=self.stars_min_threshold,
             )
             .order_by("githubrepository_ptr__id")
         )

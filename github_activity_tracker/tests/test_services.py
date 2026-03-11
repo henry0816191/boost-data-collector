@@ -389,6 +389,15 @@ def test_create_or_update_github_file_deleted_default_false(github_repository):
     assert gf.is_deleted is False
 
 
+@pytest.mark.django_db
+def test_create_or_update_github_file_strips_nul_from_filename(github_repository):
+    """create_or_update_github_file strips NUL bytes from filename (PostgreSQL text cannot contain 0x00)."""
+    filename_with_nul = "path\x00to\x00file.py"
+    gf, _ = services.create_or_update_github_file(github_repository, filename_with_nul)
+    assert "\x00" not in gf.filename
+    assert gf.filename == "pathtofile.py"
+
+
 # --- add_commit_file_change ---
 
 
@@ -445,6 +454,26 @@ def test_add_commit_file_change_defaults_patch_empty(github_repository, github_a
     gf, _ = services.create_or_update_github_file(github_repository, "h.py")
     fc, _ = services.add_commit_file_change(commit_obj, gf, "modified")
     assert fc.patch == ""
+
+
+@pytest.mark.django_db
+def test_add_commit_file_change_strips_nul_from_patch(
+    github_repository, github_account
+):
+    """add_commit_file_change strips NUL bytes from patch (PostgreSQL text cannot contain 0x00)."""
+    commit_obj, _ = services.create_or_update_commit(
+        github_repository,
+        github_account,
+        "c_nul",
+        commit_at=datetime.now(timezone.utc),
+    )
+    gf, _ = services.create_or_update_github_file(github_repository, "f.py")
+    patch_with_nul = "diff --git a/f.py\n\x00binary\x00content\n"
+    fc, _ = services.add_commit_file_change(
+        commit_obj, gf, "modified", additions=1, deletions=0, patch=patch_with_nul
+    )
+    assert "\x00" not in fc.patch
+    assert fc.patch == "diff --git a/f.py\nbinarycontent\n"
 
 
 # --- create_or_update_issue ---

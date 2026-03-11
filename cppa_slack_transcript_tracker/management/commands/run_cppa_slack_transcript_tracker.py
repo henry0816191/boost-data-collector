@@ -7,6 +7,7 @@ All functionality lives in this app.
 
 import logging
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from operations.slack_ops import get_slack_app_token, get_slack_bot_token
@@ -29,7 +30,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         try:
-            bot_token = get_slack_bot_token()
+            team_id = getattr(settings, "SLACK_TEAM_ID", None) or None
+            bot_token = get_slack_bot_token(team_id=team_id)
         except ValueError:
             bot_token = None
         try:

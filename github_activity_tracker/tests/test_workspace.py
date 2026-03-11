@@ -5,6 +5,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from github_activity_tracker.workspace import (
+    get_clone_dir,
+    get_clones_root,
     get_commits_dir,
     get_commit_json_path,
     get_issues_dir,
@@ -24,6 +26,7 @@ from github_activity_tracker.workspace import (
     iter_existing_commit_jsons,
     iter_existing_issue_jsons,
     iter_existing_pr_jsons,
+    remove_clone_dir,
 )
 
 
@@ -331,14 +334,18 @@ def mock_raw_workspace_path(tmp_path):
         yield tmp_path / "raw"
 
 
-def test_get_raw_source_root_returns_path_and_creates_dir(mock_raw_workspace_path):
+def test_get_raw_source_root_returns_path_and_creates_dir(
+    mock_raw_workspace_path,
+):
     """get_raw_source_root returns .../raw/github_activity_tracker/ and creates dirs."""
     root = get_raw_source_root()
     assert root == mock_raw_workspace_path / "github_activity_tracker"
     assert root.is_dir()
 
 
-def test_get_raw_source_repo_dir_returns_owner_repo_subdir(mock_raw_workspace_path):
+def test_get_raw_source_repo_dir_returns_owner_repo_subdir(
+    mock_raw_workspace_path,
+):
     """get_raw_source_repo_dir returns .../github_activity_tracker/<owner>/<repo>/."""
     path = get_raw_source_repo_dir("boostorg", "boost")
     assert (
@@ -348,7 +355,9 @@ def test_get_raw_source_repo_dir_returns_owner_repo_subdir(mock_raw_workspace_pa
     assert path.is_dir()
 
 
-def test_get_raw_source_commits_dir_returns_commits_subdir(mock_raw_workspace_path):
+def test_get_raw_source_commits_dir_returns_commits_subdir(
+    mock_raw_workspace_path,
+):
     """get_raw_source_commits_dir returns .../<owner>/<repo>/commits/."""
     path = get_raw_source_commits_dir("o", "r")
     assert (
@@ -358,7 +367,9 @@ def test_get_raw_source_commits_dir_returns_commits_subdir(mock_raw_workspace_pa
     assert path.is_dir()
 
 
-def test_get_raw_source_issues_dir_returns_issues_subdir(mock_raw_workspace_path):
+def test_get_raw_source_issues_dir_returns_issues_subdir(
+    mock_raw_workspace_path,
+):
     """get_raw_source_issues_dir returns .../<owner>/<repo>/issues/."""
     path = get_raw_source_issues_dir("o", "r")
     assert (
@@ -391,7 +402,9 @@ def test_get_raw_source_commit_path_returns_sha_json(mock_raw_workspace_path):
     )
 
 
-def test_get_raw_source_issue_path_returns_number_json(mock_raw_workspace_path):
+def test_get_raw_source_issue_path_returns_number_json(
+    mock_raw_workspace_path,
+):
     """get_raw_source_issue_path returns .../issues/<number>.json."""
     path = get_raw_source_issue_path("owner", "repo", 42)
     assert (
@@ -417,3 +430,54 @@ def test_get_raw_source_pr_path_returns_number_json(mock_raw_workspace_path):
         / "prs"
         / "7.json"
     )
+
+
+# --- get_clones_root, get_clone_dir ---
+
+
+def test_get_clones_root_returns_clones_subdir(mock_workspace_path):
+    """get_clones_root returns .../clones/ and creates it."""
+    root = get_clones_root()
+    assert root == mock_workspace_path / "clones"
+    assert root.is_dir()
+
+
+def test_get_clone_dir_returns_owner_repo_path(mock_workspace_path):
+    """get_clone_dir returns .../clones/<owner>/<repo> and creates parent dir."""
+    path = get_clone_dir("boostorg", "outcome")
+    assert path == mock_workspace_path / "clones" / "boostorg" / "outcome"
+    assert path.parent.is_dir()
+
+
+# --- remove_clone_dir (Windows Access denied fix) ---
+
+
+def test_remove_clone_dir_returns_true_when_path_missing(mock_workspace_path):
+    """remove_clone_dir returns True when path does not exist."""
+    missing = mock_workspace_path / "clones" / "nonexistent"
+    assert remove_clone_dir(missing) is True
+
+
+def test_remove_clone_dir_removes_dir_and_returns_true(mock_workspace_path):
+    """remove_clone_dir removes directory and returns True (no read-only files)."""
+    clone_path = mock_workspace_path / "clones" / "test_repo"
+    clone_path.mkdir(parents=True)
+    (clone_path / "file.txt").write_text("x")
+    result = remove_clone_dir(clone_path)
+    assert result is True
+    assert not clone_path.exists()
+
+
+def test_remove_clone_dir_returns_false_when_rmtree_raises(
+    mock_workspace_path,
+):
+    """remove_clone_dir returns False when shutil.rmtree raises OSError (e.g. file locked)."""
+    clone_path = mock_workspace_path / "clones" / "locked_repo"
+    clone_path.mkdir(parents=True)
+    with patch(
+        "github_activity_tracker.workspace.shutil.rmtree",
+        side_effect=OSError(5, "Access is denied"),
+    ):
+        result = remove_clone_dir(clone_path)
+    assert result is False
+    assert clone_path.exists()

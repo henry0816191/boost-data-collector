@@ -11,6 +11,7 @@ from github_ops.client import (
 from github_ops.git_ops import (
     clone_repo,
     fetch_file_content,
+    get_commit_file_changes,
     push,
     upload_file,
 )
@@ -22,6 +23,7 @@ __all__ = [
     "RateLimitException",
     "clone_repo",
     "fetch_file_content",
+    "get_commit_file_changes",
     "get_github_client",
     "get_github_token",
     "push",
