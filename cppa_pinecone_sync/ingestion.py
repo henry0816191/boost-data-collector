@@ -26,6 +26,7 @@ class PineconeInstance(str, Enum):
     PUBLIC = "public"
     PRIVATE = "private"
 
+
 try:
     from pinecone import Pinecone
     from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -44,9 +45,7 @@ logger = logging.getLogger(__name__)
 class PineconeIngestion:
     """Handles Pinecone index creation, document chunking, and vector operations."""
 
-    def __init__(
-        self, instance: PineconeInstance = PineconeInstance.PUBLIC
-    ) -> None:
+    def __init__(self, instance: PineconeInstance = PineconeInstance.PUBLIC) -> None:
         """Initialize with configuration from Django settings.
 
         Args:
@@ -57,9 +56,7 @@ class PineconeIngestion:
 
         self.instance = instance
         self._api_key: str = getattr(settings, "PINECONE_API_KEY", "")
-        self._private_api_key: str = getattr(
-            settings, "PINECONE_PRIVATE_API_KEY", ""
-        )
+        self._private_api_key: str = getattr(settings, "PINECONE_PRIVATE_API_KEY", "")
         self.index_name: str = getattr(settings, "PINECONE_INDEX_NAME", "")
         self.environment: str = getattr(settings, "PINECONE_ENVIRONMENT", "us-east-1")
         self.cloud: str = getattr(settings, "PINECONE_CLOUD", "aws")
