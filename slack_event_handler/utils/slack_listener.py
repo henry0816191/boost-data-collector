@@ -22,7 +22,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from operations.slack_ops import (
     get_slack_app_token,
     get_slack_bot_token,
-    get_default_workspace_key,
+    get_default_team_key,
     start_channel_join_background,
 )
 
@@ -77,7 +77,7 @@ class SlackListener:
         if token:
             self.bot_token = token
         else:
-            fallback_id = get_default_workspace_key() or None
+            fallback_id = get_default_team_key() or None
             self.bot_token = get_slack_bot_token(team_id=fallback_id)
             if self._team_id is None:
                 self._team_id = fallback_id
@@ -169,14 +169,14 @@ class SlackListener:
     ) -> None:
         """Full PR comment request pipeline: parse → deduplicate → enqueue → ack."""
         allowed_org: str = (
-            getattr(settings, "SLACK_PR_BOT_WORKSPACE", "") or ""
+            getattr(settings, "SLACK_PR_BOT_TEAM", "") or ""
         ).strip()
         valid, invalid_org = extract_pr_urls(text)
 
         org_hint = (
             f"only PRs under the `{allowed_org}` org are supported."
             if allowed_org
-            else "Set SLACK_PR_BOT_WORKSPACE in .env to the GitHub org name (e.g. your-org) to enable PR comments."
+            else "Set SLACK_PR_BOT_TEAM in .env to the GitHub org name (e.g. your-org) to enable PR comments."
         )
         for entry in invalid_org:
             self._send_user_reply(

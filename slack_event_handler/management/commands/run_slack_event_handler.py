@@ -12,7 +12,7 @@ from django.core.management.base import BaseCommand
 from operations.slack_ops import (
     get_slack_app_token,
     get_slack_bot_token,
-    get_default_workspace_key,
+    get_default_team_key,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         try:
-            team_id = get_default_workspace_key() or None
+            team_id = get_default_team_key() or None
             bot_token = get_slack_bot_token(team_id=team_id)
         except ValueError:
             bot_token = None

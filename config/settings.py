@@ -178,12 +178,12 @@ GITHUB_SLACK_HUDDLE_REPO_NAME = (
 
 
 # Slack (bot + app token for operations.slack_ops and cppa_slack_transcript_tracker)
-# SLACK_BOT_TOKEN: built from env (prefixed vars). In settings it is a dict (workspace_id -> token).
-# Env: SLACK_WORKSPACES=id1,id2 and SLACK_BOT_TOKEN_id1=xoxb-..., etc.
+# SLACK_BOT_TOKEN: built from env (prefixed vars). In settings it is a dict (team_id -> token).
+# Env: SLACK_TEAMS=id1,id2 and SLACK_BOT_TOKEN_id1=xoxb-..., etc.
 def _slack_bot_token_from_env():
-    """Build a dict of workspace_id -> bot token from SLACK_WORKSPACES and SLACK_BOT_TOKEN_<id> env vars."""
+    """Build a dict of team_id -> bot token from SLACK_TEAMS and SLACK_BOT_TOKEN_<id> env vars."""
     out = {}
-    ids_raw = (env("SLACK_WORKSPACES", default="") or "").strip()
+    ids_raw = (env("SLACK_TEAMS", default="") or "").strip()
     if not ids_raw:
         return out
     for tid in ids_raw.split(","):
@@ -232,7 +232,7 @@ CHROME_PROFILE_PATH = (
 ).strip()
 
 # Slack PR Bot configuration (for slack_event_handler)
-SLACK_PR_BOT_WORKSPACE = (env("SLACK_PR_BOT_WORKSPACE", default="") or "").strip()
+SLACK_PR_BOT_TEAM = (env("SLACK_PR_BOT_TEAM", default="") or "").strip()
 SLACK_PR_BOT_CHANNEL_NAME = (
     env("SLACK_PR_BOT_CHANNEL_NAME", default="slack-bot") or "slack-bot"
 ).strip()

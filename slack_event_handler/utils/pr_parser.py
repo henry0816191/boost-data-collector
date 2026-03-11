@@ -17,10 +17,10 @@ def extract_pr_urls(text: str) -> tuple[list[dict], list[dict]]:
     Extracts all GitHub PR URLs from a Slack message.
 
     Returns:
-        valid       – PRs under the configured org (SLACK_PR_BOT_WORKSPACE)
+        valid       – PRs under the configured org (SLACK_PR_BOT_TEAM)
         invalid_org – PRs detected but belonging to a different org
     """
-    allowed_org: str = (getattr(settings, "SLACK_PR_BOT_WORKSPACE", "") or "").strip()
+    allowed_org: str = (getattr(settings, "SLACK_PR_BOT_TEAM", "") or "").strip()
     valid: list[dict] = []
     invalid_org: list[dict] = []
 
