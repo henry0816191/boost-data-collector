@@ -62,7 +62,9 @@ class GitHubAPIClient:
                     self.rate_limit_reset_time = data["resources"]["core"]["reset"]
 
                     if self.rate_limit_remaining == 0:
-                        wait_time = self.rate_limit_reset_time - int(time.time())
+                        wait_time = max(
+                            0, self.rate_limit_reset_time - int(time.time())
+                        )
                         if wait_time > 0:
                             raise RateLimitException(
                                 f"Rate limit exceeded. Reset at {datetime.fromtimestamp(self.rate_limit_reset_time)}. "
@@ -90,19 +92,20 @@ class GitHubAPIClient:
 
     def _handle_rate_limit(self, wait_time: int, max_delay: int = 3600):
         """Handle rate limit by waiting with exponential backoff."""
+        wait_time = max(0, wait_time)
         if wait_time > max_delay:
             wait_time = max_delay
 
-        logger.warning(f"Rate limit hit. Waiting {wait_time} seconds...")
-        logger.debug(f"Resume time: {datetime.fromtimestamp(time.time() + wait_time)}")
-
-        time.sleep(wait_time)
+        if wait_time > 0:
+            logger.warning(f"Rate limit hit. Waiting {wait_time} seconds...")
+            logger.debug(
+                f"Resume time: {datetime.fromtimestamp(time.time() + wait_time)}"
+            )
+            time.sleep(wait_time)
         self._check_rate_limit()
 
     def rest_request(self, endpoint: str, params: Optional[dict] = None) -> dict:
         """Make REST API request with rate limit and connection error handling."""
-        self._check_rate_limit()
-
         url = f"{self.rest_base_url}{endpoint}"
 
         for attempt in range(self.max_retries):
@@ -114,7 +117,9 @@ class GitHubAPIClient:
                         remaining = int(response.headers["X-RateLimit-Remaining"])
                         if remaining == 0:
                             reset_time = int(response.headers["X-RateLimit-Reset"])
-                            wait_time = reset_time - int(time.time()) + 10  # Add buffer
+                            wait_time = max(
+                                0, reset_time - int(time.time()) + 10
+                            )  # Add buffer
                             self._handle_rate_limit(wait_time)
                             return self.rest_request(endpoint, params)
 
@@ -172,7 +177,6 @@ class GitHubAPIClient:
 
     def rest_post(self, endpoint: str, json_data: Optional[dict] = None) -> dict:
         """POST to REST API with rate limit and connection error handling."""
-        self._check_rate_limit()
         url = f"{self.rest_base_url}{endpoint}"
         json_data = json_data or {}
 
@@ -185,7 +189,9 @@ class GitHubAPIClient:
                         remaining = int(response.headers["X-RateLimit-Remaining"])
                         if remaining == 0:
                             reset_time = int(response.headers["X-RateLimit-Reset"])
-                            wait_time = reset_time - int(time.time()) + 10
+                            wait_time = max(
+                                0, reset_time - int(time.time()) + 10
+                            )
                             self._handle_rate_limit(wait_time)
                             return self.rest_post(endpoint, json_data)
 
@@ -228,7 +234,6 @@ class GitHubAPIClient:
 
     def rest_put(self, endpoint: str, json_data: Optional[dict] = None) -> dict:
         """PUT to REST API with rate limit and connection error handling."""
-        self._check_rate_limit()
         url = f"{self.rest_base_url}{endpoint}"
         json_data = json_data or {}
 
@@ -241,7 +246,9 @@ class GitHubAPIClient:
                         remaining = int(response.headers["X-RateLimit-Remaining"])
                         if remaining == 0:
                             reset_time = int(response.headers["X-RateLimit-Reset"])
-                            wait_time = reset_time - int(time.time()) + 10
+                            wait_time = max(
+                                0, reset_time - int(time.time()) + 10
+                            )
                             self._handle_rate_limit(wait_time)
                             return self.rest_put(endpoint, json_data)
 
@@ -286,7 +293,6 @@ class GitHubAPIClient:
         self, endpoint: str, json_data: Optional[dict] = None
     ) -> Optional[dict]:
         """DELETE to REST API (JSON body). Returns response JSON or None for 204."""
-        self._check_rate_limit()
         url = f"{self.rest_base_url}{endpoint}"
         json_data = json_data or {}
 
@@ -299,7 +305,9 @@ class GitHubAPIClient:
                         remaining = int(response.headers["X-RateLimit-Remaining"])
                         if remaining == 0:
                             reset_time = int(response.headers["X-RateLimit-Reset"])
-                            wait_time = reset_time - int(time.time()) + 10
+                            wait_time = max(
+                                0, reset_time - int(time.time()) + 10
+                            )
                             self._handle_rate_limit(wait_time)
                             return self.rest_delete(endpoint, json_data)
 
@@ -494,8 +502,6 @@ class GitHubAPIClient:
 
     def graphql_request(self, query: str, variables: Optional[dict] = None) -> dict:
         """Make GraphQL API request with rate limit and connection error handling."""
-        self._check_rate_limit()
-
         payload = {"query": query}
         if variables:
             payload["variables"] = variables
@@ -514,7 +520,9 @@ class GitHubAPIClient:
                         remaining = int(response.headers["X-RateLimit-Remaining"])
                         if remaining == 0:
                             reset_time = int(response.headers["X-RateLimit-Reset"])
-                            wait_time = reset_time - int(time.time()) + 10
+                            wait_time = max(
+                                0, reset_time - int(time.time()) + 10
+                            )
                             self._handle_rate_limit(wait_time)
                             return self.graphql_request(query, variables)
 
