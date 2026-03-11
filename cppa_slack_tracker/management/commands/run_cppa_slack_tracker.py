@@ -14,9 +14,8 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-
-from operations.slack_ops import get_default_team_key
 
 from cppa_slack_tracker.models import SlackTeam
 from cppa_slack_tracker.services import save_slack_message
@@ -59,7 +58,7 @@ class Command(BaseCommand):
             "--team-id",
             type=str,
             default=None,
-            help="Slack team ID. If omitted, uses default from SLACK_TEAMS (single or first key).",
+            help="Slack team ID. If omitted, uses SLACK_TEAM_ID from .env",
         )
         parser.add_argument(
             "--channel-id",
@@ -115,11 +114,10 @@ class Command(BaseCommand):
         """Run the requested sync(s) for the given team (and optional channel)."""
         team_id = (options.get("team_id") or "").strip()
         if not team_id:
-            team_id = get_default_team_key() or ""
-            team_id = (team_id or "").strip()
+            team_id = (getattr(settings, "SLACK_TEAM_ID", "") or "").strip()
         if not team_id:
             raise CommandError(
-                "Team ID is required: set --team-id or add one team to SLACK_TEAMS in .env"
+                "Team ID is required: set --team-id or SLACK_TEAM_ID in .env"
             )
 
         dry_run = options.get("dry_run", False)
