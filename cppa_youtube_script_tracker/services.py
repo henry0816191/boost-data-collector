@@ -12,13 +12,20 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from .models import CppaTags, YouTubeChannel, YouTubeVideo, YouTubeVideoSpeaker, YouTubeVideoTags
+from .models import (
+    CppaTags,
+    YouTubeChannel,
+    YouTubeVideo,
+    YouTubeVideoSpeaker,
+    YouTubeVideoTags,
+)
 
 
 def _parse_dt_field(value: Any) -> Any:
     """Parse a datetime string field; returns datetime, None, or the original value."""
     if isinstance(value, str) and value:
         from django.utils.dateparse import parse_datetime as _pd
+
         return _pd(value)
     return value
 

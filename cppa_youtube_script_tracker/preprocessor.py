@@ -98,7 +98,9 @@ def _build_document_content(video: YouTubeVideo, speaker_names: list[str]) -> st
     return "\n".join(parts).strip()
 
 
-def _build_candidate_queryset(normalized_failed: list[str], final_sync_at: datetime | None):
+def _build_candidate_queryset(
+    normalized_failed: list[str], final_sync_at: datetime | None
+):
     """Return the ORM queryset of candidates to preprocess."""
     queryset = YouTubeVideo._default_manager.select_related("channel").prefetch_related(  # type: ignore[attr-defined]
         "video_speakers__speaker"
@@ -113,7 +115,9 @@ def _build_candidate_queryset(normalized_failed: list[str], final_sync_at: datet
     return queryset.filter(criteria).order_by("id")
 
 
-def _build_video_metadata(video: YouTubeVideo, speaker_names: list[str]) -> dict[str, Any]:
+def _build_video_metadata(
+    video: YouTubeVideo, speaker_names: list[str]
+) -> dict[str, Any]:
     """Build the Pinecone metadata dict for one video."""
     channel_title = (video.channel.channel_title if video.channel else "") or ""
     return {
@@ -161,6 +165,11 @@ def preprocess_youtube_for_pinecone(
         if not content:
             continue
 
-        docs.append({"content": content, "metadata": _build_video_metadata(video, speaker_names)})
+        docs.append(
+            {
+                "content": content,
+                "metadata": _build_video_metadata(video, speaker_names),
+            }
+        )
 
     return docs, False

@@ -1,7 +1,13 @@
 from django.contrib import admin
 from django.contrib.admin import ModelAdmin
 
-from .models import CppaTags, YouTubeChannel, YouTubeVideo, YouTubeVideoSpeaker, YouTubeVideoTags
+from .models import (
+    CppaTags,
+    YouTubeChannel,
+    YouTubeVideo,
+    YouTubeVideoSpeaker,
+    YouTubeVideoTags,
+)
 
 
 @admin.register(YouTubeChannel)
@@ -43,4 +49,8 @@ class CppaTagsAdmin(ModelAdmin):
 class YouTubeVideoTagsAdmin(ModelAdmin):
     list_display = ("id", "youtube_video", "cppa_tag")
     raw_id_fields = ("youtube_video", "cppa_tag")
-    search_fields = ("youtube_video__video_id", "youtube_video__title", "cppa_tag__tag_name")
+    search_fields = (
+        "youtube_video__video_id",
+        "youtube_video__title",
+        "cppa_tag__tag_name",
+    )
