@@ -59,6 +59,10 @@ python manage.py run_all_collectors
 
 For local development you can start the dev server: `python manage.py runserver`.
 
+## Running with Docker
+
+You can run the whole stack (Django, PostgreSQL, Redis, Celery worker and beat) in Docker. See **[docs/Docker.md](docs/Docker.md)** for step-by-step instructions, including first-time setup and useful commands.
+
 ## Celery
 
 The daily workflow runs as a Celery task (see [docs/Celery_test.md](docs/Celery_test.md)). You need **Redis** running (default: `localhost:6379`). Start the worker and (optionally) Beat in separate terminals:
