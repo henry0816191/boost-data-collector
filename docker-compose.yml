@@ -11,7 +11,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-boost} -d ${POSTGRES_DB:-boost_dashboard}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-boost} -d ${POSTGRES_DB:-boost_dashboard}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -25,11 +29,21 @@ services:
       retries: 5
 
   selenium:
-    image: selenium/standalone-chrome:latest
+    image: selenium/standalone-chrome:145.0-chromedriver-145.0-20260222
     platform: linux/amd64
     shm_size: "2g"
     ports:
       - "4444:4444"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'curl -sf http://localhost:4444/status | grep -q ''"ready":true'' || exit 1',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
 
   web:
     build: .
