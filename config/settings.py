@@ -311,6 +311,10 @@ LOGGING = {
         "handlers": ["console", "file"],
         "level": LOG_LEVEL,
     },
+    "loggers": {
+        # Celery internals (bootsteps, timer, consumer) are noisy at DEBUG; use INFO.
+        "celery": {"level": "INFO", "propagate": True},
+    },
 }
 
 # Celery
