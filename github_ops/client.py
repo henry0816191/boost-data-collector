@@ -8,7 +8,8 @@ from __future__ import annotations
 import base64
 import logging
 import time
-from datetime import datetime
+from email.utils import parsedate_to_datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import requests
@@ -91,9 +92,23 @@ class GitHubAPIClient:
                 raise
 
     def _parse_rate_limit_wait(self, response: requests.Response) -> Optional[int]:
-        """If response is 403 with rate limit exhausted, return seconds to wait; else None."""
-        if response.status_code != 403:
+        """If response is 403/429 with rate limit or Retry-After, return seconds to wait; else None."""
+        if response.status_code not in (403, 429):
             return None
+        retry_after = response.headers.get("Retry-After")
+        if retry_after is not None:
+            retry_after = retry_after.strip()
+            try:
+                return max(0, int(retry_after))
+            except ValueError:
+                try:
+                    dt = parsedate_to_datetime(retry_after)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    wait = (dt - datetime.now(timezone.utc)).total_seconds()
+                    return max(0, int(wait))
+                except (ValueError, TypeError):
+                    pass
         remaining = response.headers.get("X-RateLimit-Remaining")
         if remaining is None:
             return None

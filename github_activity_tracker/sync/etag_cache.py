@@ -24,7 +24,12 @@ def _redis_client():
         import redis
 
         url = getattr(settings, "GITHUB_ETAG_REDIS_URL", "redis://localhost:6379/1")
-        client = redis.Redis.from_url(url, decode_responses=True)
+        client = redis.Redis.from_url(
+            url,
+            decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+        )
         client.ping()
         return client
     except Exception as e:
