@@ -69,4 +69,5 @@ def test_redis_list_etag_cache_get_set_use_client(mock_redis_client):
     mock_client.setex.assert_called_once()
     args = mock_client.setex.call_args[0]
     assert args[0] == f"{KEY_PREFIX}:10:pulls:3::"
+    assert args[1] == cache.ttl
     assert args[2] == "W/new"
