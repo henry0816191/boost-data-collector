@@ -2,7 +2,7 @@
 
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from github_activity_tracker.fetcher import (
     fetch_comments_from_github,
@@ -113,14 +113,21 @@ def test_fetch_commits_from_github_includes_since_until_params():
 
 
 def test_fetch_commits_from_github_with_etag_cache_304_yields_nothing():
-    """When etag_cache is passed and rest_request_conditional returns 304, no items yielded and set not called."""
+    """When etag_cache is passed and rest_request_conditional returns 304, page is skipped
+    and next page is requested; when next page returns empty, no items yielded and set not called.
+    """
     client = MagicMock()
-    client.rest_request_conditional.return_value = (None, 'W/"cached"')
+    # Page 1: 304 -> skip; page 2: empty -> break. No items, no etag_cache.set.
+    client.rest_request_conditional.side_effect = [
+        (None, 'W/"cached"'),  # page 1: 304
+        ([], None),  # page 2: empty, stops loop
+    ]
     etag_cache = MagicMock()
     etag_cache.get.return_value = 'W/"cached"'
-    items = list(fetch_commits_from_github(client, "o", "r", etag_cache=etag_cache))
+    with patch("github_activity_tracker.fetcher.time.sleep"):
+        items = list(fetch_commits_from_github(client, "o", "r", etag_cache=etag_cache))
     assert items == []
-    client.rest_request_conditional.assert_called_once()
+    assert client.rest_request_conditional.call_count == 2
     etag_cache.set.assert_not_called()
 
 
