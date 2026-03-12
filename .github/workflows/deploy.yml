@@ -21,13 +21,25 @@ jobs:
     environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || 'staging' }}
     env:
       BRANCH: ${{ github.event.workflow_run.head_branch }}
-      SSH_HOST: ${{ github.event.workflow_run.head_branch == 'main' && secrets.PROD_SSH_HOST || secrets.DEV_SSH_HOST }}
-      SSH_USER: ${{ github.event.workflow_run.head_branch == 'main' && secrets.PROD_SSH_USER || secrets.DEV_SSH_USER }}
-      SSH_PRIVATE_KEY: ${{ github.event.workflow_run.head_branch == 'main' && secrets.PROD_SSH_PRIVATE_KEY || secrets.DEV_SSH_PRIVATE_KEY }}
-      SSH_PORT: ${{ github.event.workflow_run.head_branch == 'main' && secrets.PROD_SSH_PORT || secrets.DEV_SSH_PORT || 22 }}
       REPO_URL: https://github.com/${{ github.repository }}.git
       SCRIPT_URL: ${{ secrets.DEPLOY_SCRIPT_URL || format('https://raw.githubusercontent.com/{0}/{1}/.github/workflows/deploy-script/deploy.sh', github.repository, github.event.workflow_run.head_sha) }}
     steps:
+      - name: Set SSH vars (production)
+        if: github.event.workflow_run.head_branch == 'main'
+        run: |
+          echo "SSH_HOST=${{ secrets.PROD_SSH_HOST }}" >> $GITHUB_ENV
+          echo "SSH_USER=${{ secrets.PROD_SSH_USER }}" >> $GITHUB_ENV
+          echo "SSH_PRIVATE_KEY=${{ secrets.PROD_SSH_PRIVATE_KEY }}" >> $GITHUB_ENV
+          echo "SSH_PORT=${{ secrets.PROD_SSH_PORT || 22 }}" >> $GITHUB_ENV
+
+      - name: Set SSH vars (staging)
+        if: github.event.workflow_run.head_branch == 'develop'
+        run: |
+          echo "SSH_HOST=${{ secrets.DEV_SSH_HOST }}" >> $GITHUB_ENV
+          echo "SSH_USER=${{ secrets.DEV_SSH_USER }}" >> $GITHUB_ENV
+          echo "SSH_PRIVATE_KEY=${{ secrets.DEV_SSH_PRIVATE_KEY }}" >> $GITHUB_ENV
+          echo "SSH_PORT=${{ secrets.DEV_SSH_PORT || 22 }}" >> $GITHUB_ENV
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.2.5
         env:

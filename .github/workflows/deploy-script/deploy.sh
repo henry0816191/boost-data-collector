@@ -32,12 +32,8 @@ else
   git clone --branch "$BRANCH" "$REPO_URL" "$DEPLOY_DIR"
 fi
 
-if [[ ! -f "$DEPLOY_DIR/.env" && -f "$DEPLOY_DIR/.env.example" ]]; then
-  log "WARNING: .env not found. Copying .env.example to .env — update it before running in production."
-  cp "$DEPLOY_DIR/.env.example" "$DEPLOY_DIR/.env"
-  chmod 600 "$DEPLOY_DIR/.env"
-elif [[ ! -f "$DEPLOY_DIR/.env" ]]; then
-  log "ERROR: .env not found and no .env.example to fall back to. Place .env manually in $DEPLOY_DIR."
+if [[ ! -f "$DEPLOY_DIR/.env" ]]; then
+  log "ERROR: .env not found. Place .env manually in $DEPLOY_DIR before deploying."
   exit 1
 fi
 

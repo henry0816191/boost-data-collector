@@ -74,7 +74,7 @@ Docker and Docker Compose are also required. Refer to the [official Docker docs]
 
 ### 1. Create the `.env` file
 
-The deploy script does **not** manage secrets — the `.env` file must be placed manually on the server before the first deploy.
+The deploy script does **not** manage secrets. You must place `.env` manually on the server before the first deploy; if `.env` is missing, the deploy will fail with an error.
 
 ```bash
 sudo mkdir -p /opt/boost-data-collector
@@ -111,10 +111,7 @@ The deploy script (`.github/workflows/deploy-script/deploy.sh`) runs on the remo
 2. Checks that `git` and `make` are installed.
 3. If the repo already exists — fetches and hard-resets to `origin/<branch>`.
 4. If the repo does not exist — clones it fresh.
-5. Checks for `.env` in the deploy directory:
-   - If found — uses it as-is.
-   - If not found but `.env.example` exists — copies it with a warning.
-   - If neither exists — exits with an error.
+5. Checks for `.env` in the deploy directory. If it is missing, the script exits with an error. You must create `.env` on the server before the first deploy (see [One-Time Server Setup](#1-create-the-env-file)).
 6. Stops existing containers (`make down`).
 7. Builds and starts the stack (`make build && make up`).
 
