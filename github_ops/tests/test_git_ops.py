@@ -98,28 +98,32 @@ def test_clone_repo_uses_get_github_token_when_token_not_provided(tmp_path):
 
 
 def test_push_with_branch_appends_branch_to_command(tmp_path):
-    """push with branch runs git push <url> <branch>."""
+    """push with branch runs git add, git commit, get-url, then git push <url> <branch>."""
     with patch("github_ops.git_ops.subprocess.run") as run_mock:
         run_mock.side_effect = [
-            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),  # add
+            MagicMock(returncode=0, stdout="", stderr=""),  # commit
+            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),  # get-url
             MagicMock(),
         ]
         push(tmp_path, "origin", branch="main", token="t")
-    assert run_mock.call_count == 2
-    push_call = run_mock.call_args_list[1][0][0]
+    assert run_mock.call_count == 4
+    push_call = run_mock.call_args_list[3][0][0]
     assert "push" in push_call
     assert "main" in push_call
 
 
 def test_push_without_branch_does_not_append_branch(tmp_path):
-    """push without branch runs git push <url> only."""
+    """push without branch runs git add, git commit, get-url, then git push <url> only."""
     with patch("github_ops.git_ops.subprocess.run") as run_mock:
         run_mock.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
             MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
             MagicMock(),
         ]
         push(tmp_path, "origin", token="t")
-    push_call = run_mock.call_args_list[1][0][0]
+    push_call = run_mock.call_args_list[3][0][0]
     assert "push" in push_call
     assert push_call[-1] != "main"
 
@@ -128,11 +132,13 @@ def test_push_injects_token_into_push_url(tmp_path):
     """push uses _url_with_token so push URL contains token."""
     with patch("github_ops.git_ops.subprocess.run") as run_mock:
         run_mock.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
             MagicMock(stdout="https://github.com/owner/repo.git\n", stderr=""),
             MagicMock(),
         ]
         push(tmp_path, "origin", token="secret_token")
-    push_call = run_mock.call_args_list[1][0][0]
+    push_call = run_mock.call_args_list[3][0][0]
     push_url = push_call[push_call.index("push") + 1]
     assert "secret_token" in push_url
 
@@ -144,6 +150,8 @@ def test_push_uses_get_github_token_when_token_not_provided(tmp_path):
     ) as get_token:
         with patch("github_ops.git_ops.subprocess.run") as run_mock:
             run_mock.side_effect = [
+                MagicMock(returncode=0, stdout="", stderr=""),
+                MagicMock(returncode=0, stdout="", stderr=""),
                 MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
                 MagicMock(),
             ]

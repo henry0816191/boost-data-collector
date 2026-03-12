@@ -16,6 +16,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Optional
+from datetime import datetime, timezone
 
 import requests
 
@@ -181,37 +182,42 @@ def push(
 ) -> None:
     """
     Push to remote. Uses push token by default.
-    If commit_message is provided, runs git add, git commit, then push; otherwise only push.
-    add_paths: paths to add (relative to repo_dir); if None, adds all (git add .). Used only when commit_message is set.
+    Always runs git add, git commit, then push. Uses commit_message if provided,
+    otherwise "Auto commit in <YYYY-MM-DD HH:MM:SS UTC>". add_paths: paths to add
+    (relative to repo_dir); if None, adds all (git add .).
     """
     repo_dir = Path(repo_dir)
     if token is None:
         token = get_github_token(use="push")
 
-    if commit_message is not None:
-        add_targets = ["."] if add_paths is None else [str(Path(p)) for p in add_paths]
-        logger.info("Adding and committing in %s", repo_dir)
-        subprocess.run(
-            ["git", "-C", str(repo_dir), "add", *add_targets],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        commit_result = subprocess.run(
-            ["git", "-C", str(repo_dir), "commit", "-m", commit_message],
-            capture_output=True,
-            text=True,
-        )
-        if commit_result.returncode != 0:
-            out = (commit_result.stderr or "") + (commit_result.stdout or "")
-            if "nothing to commit" not in out:
-                raise subprocess.CalledProcessError(
-                    commit_result.returncode,
-                    ["git", "commit", "-m", commit_message],
-                    commit_result.stdout,
-                    commit_result.stderr,
-                )
-            logger.info("Nothing to commit in %s", repo_dir)
+    add_targets = ["."] if add_paths is None else [str(Path(p)) for p in add_paths]
+    message = (
+        commit_message
+        if commit_message is not None
+        else f"Auto commit in {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    )
+    logger.info("Adding and committing in %s", repo_dir)
+    subprocess.run(
+        ["git", "-C", str(repo_dir), "add", *add_targets],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    commit_result = subprocess.run(
+        ["git", "-C", str(repo_dir), "commit", "-m", message],
+        capture_output=True,
+        text=True,
+    )
+    if commit_result.returncode != 0:
+        out = (commit_result.stderr or "") + (commit_result.stdout or "")
+        if "nothing to commit" not in out:
+            raise subprocess.CalledProcessError(
+                commit_result.returncode,
+                ["git", "commit", "-m", message],
+                commit_result.stdout,
+                commit_result.stderr,
+            )
+        logger.info("Nothing to commit in %s", repo_dir)
 
     result = subprocess.run(
         ["git", "-C", str(repo_dir), "remote", "get-url", remote],
