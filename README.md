@@ -185,7 +185,7 @@ Docs are organized **by topic** (one doc per concern: workflow, workspace, servi
 The project deploys automatically over SSH after CI passes. Pushes to `develop` deploy to staging; pushes to `main` deploy to production.
 
 See **[docs/Deployment.md](docs/Deployment.md)** for:
-- Required GitHub secrets (`PROD_SSH_*` / `DEV_SSH_*`)
+- Required environment secrets (`SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `SSH_PORT`) — set per environment (production / staging), not as PROD_* / DEV_* repository secrets
 - GitHub Environments setup (approval gates for production)
 - One-time server setup (prerequisites, `.env`, SSH key)
 - Deploy script behavior and override options
