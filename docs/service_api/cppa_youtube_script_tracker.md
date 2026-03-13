@@ -51,7 +51,7 @@
 
 | Function                        | Parameter types                                    | Return type                  | Description                                                                      |
 | ------------------------------- | -------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------- |
-| `get_or_create_youtube_speaker` | `display_name: str`, `identity: Identity \| None = None` | `tuple[YoutubeSpeaker, bool]` | Get or create a speaker by `display_name`. Raises `ValueError` if name is empty. |
+| `get_or_create_youtube_speaker` | `external_id: str`, `display_name: str = ""`, `identity: Identity \| None = None` | `tuple[YoutubeSpeaker, bool]` | Get or create a speaker by `external_id`; updates `display_name` when provided. Raises `ValueError` if `external_id` is empty. |
 
 **Module path:** `cppa_user_tracker.services`
 
@@ -83,12 +83,12 @@ Each document dict has:
 | ----------------------- | ----------- | --------------------------------------------------------------------------- |
 | `get_workspace_root()`  | `Path`      | `workspace/cppa_youtube_script_tracker/`                                    |
 | `get_raw_dir()`         | `Path`      | `workspace/raw/cppa_youtube_script_tracker/` (permanent JSON archive)       |
-| `get_transcripts_dir()` | `Path`      | `workspace/cppa_youtube_script_tracker/transcripts/` (permanent VTT archive) |
-| `get_queue_dir()`       | `Path`      | `workspace/cppa_youtube_script_tracker/queue/` (short-lived; deleted after persist) |
-| `get_raw_json_path(video_id)` | `Path` | Raw JSON archive path for a video.                                          |
-| `get_queue_json_path(video_id)` | `Path` | Queue JSON path for a video.                                               |
+| `get_raw_transcripts_dir()` | `Path`      | `workspace/raw/cppa_youtube_script_tracker/transcripts/` (permanent VTT archive) |
+| `get_metadata_queue_dir()`       | `Path`      | `workspace/cppa_youtube_script_tracker/metadata/` (short-lived; moved after persist) |
+| `get_raw_metadata_path(video_id)` | `Path` | Raw metadata JSON archive path for a video.                                          |
+| `get_metadata_queue_path(video_id)` | `Path` | Metadata queue JSON path for a video.                                               |
 | `get_transcript_path(video_id, lang="en")` | `Path` | VTT path for a video.                                         |
-| `iter_queue_jsons()`    | `Iterator[Path]` | Yield all `*.json` files in the queue directory.                       |
+| `iter_metadata_queue_jsons()`    | `Iterator[Path]` | Yield all `*.json` files in the metadata queue directory.                       |
 
 ---
 

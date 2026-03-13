@@ -36,9 +36,16 @@ from cppa_youtube_script_tracker.services import (
     get_or_create_video,
     link_speaker_to_video,
     link_tag_to_video,
+    remove_speaker_links_by_name,
     update_video_transcript,
 )
 from cppa_youtube_script_tracker.transcript import download_vtt
+from cppa_youtube_script_tracker.utils import (
+    UNKNOWN_SPEAKER_NAME,
+    build_speaker_external_id,
+    clean_text,
+    resolve_speakers,
+)
 from cppa_youtube_script_tracker.workspace import (
     get_metadata_queue_path,
     get_raw_metadata_path,
@@ -52,30 +59,6 @@ PINECONE_NAMESPACE_ENV_KEY = "YOUTUBE_PINECONE_NAMESPACE"
 _DEFAULT_PINECONE_NAMESPACE = "youtube-scripts"
 
 YOUTUBE_COOKIES_FILE = os.getenv("YOUTUBE_COOKIES_FILE", "youtube_cookies.txt")
-
-
-def _clean_text(value: object) -> str:
-    """Return DB-safe text (PostgreSQL rejects NUL bytes)."""
-    if value is None:
-        return ""
-    value = str(value).replace("\x00", "").replace("\u2019", "'")
-
-    return value
-
-
-def _extract_speakers_from_title(title: str) -> list[str]:
-    """Heuristic: extract speaker names from talk titles like 'Topic - Speaker Name'.
-
-    Returns a list of candidate names (may be empty if no pattern matched).
-    """
-    if not title:
-        return []
-    for sep in (" - ", " — ", " | "):
-        if sep in title:
-            candidate = title.split(sep)[-1].strip()
-            if candidate and len(candidate) < 80 and " " in candidate:
-                return [candidate]
-    return []
 
 
 def _move_to_raw(video_id: str, queue_path) -> None:
@@ -97,25 +80,15 @@ def _move_to_raw(video_id: str, queue_path) -> None:
 
 def _persist_video(video_data: dict) -> tuple[bool, bool]:
     """Persist one video metadata dict to DB. Returns (created, skipped)."""
-    video_id = _clean_text(video_data.get("video_id", "")).strip()
+    video_id = clean_text(video_data.get("video_id", ""))
     if not video_id:
         return False, True
 
-    channel_id = _clean_text(video_data.get("channel_id", "")).strip()
-    channel_title = _clean_text(video_data.get("channel_title", "")).strip()
+    channel_id = clean_text(video_data.get("channel_id", ""))
+    channel_title = clean_text(video_data.get("channel_title", ""))
     channel = get_or_create_channel(channel_id, channel_title) if channel_id else None
 
-    metadata = {
-        "title": _clean_text(video_data.get("title", "")),
-        "description": _clean_text(video_data.get("description", "")),
-        "published_at": video_data.get("published_at"),
-        "duration_seconds": video_data.get("duration_seconds", 0),
-        "view_count": video_data.get("view_count"),
-        "like_count": video_data.get("like_count"),
-        "comment_count": video_data.get("comment_count"),
-        "search_term": _clean_text(video_data.get("search_term", "")),
-        "scraped_at": video_data.get("scraped_at"),
-    }
+    metadata = _build_video_metadata(video_data)
 
     try:
         video, created = get_or_create_video(
@@ -126,34 +99,75 @@ def _persist_video(video_data: dict) -> tuple[bool, bool]:
         return False, True
 
     if created:
-        for name in _extract_speakers_from_title(
-            _clean_text(video_data.get("title", ""))
-        ):
-            try:
-                speaker, _ = get_or_create_youtube_speaker(display_name=name)
-                link_speaker_to_video(video, speaker)
-            except Exception:
-                logger.warning(
-                    "_persist_video: could not link speaker %r to video %s",
-                    name,
-                    video_id,
-                )
-
-        for raw_tag in video_data.get("tags") or []:
-            tag_name = _clean_text(raw_tag).strip()
-            if not tag_name:
-                continue
-            try:
-                tag = get_or_create_tag(tag_name)
-                link_tag_to_video(video, tag)
-            except Exception:
-                logger.warning(
-                    "_persist_video: could not link tag %r to video %s",
-                    tag_name,
-                    video_id,
-                )
+        speaker_names = _resolve_video_speakers(video_data, channel_title)
+        _link_speakers(video, speaker_names, channel_id=channel_id, video_id=video_id)
+        _link_tags(video, video_data.get("tags") or [], video_id=video_id)
 
     return created, False
+
+
+def _build_video_metadata(video_data: dict) -> dict:
+    return {
+        "title": clean_text(video_data.get("title", "")),
+        "description": clean_text(video_data.get("description", "")),
+        "published_at": video_data.get("published_at"),
+        "duration_seconds": video_data.get("duration_seconds", 0),
+        "view_count": video_data.get("view_count"),
+        "like_count": video_data.get("like_count"),
+        "comment_count": video_data.get("comment_count"),
+        "search_term": clean_text(video_data.get("search_term", "")),
+        "scraped_at": video_data.get("scraped_at"),
+    }
+
+
+def _link_speakers(
+    video: YouTubeVideo,
+    speaker_names: list[str],
+    *,
+    channel_id: str,
+    video_id: str,
+) -> None:
+    for name in speaker_names:
+        try:
+            speaker, _ = get_or_create_youtube_speaker(
+                external_id=build_speaker_external_id(
+                    speaker_name=name,
+                    channel_id=channel_id,
+                    video_id=video_id,
+                ),
+                display_name=name,
+            )
+            link_speaker_to_video(video, speaker)
+        except Exception:
+            logger.warning(
+                "_link_speakers: could not link speaker %r to video %s",
+                name,
+                video_id,
+            )
+
+
+def _link_tags(video: YouTubeVideo, raw_tags: list[str], *, video_id: str) -> None:
+    for raw_tag in raw_tags:
+        tag_name = clean_text(raw_tag)
+        if not tag_name:
+            continue
+        try:
+            tag = get_or_create_tag(tag_name)
+            link_tag_to_video(video, tag)
+        except Exception:
+            logger.warning(
+                "_link_tags: could not link tag %r to video %s",
+                tag_name,
+                video_id,
+            )
+
+
+def _resolve_video_speakers(video_data: dict, channel_title: str) -> list[str]:
+    return resolve_speakers(
+        title=clean_text(video_data.get("title", "")),
+        description=clean_text(video_data.get("description", "")),
+        channel_title=channel_title,
+    )
 
 
 def _process_queue() -> tuple[int, int]:
@@ -262,6 +276,63 @@ def _persist_fetched_video(vdata: dict) -> tuple[bool, bool]:
         return False, True
 
 
+def _read_text_file(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8") as file_obj:
+            return file_obj.read()
+    except Exception:
+        return ""
+
+
+def _enrich_speakers_from_transcript(
+    video_obj: YouTubeVideo, transcript_path: str
+) -> None:
+    """Try transcript-based speaker extraction and replace unknown fallback if possible."""
+    transcript_text = _read_text_file(transcript_path)
+    if not transcript_text:
+        return
+
+    resolved = resolve_speakers(
+        title=clean_text(video_obj.title),
+        description=clean_text(video_obj.description),
+        channel_title=(
+            clean_text(video_obj.channel.channel_title) if video_obj.channel else ""
+        ),
+        transcript_text=transcript_text,
+    )
+    if not resolved:
+        return
+
+    # If we discovered a concrete speaker name, remove fallback "unkown" links first.
+    has_known = any(
+        name.casefold() != UNKNOWN_SPEAKER_NAME.casefold() for name in resolved
+    )
+    if has_known:
+        remove_speaker_links_by_name(video_obj, UNKNOWN_SPEAKER_NAME)
+
+    for name in resolved:
+        try:
+            speaker, _ = get_or_create_youtube_speaker(
+                external_id=build_speaker_external_id(
+                    speaker_name=name,
+                    channel_id=(
+                        clean_text(video_obj.channel.channel_id)
+                        if video_obj.channel
+                        else ""
+                    ),
+                    video_id=video_obj.video_id,
+                ),
+                display_name=name,
+            )
+            link_speaker_to_video(video_obj, speaker)
+        except Exception:
+            logger.warning(
+                "_enrich_speakers_from_transcript: could not link speaker %r to video %s",
+                name,
+                video_obj.video_id,
+            )
+
+
 def _run_phase_2(
     start_time: datetime,
     end_time: datetime,
@@ -310,6 +381,7 @@ def _run_phase_3() -> tuple[int, int]:
             if vtt_path:
                 video_obj = YouTubeVideo.objects.get(video_id=vid)
                 update_video_transcript(video_obj, str(vtt_path))
+                _enrich_speakers_from_transcript(video_obj, str(vtt_path))
                 ok += 1
             else:
                 fail += 1

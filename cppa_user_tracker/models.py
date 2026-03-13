@@ -187,12 +187,17 @@ class DiscordProfile(BaseProfile):
 
 
 class YoutubeSpeaker(BaseProfile):
-    """YouTube speaker profile. Identified by display_name."""
+    """YouTube speaker profile.
+
+    Uses external_id as canonical identifier (stable across updates). display_name is
+    a human-readable field and is not used as the identity key.
+    """
 
     def save(self, *args, **kwargs):
         self.type = ProfileType.YOUTUBE
         super().save(*args, **kwargs)
 
+    external_id = models.CharField(max_length=255, unique=True)
     display_name = models.CharField(max_length=255, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

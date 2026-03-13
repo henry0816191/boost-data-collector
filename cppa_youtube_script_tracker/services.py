@@ -113,6 +113,24 @@ def link_speaker_to_video(
     return join
 
 
+def remove_speaker_links_by_name(
+    video: YouTubeVideo,
+    speaker_name: str,
+) -> int:
+    """Remove all speaker links for a video where speaker.display_name matches speaker_name.
+
+    Returns number of deleted join rows.
+    """
+    speaker_name_val = (speaker_name or "").strip()
+    if not speaker_name_val:
+        return 0
+    deleted, _ = YouTubeVideoSpeaker.objects.filter(
+        video=video,
+        speaker__display_name=speaker_name_val,
+    ).delete()
+    return int(deleted)
+
+
 def get_or_create_tag(tag_name: str) -> CppaTags:
     """Get or create a CppaTags entry by tag_name.
 

@@ -27,8 +27,46 @@ C_PLUS_PLUS_CHANNELS: dict[str, str] = {
     "Bo Qian": "UCEqgmyWChwmqyRdmnsS24Zw",
 }
 
+_CHANNEL_FOCUSED_TERMS: list[str] = [
+    "C++",
+]
+
+# Search-term based discovery (global searches, not tied to one channel ID)
+_GLOBAL_SEARCH_TERMS: list[str] = [
+    "C++ programming",
+    "C++ tutorial",
+    "C++ advanced",
+    "modern C++",
+    "C++20",
+    "C++23",
+    "C++ templates",
+    "C++ STL",
+    "C++ best practices",
+    "C++ performance",
+    "Boost C++",
+]
+
+# Famous-figure focused discovery terms.
+_FAMOUS_FIGURE_TERMS: list[str] = [
+    "Bjarne Stroustrup C++",
+    "Herb Sutter C++",
+    "Scott Meyers C++",
+    "Andrei Alexandrescu C++",
+    "Nicolai Josuttis C++",
+    "Chandler Carruth C++",
+    "Kate Gregory C++",
+    "Jason Turner C++",
+    "Sean Parent C++",
+    "Jonathan Boccara C++",
+]
+
 _MAX_RESULTS_PER_PAGE = 50
 _DELAY_SECONDS = 0.5
+_DEFAULT_MAX_QUERY_PAIRS = 30
+
+
+class QuotaExceededError(RuntimeError):
+    """Raised when YouTube Data API quota has been exhausted."""
 
 
 def _get_api_key() -> str:
@@ -53,6 +91,25 @@ def _parse_duration_iso(duration_iso: str) -> int:
         + int(match.group(2) or 0) * 60
         + int(match.group(3) or 0)
     )
+
+
+def _is_quota_exceeded_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "quotaexceeded" in text or "youtube.quota" in text
+
+
+def _get_max_query_pairs() -> int:
+    """
+    Return max number of query pairs for one run.
+
+    Configure with `YOUTUBE_MAX_QUERY_PAIRS` in Django settings/.env.
+    """
+    raw = getattr(settings, "YOUTUBE_MAX_QUERY_PAIRS", _DEFAULT_MAX_QUERY_PAIRS)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = _DEFAULT_MAX_QUERY_PAIRS
+    return max(1, value)
 
 
 def _format_video_data(
@@ -91,7 +148,31 @@ def _to_rfc3339(dt: datetime) -> str:
 
 
 def _build_queries(channel_title: Optional[str]) -> list[tuple[str, Optional[str]]]:
-    """Return list of (query_text, channel_id_or_None) pairs to iterate over."""
+    """Return list of (query_text, channel_id_or_None) pairs to iterate over.
+
+    Strategy:
+    - If channel_title is specified:
+      - Known channel ID: run several C++ terms scoped to that channel.
+      - Unknown channel: run keyword searches with that channel title.
+    - Otherwise:
+      - Run channel-scoped queries for known channels.
+      - Run global term-based discovery queries.
+      - Run famous-figure discovery queries.
+    """
+
+    def _dedupe_pairs(
+        pairs: list[tuple[str, Optional[str]]],
+    ) -> list[tuple[str, Optional[str]]]:
+        seen: set[tuple[str, Optional[str]]] = set()
+        out: list[tuple[str, Optional[str]]] = []
+        for query_text, ch_id in pairs:
+            key = (query_text.strip().casefold(), ch_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append((query_text, ch_id))
+        return out
+
     if channel_title:
         ch_id = C_PLUS_PLUS_CHANNELS.get(channel_title)
         if not ch_id:
@@ -100,9 +181,18 @@ def _build_queries(channel_title: Optional[str]) -> list[tuple[str, Optional[str
                 "falling back to keyword search",
                 channel_title,
             )
-            return [(channel_title, None)]
-        return [("C++", ch_id)]
-    return [("C++", ch_id) for ch_id in C_PLUS_PLUS_CHANNELS.values()]
+            return _dedupe_pairs(
+                [(channel_title, None), (f"{channel_title} C++", None)]
+            )
+        return _dedupe_pairs([(term, ch_id) for term in _CHANNEL_FOCUSED_TERMS])
+
+    pairs: list[tuple[str, Optional[str]]] = []
+    for ch_id in C_PLUS_PLUS_CHANNELS.values():
+        pairs.extend((term, ch_id) for term in _CHANNEL_FOCUSED_TERMS)
+
+    pairs.extend((term, None) for term in _FAMOUS_FIGURE_TERMS)
+    pairs.extend((term, None) for term in _GLOBAL_SEARCH_TERMS)
+    return _dedupe_pairs(pairs)
 
 
 def _fetch_search_page(
@@ -113,7 +203,10 @@ def _fetch_search_page(
     before_str: str,
     page_token: Optional[str],
 ) -> Optional[dict[str, Any]]:
-    """Execute one search().list() call; return the response or None on error."""
+    """Execute one search().list() call; return the response or None on error.
+
+    Raises QuotaExceededError when API quota is exhausted.
+    """
     params: dict[str, Any] = {
         "q": query_text,
         "part": "id,snippet",
@@ -131,12 +224,17 @@ def _fetch_search_page(
         time.sleep(_DELAY_SECONDS)
         return youtube.search().list(**params).execute()  # type: ignore[union-attr]
     except Exception as exc:  # pylint: disable=broad-exception-caught
+        if _is_quota_exceeded_error(exc):
+            raise QuotaExceededError("YouTube API quota exceeded.") from exc
         logger.error("fetch_videos: search API error: %s", exc)
         return None
 
 
 def _fetch_video_details(youtube: Any, video_ids: list[str]) -> list[dict[str, Any]]:
-    """Execute one videos().list() call; return items or empty list on error."""
+    """Execute one videos().list() call; return items or empty list on error.
+
+    Raises QuotaExceededError when API quota is exhausted.
+    """
     try:
         time.sleep(_DELAY_SECONDS)
         resp = (
@@ -146,6 +244,8 @@ def _fetch_video_details(youtube: Any, video_ids: list[str]) -> list[dict[str, A
         )
         return resp.get("items", [])
     except Exception as exc:  # pylint: disable=broad-exception-caught
+        if _is_quota_exceeded_error(exc):
+            raise QuotaExceededError("YouTube API quota exceeded.") from exc
         logger.error("fetch_videos: videos.list API error: %s", exc)
         return []
 
@@ -226,19 +326,38 @@ def fetch_videos(
     before_str = _to_rfc3339(published_before)
     seen_ids: set[str] = set(skip_video_ids or set())
     all_videos: list[dict[str, Any]] = []
-
-    for query_text, ch_id in _build_queries(channel_title):
-        all_videos.extend(
-            _process_one_channel_query(
-                youtube,
-                query_text,
-                ch_id,
-                after_str,
-                before_str,
-                seen_ids,
-                min_duration_seconds,
-            )
+    query_pairs = _build_queries(channel_title)
+    max_queries = _get_max_query_pairs()
+    if len(query_pairs) > max_queries:
+        logger.warning(
+            "fetch_videos: query list truncated from %d to %d by YOUTUBE_MAX_QUERY_PAIRS",
+            len(query_pairs),
+            max_queries,
         )
+    query_pairs = query_pairs[:max_queries]
+
+    for idx, (query_text, ch_id) in enumerate(query_pairs, start=1):
+        try:
+            all_videos.extend(
+                _process_one_channel_query(
+                    youtube,
+                    query_text,
+                    ch_id,
+                    after_str,
+                    before_str,
+                    seen_ids,
+                    min_duration_seconds,
+                )
+            )
+        except QuotaExceededError:
+            logger.error(
+                "fetch_videos: quota exhausted at query %d/%d (%r). "
+                "Returning partial results collected so far.",
+                idx,
+                len(query_pairs),
+                query_text,
+            )
+            break
 
     logger.info("fetch_videos: fetched %d videos", len(all_videos))
     return all_videos

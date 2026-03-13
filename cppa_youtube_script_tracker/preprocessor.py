@@ -102,17 +102,17 @@ def _build_candidate_queryset(
     normalized_failed: list[str], final_sync_at: datetime | None
 ):
     """Return the ORM queryset of candidates to preprocess."""
-    queryset = YouTubeVideo._default_manager.select_related("channel").prefetch_related(  # type: ignore[attr-defined]
+    queryset = YouTubeVideo.objects.select_related("channel").prefetch_related(
         "video_speakers__speaker"
     )
     if final_sync_at is None and not normalized_failed:
-        return queryset.order_by("id")
+        return queryset.order_by("video_id")
     criteria = Q()
     if final_sync_at is not None:
         criteria |= Q(created_at__gt=final_sync_at)
     if normalized_failed:
         criteria |= Q(video_id__in=normalized_failed)
-    return queryset.filter(criteria).order_by("id")
+    return queryset.filter(criteria).order_by("video_id")
 
 
 def _build_video_metadata(
