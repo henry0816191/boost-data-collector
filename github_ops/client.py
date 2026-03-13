@@ -195,19 +195,22 @@ class GitHubAPIClient:
         json_data: Optional[dict] = None,
         headers: Optional[dict] = None,
         timeout: int = 30,
-        allow_retry: bool = False,
+        allow_retry_on_5xx: bool = False,
+        allow_retry_on_connection_errors: bool = False,
     ) -> requests.Response:
         """Perform one HTTP request. Retries on 429/403 rate limit (wait then retry).
-        Retries on 5xx/connection errors only when allow_retry=True.
-
-        Mutating methods (POST, DELETE, GraphQL) must NOT pass allow_retry=True to avoid
-        replaying writes that may have succeeded on the server despite a transient failure.
+        Retries on 5xx only when allow_retry_on_5xx=True; retries on connection errors
+        only when allow_retry_on_connection_errors=True. Mutating methods (POST, DELETE,
+        GraphQL) should not pass allow_retry_on_connection_errors=True to avoid replaying
+        writes that may have succeeded on the server despite a transient failure.
         """
-        attempts = self.max_retries if allow_retry else 1
+        attempts_5xx = self.max_retries if allow_retry_on_5xx else 1
+        attempts_conn = self.max_retries if allow_retry_on_connection_errors else 1
         for rate_limit_attempt in range(MAX_RATE_LIMIT_RETRIES + 1):
             rate_limited = False
-            rate_limit_resp = None
-            for attempt in range(attempts):
+            attempt_5xx = 0
+            attempt_conn = 0
+            while True:
                 try:
                     resp = self.session.request(
                         method,
@@ -219,36 +222,45 @@ class GitHubAPIClient:
                     )
                     wait = self._parse_rate_limit_wait(resp)
                     if wait is not None:
+                        if rate_limit_attempt >= MAX_RATE_LIMIT_RETRIES:
+                            raise RateLimitException(
+                                f"Rate limit retries exhausted for {endpoint_for_log}"
+                            )
                         self._handle_rate_limit(wait)
                         rate_limited = True
-                        rate_limit_resp = resp
                         break
-                    if allow_retry and resp.status_code in (500, 502, 503, 504):
-                        if attempt < attempts - 1:
-                            wait_time = self.retry_delay * (2**attempt)
+                    if resp.status_code in (500, 502, 503, 504):
+                        if allow_retry_on_5xx and attempt_5xx < attempts_5xx - 1:
+                            wait_time = self.retry_delay * (2**attempt_5xx)
                             logger.warning(
                                 "HTTP %s on %s (attempt %s/%s), retrying in %ss...",
                                 resp.status_code,
                                 endpoint_for_log,
-                                attempt + 1,
-                                attempts,
+                                attempt_5xx + 1,
+                                attempts_5xx,
                                 wait_time,
                             )
                             time.sleep(wait_time)
+                            attempt_5xx += 1
                             continue
                     return resp
                 except (ConnectionError, ProtocolError, Timeout) as e:
-                    if allow_retry and attempt < attempts - 1:
-                        wait_time = self.retry_delay * (2**attempt)
+                    if (
+                        allow_retry_on_connection_errors
+                        and attempt_conn < attempts_conn - 1
+                    ):
+                        wait_time = self.retry_delay * (2**attempt_conn)
                         logger.warning(
                             "Connection error on %s (attempt %s/%s): %s",
                             endpoint_for_log,
-                            attempt + 1,
-                            attempts,
+                            attempt_conn + 1,
+                            attempts_conn,
                             e,
                         )
                         time.sleep(wait_time)
-                    elif allow_retry:
+                        attempt_conn += 1
+                        continue
+                    if allow_retry_on_connection_errors:
                         logger.error(
                             "Failed %s after %s retries: %s",
                             endpoint_for_log,
@@ -258,25 +270,16 @@ class GitHubAPIClient:
                         raise ConnectionException(
                             f"Connection error after {self.max_retries} retries for {endpoint_for_log}: {e}"
                         ) from e
-                    else:
-                        logger.error(
-                            "Connection error on %s (no retries): %s",
-                            endpoint_for_log,
-                            e,
-                        )
-                        raise ConnectionException(
-                            f"Connection error for {endpoint_for_log}: {e}"
-                        ) from e
-            if rate_limited:
-                if rate_limit_attempt < MAX_RATE_LIMIT_RETRIES:
-                    continue
-                if rate_limit_resp is not None:
-                    logger.warning(
-                        "Rate limit retries exhausted (%s) for %s, returning last response.",
-                        MAX_RATE_LIMIT_RETRIES,
+                    logger.error(
+                        "Connection error on %s (no retries): %s",
                         endpoint_for_log,
+                        e,
                     )
-                    return rate_limit_resp
+                    raise ConnectionException(
+                        f"Connection error for {endpoint_for_log}: {e}"
+                    ) from e
+            if rate_limited:
+                continue
             raise ConnectionException(
                 f"Connection error for {endpoint_for_log}: max retries exceeded"
             )
@@ -303,7 +306,7 @@ class GitHubAPIClient:
     ) -> tuple[Optional[requests.Response], Optional[str]]:
         """
         Shared GET logic: 403 wait+retry, 304/200 handling.
-        _do_request already retries 5xx and connection errors.
+        _do_request retries 5xx and connection errors when the corresponding flags are set.
         Returns (response, response_etag). On 304 returns (None, response ETag or caller's etag).
         Caller gets response body from response.json() when response is not None.
         """
@@ -318,7 +321,8 @@ class GitHubAPIClient:
             params=params,
             headers=headers or None,
             timeout=30,
-            allow_retry=True,
+            allow_retry_on_5xx=True,
+            allow_retry_on_connection_errors=True,
         )
         if response.status_code == 304:
             self._update_rate_limit_from_response(response)
@@ -553,6 +557,8 @@ class GitHubAPIClient:
             json_data=payload,
             headers={"Content-Type": "application/json"},
             timeout=30,
+            allow_retry_on_5xx=True,
+            allow_retry_on_connection_errors=False,
         )
         self._raise_if_error_and_update_rate_limit(response, "GraphQL request")
         data = response.json()

@@ -54,7 +54,7 @@ def _redis_client():
         )
         client.ping()
         _CACHED_REDIS_CLIENT = client
-        logger.info("ETag cache Redis connected: %s", url)
+        logger.info("ETag cache Redis connected.")
         return client
     except Exception as e:
         logger.debug("ETag cache Redis unavailable: %s", e)
