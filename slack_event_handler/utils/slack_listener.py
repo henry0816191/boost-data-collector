@@ -21,8 +21,6 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from operations.slack_ops import (
     get_slack_app_token,
-    get_slack_bot_token,
-    get_default_team_key,
 )
 
 from slack_event_handler.utils.job_queue import (
@@ -80,10 +78,10 @@ class SlackListener:
         if token:
             self.bot_token = token
         else:
-            fallback_id = get_default_team_key() or None
-            self.bot_token = get_slack_bot_token(team_id=fallback_id)
-            if self._team_id is None:
-                self._team_id = fallback_id
+            raise ValueError(
+                "Missing bot_token. Pass bot_token or set SLACK_TEAM_IDS and "
+                "SLACK_BOT_TOKEN_<id> in .env."
+            )
 
         app_token = (app_token or "").strip()
         self.app_token = app_token or get_slack_app_token(self._team_id)
@@ -167,7 +165,7 @@ class SlackListener:
                 kwargs["thread_ts"] = message_ts
             self.app.client.chat_postMessage(**kwargs)
         except Exception as e:
-            logger.error("Error sending reply to %s: %s", channel, e)
+            logger.warning("Error sending reply to %s: %s", channel, e)
 
     def _handle_pr_request(
         self,
@@ -242,7 +240,7 @@ class SlackListener:
             match = re.search(r"/(F[A-Z0-9]{10,})$", url)
             return match.group(1) if match else None
         except Exception as e:
-            logger.error("Error extracting file ID from URL %s: %s", url, e)
+            logger.warning("Error extracting file ID from URL %s: %s", url, e)
             return None
 
     def _is_huddle_ai_note_event(self, event: dict) -> bool:
@@ -277,7 +275,7 @@ class SlackListener:
                                     if file_id:
                                         return file_id
         except Exception as e:
-            logger.error("Error extracting file ID from huddle event: %s", e)
+            logger.warning("Error extracting file ID from huddle event: %s", e)
         return None
 
     def _mark_file_processed(self, file_id: str) -> bool:

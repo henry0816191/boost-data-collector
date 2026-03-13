@@ -4,13 +4,18 @@ Reads SLACK_PR_BOT_GITHUB_TOKEN and SLACK_PR_BOT_COMMENT_TEMPLATE from Django se
 """
 
 import logging
+import time
 
 from django.conf import settings
 from github import Github
+from github.GithubException import GithubException
 
 logger = logging.getLogger(__name__)
 
 _gh: Github | None = None
+
+MAX_RETRIES = 3
+RETRY_BASE_DELAY_SEC = 2  # exponential backoff: base * 2^attempt
 
 
 def _get_client() -> Github:
@@ -37,5 +42,27 @@ def post_pr_comment(owner: str, repo: str, pull_number: int) -> None:
     gh = _get_client()
     repository = gh.get_repo(f"{owner}/{repo}")
     pull = repository.get_pull(pull_number)
-    pull.create_issue_comment(template)
-    logger.debug("Posted PR comment to %s/%s#%d", owner, repo, pull_number)
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            pull.create_issue_comment(template)
+            logger.debug("Posted PR comment to %s/%s#%d", owner, repo, pull_number)
+            return
+        except GithubException as e:
+            if attempt < MAX_RETRIES - 1:
+                delay_sec = RETRY_BASE_DELAY_SEC * (2**attempt)
+                logger.warning(
+                    "GitHub PR comment failed (attempt %d/%d): %s; retrying in %ds",
+                    attempt + 1,
+                    MAX_RETRIES,
+                    e,
+                    delay_sec,
+                )
+                time.sleep(delay_sec)
+            else:
+                logger.error(
+                    "GitHub PR comment failed after %d attempts: %s",
+                    MAX_RETRIES,
+                    e,
+                )
+                raise

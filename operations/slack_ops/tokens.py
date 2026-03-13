@@ -14,20 +14,25 @@ logger = logging.getLogger(__name__)
 
 
 def _slack_team_fallback() -> str:
-    """Return default team key from SLACK_BOT_TOKEN: single key, or first key (order from SLACK_TEAM_IDS)."""
+    """Return default team key from SLACK_TEAM_ID. Raises ValueError if not set."""
     try:
         from django.conf import settings as django_settings
 
-        tokens_map = getattr(django_settings, "SLACK_BOT_TOKEN", None)
+        team_id = (getattr(django_settings, "SLACK_TEAM_ID", "") or "").strip()
     except Exception:
-        tokens_map = None
-    if not isinstance(tokens_map, dict) or not tokens_map:
-        return ""
-    return next(iter(tokens_map.keys()))
+        team_id = ""
+    if not team_id:
+        logger.error(
+            "SLACK_TEAM_ID is not set. Set SLACK_TEAM_ID in .env (must match a key in SLACK_TEAM_IDS)."
+        )
+        raise ValueError(
+            "SLACK_TEAM_ID is required for default team. Set SLACK_TEAM_ID in .env."
+        )
+    return team_id
 
 
 def get_default_team_key() -> str:
-    """Return the default team key (single or first in SLACK_TEAM_IDS). Empty if no teams configured."""
+    """Return the default team key from SLACK_TEAM_ID. Raises ValueError if not set."""
     return _slack_team_fallback()
 
 

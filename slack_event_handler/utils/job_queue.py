@@ -130,7 +130,7 @@ def _send_reply(
             kwargs["thread_ts"] = thread_ts
         app.client.chat_postMessage(**kwargs)
     except Exception as e:
-        logger.error("Failed to send reply (channel=%s): %s", channel, e)
+        logger.warning("Failed to send reply (channel=%s): %s", channel, e)
 
 
 def _job_label(job: dict) -> str:
@@ -211,7 +211,7 @@ def _worker(team_id: Optional[str]) -> None:
         try:
             _process_job(job)
         except Exception as e:
-            logger.error("%s – FAILED: %s", label, e)
+            logger.warning("%s – FAILED: %s", label, e)
             _send_reply(
                 team_id,
                 job[KEY_CHANNEL],
