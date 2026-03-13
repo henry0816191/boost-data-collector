@@ -109,7 +109,7 @@ def _build_candidate_queryset(
         return queryset.order_by("video_id")
     criteria = Q()
     if final_sync_at is not None:
-        criteria |= Q(created_at__gt=final_sync_at)
+        criteria |= Q(updated_at__gt=final_sync_at)
     if normalized_failed:
         criteria |= Q(video_id__in=normalized_failed)
     return queryset.filter(criteria).order_by("video_id")

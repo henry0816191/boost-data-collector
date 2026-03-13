@@ -198,6 +198,6 @@ class YoutubeSpeaker(BaseProfile):
         super().save(*args, **kwargs)
 
     external_id = models.CharField(max_length=255, unique=True)
-    display_name = models.CharField(max_length=255, db_index=True)
+    display_name = models.CharField(max_length=255, db_index=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

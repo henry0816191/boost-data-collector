@@ -33,9 +33,10 @@
 | `view_count`       | int \| None       |                                                    |
 | `like_count`       | int \| None       |                                                    |
 | `comment_count`    | int \| None       |                                                    |
-| `tags`             | list              |                                                    |
 | `search_term`      | str               | Search term used to discover the video             |
 | `scraped_at`       | datetime or str   | ISO string is parsed via `parse_datetime`          |
+
+Tags are not part of `metadata_dict`; use `get_or_create_tag` and `link_tag_to_video` (in this module) to associate tags with a video after creating or fetching it.
 
 ---
 

@@ -40,6 +40,8 @@ def get_or_create_channel(
     Returns the YouTubeChannel instance.
     """
     channel_id_val = (channel_id or "").strip()
+    if not channel_id_val:
+        raise ValueError("channel_id must not be empty.")
     channel_title_val = (channel_title or "").strip()
     channel, created = YouTubeChannel.objects.get_or_create(
         channel_id=channel_id_val,

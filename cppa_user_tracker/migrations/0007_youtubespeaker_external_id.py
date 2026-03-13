@@ -1,21 +1,17 @@
+import re
+
 from django.db import migrations, models
 
 
-def _normalize_name(value: str) -> str:
-    value = (value or "").strip().lower()
-    chars = []
-    for ch in value:
-        if ch.isalnum():
-            chars.append(ch)
-        else:
-            chars.append("_")
-    slug = "".join(chars).strip("_")
-    while "__" in slug:
-        slug = slug.replace("__", "_")
-    return slug or "unknown"
+def _slugify_speaker_name(name: str) -> str:
+    """Match cppa_youtube_script_tracker.utils._slugify_speaker_name (no channel/video)."""
+    s = (name or "").strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")
+    return s or "unknown"
 
 
 def populate_external_id(apps, schema_editor):
+    """Seed external_id using same format as build_speaker_external_id(..., "", "")."""
     YoutubeSpeaker = apps.get_model("cppa_user_tracker", "YoutubeSpeaker")
 
     used = set(
@@ -27,8 +23,8 @@ def populate_external_id(apps, schema_editor):
     for speaker in YoutubeSpeaker.objects.all().order_by("baseprofile_ptr_id"):
         if speaker.external_id:
             continue
-        base = _normalize_name(speaker.display_name)
-        candidate = f"legacy:{base}"
+        slug = _slugify_speaker_name(speaker.display_name)
+        candidate = f"youtube:name:{slug}"
         if candidate in used:
             candidate = f"{candidate}:{speaker.baseprofile_ptr_id}"
         speaker.external_id = candidate

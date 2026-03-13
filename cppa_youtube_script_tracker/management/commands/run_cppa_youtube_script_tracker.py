@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.utils.dateparse import parse_datetime
@@ -69,13 +70,10 @@ def _move_to_raw(video_id: str, queue_path) -> None:
         shutil.move(str(queue_path), str(raw_path))
     except Exception:
         logger.warning(
-            "_move_to_raw: could not move %s to raw/metadata/, removing instead",
+            "_move_to_raw: could not move %s to raw/metadata/, leaving in queue",
             queue_path,
         )
-        try:
-            queue_path.unlink(missing_ok=True)
-        except Exception:
-            pass
+        return
 
 
 def _persist_video(video_data: dict) -> tuple[bool, bool]:
@@ -94,14 +92,15 @@ def _persist_video(video_data: dict) -> tuple[bool, bool]:
         video, created = get_or_create_video(
             video_id=video_id, channel=channel, metadata_dict=metadata
         )
-    except Exception:
-        logger.exception("_persist_video: failed to persist video_id=%s", video_id)
+    except (ValueError, ValidationError) as e:
+        logger.warning(
+            "_persist_video: validation error for video_id=%s: %s", video_id, e
+        )
         return False, True
 
-    if created:
-        speaker_names = _resolve_video_speakers(video_data, channel_title)
-        _link_speakers(video, speaker_names, channel_id=channel_id, video_id=video_id)
-        _link_tags(video, video_data.get("tags") or [], video_id=video_id)
+    speaker_names = _resolve_video_speakers(video_data, channel_title)
+    _link_speakers(video, speaker_names, channel_id=channel_id, video_id=video_id)
+    _link_tags(video, video_data.get("tags") or [], video_id=video_id)
 
     return created, False
 
@@ -128,22 +127,15 @@ def _link_speakers(
     video_id: str,
 ) -> None:
     for name in speaker_names:
-        try:
-            speaker, _ = get_or_create_youtube_speaker(
-                external_id=build_speaker_external_id(
-                    speaker_name=name,
-                    channel_id=channel_id,
-                    video_id=video_id,
-                ),
-                display_name=name,
-            )
-            link_speaker_to_video(video, speaker)
-        except Exception:
-            logger.warning(
-                "_link_speakers: could not link speaker %r to video %s",
-                name,
-                video_id,
-            )
+        speaker, _ = get_or_create_youtube_speaker(
+            external_id=build_speaker_external_id(
+                speaker_name=name,
+                channel_id=channel_id,
+                video_id=video_id,
+            ),
+            display_name=name,
+        )
+        link_speaker_to_video(video, speaker)
 
 
 def _link_tags(video: YouTubeVideo, raw_tags: list[str], *, video_id: str) -> None:
@@ -151,15 +143,8 @@ def _link_tags(video: YouTubeVideo, raw_tags: list[str], *, video_id: str) -> No
         tag_name = clean_text(raw_tag)
         if not tag_name:
             continue
-        try:
-            tag = get_or_create_tag(tag_name)
-            link_tag_to_video(video, tag)
-        except Exception:
-            logger.warning(
-                "_link_tags: could not link tag %r to video %s",
-                tag_name,
-                video_id,
-            )
+        tag = get_or_create_tag(tag_name)
+        link_tag_to_video(video, tag)
 
 
 def _resolve_video_speakers(video_data: dict, channel_title: str) -> list[str]:
