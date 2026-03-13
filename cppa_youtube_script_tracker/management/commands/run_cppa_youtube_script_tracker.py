@@ -350,15 +350,12 @@ def _run_phase_3() -> tuple[int, int]:
     Saves directly to raw/transcripts/ (never deleted).
     Returns (ok_count, fail_count).
     """
-    pending = list(
-        YouTubeVideo.objects.filter(has_transcript=False).values_list(
-            "video_id", flat=True
-        )
-    )
+    pending = list(YouTubeVideo.objects.filter(has_transcript=False))
     transcripts_dir = get_raw_transcripts_dir()
     ok = 0
     fail = 0
-    for vid in pending:
+    for video_obj in pending:
+        vid = video_obj.video_id
         try:
             vtt_path = download_vtt(
                 vid, output_dir=transcripts_dir, cookies_file=YOUTUBE_COOKIES_FILE
