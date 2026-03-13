@@ -76,7 +76,7 @@ def task_fetch_github_activity(
     if end_date:
         self.stdout.write(f"  To: {end_date.isoformat()}")
     elif start_date:
-        self.stdout.write("  To: now")
+        self.stdout.write("  To: no end (open-ended)")
     if from_library:
         self.stdout.write(f"  From library: {from_library} (and all after)")
 
@@ -350,7 +350,7 @@ class Command(BaseCommand):
             ref,
             task_filter or "all",
             start_date.isoformat() if start_date else "auto",
-            end_date.isoformat() if end_date else "now",
+            end_date.isoformat() if end_date else "none",
             from_library or "all",
         )
 

@@ -121,7 +121,7 @@ def fetch_commits_from_github(
                         f"Failed to parse commit date '{commit_date_str}': {e}"
                     )
 
-            # Fetch full commit with stats (skip on persistent server errors so sync continues)
+            # Fetch full commit with stats (abort on 502/503/504 so page is not checkpointed and can be retried)
             try:
                 commit_with_stats = client.rest_request(
                     f"/repos/{owner}/{repo}/commits/{commit['sha']}"
@@ -129,14 +129,14 @@ def fetch_commits_from_github(
             except requests.exceptions.HTTPError as e:
                 if e.response is not None and e.response.status_code in (502, 503, 504):
                     logger.warning(
-                        "Skipping commit %s for %s/%s after HTTP %s: %s",
+                        "Aborting commit sync at %s for %s/%s after HTTP %s: %s",
                         commit["sha"][:7],
                         owner,
                         repo,
                         e.response.status_code,
                         e,
                     )
-                    continue
+                    raise
                 raise
             yield commit_with_stats
 
@@ -275,7 +275,8 @@ def fetch_issues_from_github(
             break
 
         # Filter out PRs (issues endpoint returns both issues and PRs)
-        issues = [i for i in issues if "pull_request" not in i]
+        raw_issues = issues
+        issues = [i for i in raw_issues if "pull_request" not in i]
         logger.debug(f"Fetched {len(issues)} issues (excluding PRs) from page {page}")
 
         for issue in issues:
@@ -329,7 +330,7 @@ def fetch_issues_from_github(
         if etag_cache is not None and response_etag:
             etag_cache.set("issues", page, since_iso, "", response_etag)
 
-        if len(issues) < per_page:
+        if len(raw_issues) < per_page:
             logger.debug(
                 f"Last page reached (got {len(issues)} issues, expected {per_page})"
             )

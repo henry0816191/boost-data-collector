@@ -162,13 +162,13 @@ def test_fetch_commits_from_github_with_etag_cache_200_yields_and_sets():
     assert call_args[4] == "W/new_etag"
 
 
-def test_fetch_commits_from_github_skips_commit_on_502_503_504():
-    """fetch_commits_from_github skips commit and continues when full-commit fetch returns 502/503/504."""
+def test_fetch_commits_from_github_aborts_on_502_503_504():
+    """fetch_commits_from_github raises HTTPError on 502/503/504 so page is not checkpointed and can be retried."""
     import requests as req
 
     client = MagicMock()
     # API returns commits (e.g. newest first); fetcher iterates reversed(), so first
-    # full-commit fetch is for the last in this list (def456), second for abc123.
+    # full-commit fetch is for the last in this list (def456). That fetch returns 502 → abort.
     client.rest_request.side_effect = [
         [
             {
@@ -181,11 +181,9 @@ def test_fetch_commits_from_github_skips_commit_on_502_503_504():
             },
         ],
         req.exceptions.HTTPError("Bad Gateway", response=MagicMock(status_code=502)),
-        {"sha": "abc123", "commit": {"message": "msg1"}, "stats": {"additions": 1}},
     ]
-    items = list(fetch_commits_from_github(client, "o", "r"))
-    assert len(items) == 1
-    assert items[0]["sha"] == "abc123"
+    with pytest.raises(req.exceptions.HTTPError):
+        list(fetch_commits_from_github(client, "o", "r"))
 
 
 def test_fetch_commits_from_github_reraises_non_server_error_http():

@@ -220,7 +220,7 @@ class GitHubAPIClient:
                         )
                         raise ConnectionException(
                             f"Connection error after {self.max_retries} retries for {endpoint_for_log}: {e}"
-                        )
+                        ) from e
                     else:
                         logger.error(
                             "Connection error on %s (no retries): %s",
@@ -229,7 +229,7 @@ class GitHubAPIClient:
                         )
                         raise ConnectionException(
                             f"Connection error for {endpoint_for_log}: {e}"
-                        )
+                        ) from e
             if rate_limited:
                 if rate_limit_attempt < MAX_RATE_LIMIT_RETRIES:
                     continue
