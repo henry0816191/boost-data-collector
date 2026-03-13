@@ -253,7 +253,10 @@ class SlackListener:
                 summary = ai_context.get("summary", {})
                 return summary.get("type") == "huddle"
         except Exception:
-            pass
+            logger.exception(
+                "Malformed event in _is_huddle_ai_note_event (event keys=%s)",
+                list(event.keys()) if isinstance(event, dict) else type(event).__name__,
+            )
         return False
 
     def _extract_file_id_from_event(self, event: dict) -> str | None:

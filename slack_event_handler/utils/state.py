@@ -8,10 +8,15 @@ When team_id is provided, state is stored in state_<team_id>.json for multi-work
 """
 
 import json
+import logging
 import os
 import re
+import tempfile
+import time
 from copy import deepcopy
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_STATE: dict[str, Any] = {"postedAt": [], "queue": []}
 
@@ -41,13 +46,19 @@ def _ensure_dir(path: str) -> None:
 def load_state(team_id: Optional[str] = None) -> dict[str, Any]:
     """Load state for the given team. team_id=None uses state.json (single-workspace)."""
     path = _get_state_file_path(team_id)
+    _ensure_dir(path)
+    if not os.path.exists(path):
+        return deepcopy(_DEFAULT_STATE)
     try:
-        _ensure_dir(path)
-        if not os.path.exists(path):
-            return deepcopy(_DEFAULT_STATE)
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except json.JSONDecodeError:
+        logger.exception("Corrupt state file decoding %s", path)
+        quarantine = f"{path}.corrupt.{int(time.time())}"
+        try:
+            os.replace(path, quarantine)
+        except OSError as e:
+            logger.warning("Could not quarantine %s to %s: %s", path, quarantine, e)
         return deepcopy(_DEFAULT_STATE)
 
 
@@ -55,5 +66,16 @@ def save_state(state: dict[str, Any], team_id: Optional[str] = None) -> None:
     """Save state for the given team. team_id=None uses state.json (single-workspace)."""
     path = _get_state_file_path(team_id)
     _ensure_dir(path)
-    with open(path, "w", encoding="utf-8") as f:
+    dir_path = os.path.dirname(os.path.abspath(path))
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=dir_path,
+        delete=False,
+        suffix=".tmp",
+    ) as f:
         json.dump(state, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+        temp_path = f.name
+    os.replace(temp_path, path)

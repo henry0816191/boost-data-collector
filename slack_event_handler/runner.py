@@ -35,13 +35,16 @@ def run_slack_event_handler(bot_token=None, app_token=None):
         # Multiple (or single) teams from SLACK_TEAM_IDS + SLACK_BOT_TOKEN_<id> and SLACK_APP_TOKEN_<id>
         from slack_event_handler.utils.slack_listener import start_slack_listener
 
+        listeners = []
         started = 0
         for team_id, token in tokens_map.items():
             token = (token or "").strip()
             if not token:
                 continue
             try:
-                app_token = (app_token or "").strip() or get_slack_app_token(team_id)
+                team_app_token = (app_token or "").strip() or get_slack_app_token(
+                    team_id
+                )
             except ValueError:
                 logger.warning(
                     "Skipping team %s: SLACK_APP_TOKEN_%s not set in .env",
@@ -52,16 +55,24 @@ def run_slack_event_handler(bot_token=None, app_token=None):
             logger.info("Starting Slack Event Listener for team=%s", team_id)
             t = threading.Thread(
                 target=start_slack_listener,
-                kwargs={"bot_token": token, "app_token": app_token, "team_id": team_id},
+                kwargs={
+                    "bot_token": token,
+                    "app_token": team_app_token,
+                    "team_id": team_id,
+                },
                 daemon=True,
                 name=f"slack-listener-{team_id}",
             )
             t.start()
+            listeners.append(t)
             started += 1
         if started == 0:
             logger.error(
                 "No valid team with both SLACK_BOT_TOKEN_<id> and SLACK_APP_TOKEN_<id> in .env"
             )
+        else:
+            for t in listeners:
+                t.join()
     else:
         # Single team: use default key from SLACK_TEAM_IDS (only key or first key)
         from operations.slack_ops import get_default_team_key
