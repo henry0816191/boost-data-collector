@@ -1,13 +1,18 @@
-"""Tests for github_ops git_ops (clone, push, fetch_file_content, get_commit_file_changes)."""
+"""Tests for github_ops git_ops (clone, push, pull, fetch_file_content, upload_folder_to_github)."""
 
 from unittest.mock import MagicMock, patch
 
+import requests
+
 from github_ops.git_ops import (
+    _create_blob_with_retry,
     _url_with_token,
     clone_repo,
     fetch_file_content,
+    pull,
     get_commit_file_changes,
     push,
+    upload_folder_to_github,
 )
 
 
@@ -93,28 +98,32 @@ def test_clone_repo_uses_get_github_token_when_token_not_provided(tmp_path):
 
 
 def test_push_with_branch_appends_branch_to_command(tmp_path):
-    """push with branch runs git push <url> <branch>."""
+    """push with branch runs git add, git commit, get-url, then git push <url> <branch>."""
     with patch("github_ops.git_ops.subprocess.run") as run_mock:
         run_mock.side_effect = [
-            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),  # add
+            MagicMock(returncode=0, stdout="", stderr=""),  # commit
+            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),  # get-url
             MagicMock(),
         ]
         push(tmp_path, "origin", branch="main", token="t")
-    assert run_mock.call_count == 2
-    push_call = run_mock.call_args_list[1][0][0]
+    assert run_mock.call_count == 4
+    push_call = run_mock.call_args_list[3][0][0]
     assert "push" in push_call
     assert "main" in push_call
 
 
 def test_push_without_branch_does_not_append_branch(tmp_path):
-    """push without branch runs git push <url> only."""
+    """push without branch runs git add, git commit, get-url, then git push <url> only."""
     with patch("github_ops.git_ops.subprocess.run") as run_mock:
         run_mock.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
             MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
             MagicMock(),
         ]
         push(tmp_path, "origin", token="t")
-    push_call = run_mock.call_args_list[1][0][0]
+    push_call = run_mock.call_args_list[3][0][0]
     assert "push" in push_call
     assert push_call[-1] != "main"
 
@@ -123,11 +132,13 @@ def test_push_injects_token_into_push_url(tmp_path):
     """push uses _url_with_token so push URL contains token."""
     with patch("github_ops.git_ops.subprocess.run") as run_mock:
         run_mock.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
             MagicMock(stdout="https://github.com/owner/repo.git\n", stderr=""),
             MagicMock(),
         ]
         push(tmp_path, "origin", token="secret_token")
-    push_call = run_mock.call_args_list[1][0][0]
+    push_call = run_mock.call_args_list[3][0][0]
     push_url = push_call[push_call.index("push") + 1]
     assert "secret_token" in push_url
 
@@ -139,10 +150,155 @@ def test_push_uses_get_github_token_when_token_not_provided(tmp_path):
     ) as get_token:
         with patch("github_ops.git_ops.subprocess.run") as run_mock:
             run_mock.side_effect = [
+                MagicMock(returncode=0, stdout="", stderr=""),
+                MagicMock(returncode=0, stdout="", stderr=""),
                 MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
                 MagicMock(),
             ]
             push(tmp_path, "origin")
+    get_token.assert_called_once_with(use="push")
+
+
+def test_push_with_commit_message_runs_add_then_commit_then_push(tmp_path):
+    """push with commit_message runs git add, git commit, then get-url and push."""
+    with patch("github_ops.git_ops.subprocess.run") as run_mock:
+        run_mock.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),  # add
+            MagicMock(returncode=0, stdout="", stderr=""),  # commit
+            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),  # get-url
+            MagicMock(),  # push
+        ]
+        push(
+            tmp_path,
+            "origin",
+            branch="main",
+            commit_message="Update files",
+            token="t",
+        )
+    assert run_mock.call_count == 4
+    add_call = run_mock.call_args_list[0][0][0]
+    assert "git" in add_call and "add" in add_call and str(tmp_path) in add_call
+    commit_call = run_mock.call_args_list[1][0][0]
+    assert "commit" in commit_call and "-m" in commit_call
+    assert "Update files" in commit_call
+    push_call = run_mock.call_args_list[3][0][0]
+    assert "push" in push_call
+
+
+def test_push_with_commit_message_and_add_paths_passes_paths_to_add(tmp_path):
+    """push with commit_message and add_paths runs git add with those paths."""
+    with patch("github_ops.git_ops.subprocess.run") as run_mock:
+        run_mock.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
+            MagicMock(),
+        ]
+        push(
+            tmp_path,
+            "origin",
+            commit_message="Add report",
+            add_paths=["data/report.html", "index.html"],
+            token="t",
+        )
+    add_call = run_mock.call_args_list[0][0][0]
+    assert "add" in add_call
+    assert "data/report.html" in add_call or "data\\report.html" in add_call
+    assert "index.html" in add_call
+
+
+def test_push_nothing_to_commit_does_not_raise_and_still_pushes(tmp_path):
+    """When git commit returns 'nothing to commit', push does not raise and still pushes."""
+    with patch("github_ops.git_ops.subprocess.run") as run_mock:
+        run_mock.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),  # add
+            MagicMock(
+                returncode=1,
+                stdout="",
+                stderr="On branch main\nnothing to commit, working tree clean",
+            ),  # commit
+            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),  # get-url
+            MagicMock(),  # push
+        ]
+        push(
+            tmp_path,
+            "origin",
+            branch="main",
+            commit_message="Update",
+            token="t",
+        )
+    assert run_mock.call_count == 4
+    push_call = run_mock.call_args_list[3][0][0]
+    assert "push" in push_call
+
+
+def test_push_commit_failure_without_nothing_to_commit_raises(tmp_path):
+    """When git commit fails and stderr does not contain 'nothing to commit', push raises."""
+    with patch("github_ops.git_ops.subprocess.run") as run_mock:
+        run_mock.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),
+            MagicMock(returncode=1, stdout="", stderr="fatal: some error"),
+            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
+            MagicMock(),
+        ]
+        try:
+            push(
+                tmp_path,
+                "origin",
+                commit_message="Update",
+                token="t",
+            )
+        except Exception as e:
+            assert "Process" in type(e).__name__ or "Error" in type(e).__name__
+            return
+    assert False, "push should have raised on commit failure"
+
+
+# --- pull ---
+
+
+def test_pull_with_branch_runs_checkout_then_pull(tmp_path):
+    """pull with branch runs git checkout <branch> then git pull <url> <branch>."""
+    with patch("github_ops.git_ops.subprocess.run") as run_mock:
+        run_mock.side_effect = [
+            MagicMock(),
+            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
+            MagicMock(),
+        ]
+        pull(tmp_path, branch="main", token="t")
+    assert run_mock.call_count == 3
+    calls = [c[0][0] for c in run_mock.call_args_list]
+    assert "checkout" in calls[0]
+    assert calls[0][-1] == "main"
+    assert "pull" in calls[2]
+    assert "main" in calls[2]
+
+
+def test_pull_without_branch_does_not_run_checkout(tmp_path):
+    """pull without branch does not run git checkout."""
+    with patch("github_ops.git_ops.subprocess.run") as run_mock:
+        run_mock.side_effect = [
+            MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
+            MagicMock(),
+        ]
+        pull(tmp_path, token="t")
+    calls = [c[0][0] for c in run_mock.call_args_list]
+    checkout_calls = [c for c in calls if "checkout" in c]
+    assert len(checkout_calls) == 0
+
+
+def test_pull_uses_get_github_token_when_token_not_provided(tmp_path):
+    """pull calls get_github_token(use='push') when token is None."""
+    with patch(
+        "github_ops.git_ops.get_github_token", return_value="push_tok"
+    ) as get_token:
+        with patch("github_ops.git_ops.subprocess.run") as run_mock:
+            run_mock.side_effect = [
+                MagicMock(),
+                MagicMock(stdout="https://github.com/o/r.git\n", stderr=""),
+                MagicMock(),
+            ]
+            pull(tmp_path, branch="main")
     get_token.assert_called_once_with(use="push")
 
 
@@ -186,6 +342,158 @@ def test_fetch_file_content_empty_content_returns_empty_bytes():
     mock_client.get_file_content.return_value = (b"", None)
     out = fetch_file_content("o", "r", "empty", client=mock_client)
     assert out == b""
+
+
+# --- upload_folder_to_github ---
+
+
+def test_upload_folder_to_github_not_directory_returns_failure():
+    """upload_folder_to_github returns success=False when path is not a directory."""
+    result = upload_folder_to_github(
+        "/nonexistent/path", "owner", "repo", client=MagicMock()
+    )
+    assert result["success"] is False
+    assert "Not a directory" in result["message"]
+
+
+def test_upload_folder_to_github_calls_create_blob_per_file(tmp_path):
+    """upload_folder_to_github invokes _create_blob_with_retry once per file (parallel)."""
+    (tmp_path / "a.txt").write_text("a")
+    (tmp_path / "b.txt").write_text("b")
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "c.txt").write_bytes(b"c")
+    blob_calls = []
+
+    def capture_blob(_base, _token, repo_path, local_path):
+        blob_calls.append((repo_path, local_path))
+        return (repo_path, "sha_" + repo_path.replace("/", "_"))
+
+    mock_session = MagicMock()
+    mock_session.get.side_effect = [
+        MagicMock(status_code=200, json=lambda: {"object": {"sha": "commit_sha"}}),
+        MagicMock(status_code=200, json=lambda: {"tree": {"sha": "base_tree_sha"}}),
+    ]
+    mock_session.post.side_effect = [
+        MagicMock(status_code=201, json=lambda: {"sha": "new_tree_sha"}),
+        MagicMock(status_code=201, json=lambda: {"sha": "new_commit_sha"}),
+    ]
+    mock_session.patch.return_value = MagicMock(status_code=200)
+
+    mock_client = MagicMock()
+    mock_client.rest_base_url = "https://api.github.com"
+    mock_client.token = "token"
+    mock_client.session = mock_session
+
+    with patch("github_ops.git_ops._create_blob_with_retry", side_effect=capture_blob):
+        result = upload_folder_to_github(
+            tmp_path, "owner", "repo", branch="main", client=mock_client
+        )
+    assert result["success"] is True
+    assert len(blob_calls) == 3
+    paths = {c[0] for c in blob_calls}
+    assert paths == {"a.txt", "b.txt", "sub/c.txt"}
+
+
+def test_upload_folder_to_github_retries_on_403_then_succeeds(tmp_path):
+    """upload_folder_to_github retries blob creation on 403 and succeeds on retry."""
+    (tmp_path / "single.txt").write_text("content")
+    mock_403 = MagicMock()
+    mock_403.status_code = 403
+    mock_403.headers = {"Retry-After": "1"}
+    mock_403.raise_for_status.side_effect = requests.exceptions.HTTPError(
+        "403", response=mock_403
+    )
+    mock_200 = MagicMock()
+    mock_200.status_code = 200
+    mock_200.json.return_value = {"sha": "blob_sha_after_retry"}
+    mock_200.raise_for_status = MagicMock()
+
+    mock_main_session = MagicMock()
+    mock_main_session.get.side_effect = [
+        MagicMock(status_code=200, json=lambda: {"object": {"sha": "commit_sha"}}),
+        MagicMock(status_code=200, json=lambda: {"tree": {"sha": "base_tree_sha"}}),
+    ]
+    mock_main_session.post.side_effect = [
+        MagicMock(status_code=201, json=lambda: {"sha": "new_tree_sha"}),
+        MagicMock(status_code=201, json=lambda: {"sha": "new_commit_sha"}),
+    ]
+    mock_main_session.patch.return_value = MagicMock(status_code=200)
+
+    mock_worker_session = MagicMock()
+    mock_worker_session.post.side_effect = [mock_403, mock_200]
+
+    mock_client = MagicMock()
+    mock_client.rest_base_url = "https://api.github.com"
+    mock_client.token = "token"
+    mock_client.session = mock_main_session
+
+    with patch(
+        "github_ops.git_ops._get_worker_session",
+        return_value=mock_worker_session,
+    ):
+        with patch("github_ops.git_ops.time.sleep"):
+            result = upload_folder_to_github(
+                tmp_path, "owner", "repo", branch="main", client=mock_client
+            )
+    assert result["success"] is True
+    assert mock_worker_session.post.call_count == 2
+
+
+def test_upload_folder_to_github_returns_success_with_mock_client(tmp_path):
+    """upload_folder_to_github returns success True when all API calls succeed."""
+    (tmp_path / "f.txt").write_text("data")
+    mock_session = MagicMock()
+    mock_session.get.side_effect = [
+        MagicMock(status_code=200, json=lambda: {"object": {"sha": "c1"}}),
+        MagicMock(status_code=200, json=lambda: {"tree": {"sha": "t1"}}),
+    ]
+    mock_session.post.side_effect = [
+        MagicMock(status_code=201, json=lambda: {"sha": "tree2"}),
+        MagicMock(status_code=201, json=lambda: {"sha": "c2"}),
+    ]
+    mock_session.patch.return_value = MagicMock(status_code=200)
+    mock_client = MagicMock()
+    mock_client.rest_base_url = "https://api.github.com"
+    mock_client.token = "t"
+    mock_client.session = mock_session
+    with patch(
+        "github_ops.git_ops._create_blob_with_retry",
+        return_value=("f.txt", "blob_sha"),
+    ):
+        result = upload_folder_to_github(
+            tmp_path,
+            "owner",
+            "repo",
+            commit_message="Upload",
+            client=mock_client,
+        )
+    assert result["success"] is True
+    assert "Uploaded" in result["message"]
+
+
+# --- _create_blob_with_retry ---
+
+
+def test_create_blob_with_retry_returns_sha_on_success():
+    """_create_blob_with_retry returns (repo_path, sha) when POST returns 200."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 201
+    mock_resp.json.return_value = {"sha": "abc123"}
+    mock_resp.raise_for_status = MagicMock()
+    mock_session = MagicMock()
+    mock_session.post.return_value = mock_resp
+    mock_path = MagicMock()
+    mock_path.read_bytes.return_value = b"content"
+    with patch("github_ops.git_ops._get_worker_session", return_value=mock_session):
+        out = _create_blob_with_retry(
+            "https://api.github.com/repos/o/r",
+            "token",
+            "path/file.txt",
+            mock_path,
+        )
+    assert out == ("path/file.txt", "abc123")
+    mock_path.read_bytes.assert_called_once()
+    mock_session.post.assert_called_once()
 
 
 # --- get_commit_file_changes ---

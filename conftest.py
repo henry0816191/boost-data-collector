@@ -31,11 +31,14 @@ pytest_plugins = [
     "github_ops.tests.fixtures",
     "github_activity_tracker.tests.fixtures",
     "boost_library_tracker.tests.fixtures",
+    "boost_library_docs_tracker.tests.fixtures",
+    "cppa_pinecone_sync.tests.fixtures",
     "cppa_slack_tracker.tests.fixtures",
     "boost_library_usage_dashboard.tests.fixtures",
     "boost_usage_tracker.tests.fixtures",
     "boost_mailing_list_tracker.tests.fixtures",
     "workflow.tests.fixtures",
+    "boost_collector_runner.tests.fixtures",
 ]
 
 

@@ -30,29 +30,37 @@ def get_github_token(
     - write: GITHUB_TOKEN_WRITE (create PR, issues, comments, git push) or GITHUB_TOKEN
     """
     if use == "scraping":
-        tokens = getattr(settings, "GITHUB_TOKENS_SCRAPING", None) or []
-        if not tokens:
-            token = getattr(settings, "GITHUB_TOKEN", None) or os.environ.get(
-                "GITHUB_TOKEN", ""
-            )
+        raw_tokens = getattr(settings, "GITHUB_TOKENS_SCRAPING", None) or []
+        # Only include non-empty strings (skip whitespace-only or non-string entries)
+        tokens = [t.strip() for t in raw_tokens if isinstance(t, str) and t.strip()]
+        global _scraping_token_cycle
+        if _scraping_token_cycle is None:
+            if tokens:
+                _scraping_token_cycle = itertools.cycle(tokens)
+        if _scraping_token_cycle is not None:
+            return next(_scraping_token_cycle)
+        else:
+            token = (
+                getattr(settings, "GITHUB_TOKEN", None)
+                or os.environ.get("GITHUB_TOKEN", "")
+                or ""
+            ).strip()
             if not token:
                 raise ValueError(
                     "No scraping token: set GITHUB_TOKENS_SCRAPING or GITHUB_TOKEN."
                 )
-            return (token or "").strip()
-        global _scraping_token_cycle
-        if _scraping_token_cycle is None:
-            _scraping_token_cycle = itertools.cycle(tokens)
-        return next(_scraping_token_cycle)
+            return token
+
     if use in ("push", "create_pr", "write"):
-        token = getattr(settings, "GITHUB_TOKEN_WRITE", None) or ""
-        if not token:
-            token = getattr(settings, "GITHUB_TOKEN", None) or os.environ.get(
-                "GITHUB_TOKEN", ""
-            )
+        token = (
+            getattr(settings, "GITHUB_TOKEN_WRITE", None)
+            or getattr(settings, "GITHUB_TOKEN", None)
+            or os.environ.get("GITHUB_TOKEN", "")
+            or ""
+        ).strip()
         if not token:
             raise ValueError("No write token: set GITHUB_TOKEN_WRITE or GITHUB_TOKEN.")
-        return (token or "").strip()
+        return token
     raise ValueError(
         f"Unknown use: {use!r}. Use 'scraping', 'push', 'create_pr', or 'write'."
     )

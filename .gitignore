@@ -39,9 +39,16 @@ celerybeat.pid
 .vscode/
 *.swp
 *.swo
+.cursor/
 
 # DiscordChatExporter CLI (download to workspace/discord_activity_tracker/tools/)
 discord_activity_tracker/tools/
 # macOS
 .DS_Store
 ._*
+
+
+# Config
+config/boost_collector_schedule.yaml
+# temp files
+temp/

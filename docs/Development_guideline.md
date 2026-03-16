@@ -5,7 +5,7 @@ This document outlines the development requirements and guidelines for Django ap
 ## Overview
 
 - Django project: One Django project with multiple Django apps; all apps share the same virtual environment, settings, and database.
-- Workflow: The project runs app tasks sequentially via management commands (e.g. `python manage.py run_boost_library_tracker`) or a single command that runs all collectors (e.g. `python manage.py run_all_collectors`). Scheduling is done with Celery Beat or by running commands by hand.
+- Workflow: The project runs app tasks sequentially via management commands (e.g. `python manage.py run_boost_library_tracker`) or a single command that runs all collectors. Use **workflow** (`python manage.py run_all_collectors`) for a fixed list, or **boost_collector_runner** with `config/boost_collector_schedule.yaml` for a YAML-driven schedule. In production, Celery Beat invokes the same runner as: `python manage.py run_scheduled_collectors --schedule default --group <group_id>` for a group batch, or `python manage.py run_scheduled_collectors --schedule interval --interval-minutes <n>` for an interval batch. Manual runs (e.g. `run_all_collectors`, `run_boost_library_tracker`) differ from Beat’s per-group schedule; use the Beat-style flags above when testing the YAML-driven path.
 - Configuration: Django settings (e.g. `settings.py`), environment variables for database URL and API keys (e.g. via `django-environ` or `python-decouple`).
 
 ## Django app requirements
@@ -17,7 +17,7 @@ This document outlines the development requirements and guidelines for Django ap
 
 ### 2. Entry point and dependencies
 
-- Must expose one or more Django management commands in the app's `management/commands/` folder (e.g. `run_boost_library_tracker.py`). The main workflow invokes these commands in a fixed order.
+- Must expose one or more Django management commands in the app's `management/commands/` folder (e.g. `run_boost_library_tracker.py`). The main workflow invokes these commands in order—either from the **workflow** app's fixed list or from **boost_collector_runner**'s `config/boost_collector_schedule.yaml`.
 - Project dependencies (including app-specific ones) are listed in the project root `requirements.txt`; all apps use the same virtual environment.
 
 ### 3. Configuration and logging
@@ -50,7 +50,7 @@ The project provides:
 
 1. Settings and configuration: `settings.py` (Django settings; database, logging, installed apps), and environment variables for database URL, credentials, and API keys (e.g. via `django-environ` or `python-decouple`).
 2. Database: One PostgreSQL database shared by all apps; migrations are run from the project root.
-3. Execution: `manage.py` and management commands; the main task runs app commands in a fixed order (e.g. via `run_all_collectors` or a Celery task). Sequential execution only.
+3. Execution: `manage.py` and management commands; within a single run (e.g. `run_all_collectors` or one `run_scheduled_collectors` batch), app commands run in order sequentially. Separate Celery Beat entries may still run concurrently across workers.
 
 ## Local development setup
 
@@ -61,7 +61,7 @@ Use these steps to get the Django project running on your machine.
 3. Install dependencies (e.g. `pip install -r requirements.txt`).
 4. Copy the sample env file (e.g. `.env.example`) to `.env` and fill in values for database URL, credentials, and any API keys (e.g. via `django-environ` or `python-decouple`).
 5. Ensure the database is reachable. Run migrations: `python manage.py migrate`.
-6. Run a single app command (e.g. `python manage.py run_boost_library_tracker`) or the full workflow (e.g. `python manage.py run_all_collectors`) to confirm the project works.
+6. Run a single app command (e.g. `python manage.py run_boost_library_tracker`) or the full workflow (e.g. `python manage.py run_all_collectors`) to confirm the project works. To test the YAML-driven path as Beat does, use `python manage.py run_scheduled_collectors --schedule default --group <group_id>` for a group batch, or `python manage.py run_scheduled_collectors --schedule interval --interval-minutes <n>` for an interval batch (see `config/boost_collector_schedule.yaml`).
 
 ## Testing workflow
 
@@ -69,7 +69,7 @@ Run tests often so you catch problems early.
 
 - **Before each commit:** run the test suite for the code you changed (`python -m pytest` or a subset).
 - **For app commands:** ensure the command runs successfully (e.g. `python manage.py run_boost_library_tracker` exits with 0 and does the expected work).
-- **Full workflow:** run `python manage.py run_all_collectors` when testing integration.
+- **Full workflow:** run `python manage.py run_all_collectors` when testing the fixed workflow, or `python manage.py run_scheduled_collectors --schedule default --group <group_id>` / `--schedule interval --interval-minutes <n>` when testing the YAML-driven path (matches how Celery Beat invokes it).
   Add tests for new behavior and keep them passing.
 
 ## Step-by-step development workflow guide
@@ -83,7 +83,7 @@ This guide walks you from setup to merged code.
 5. Open a pull request - Open a PR targeting the `develop` branch. Describe what changed and how to test it.
 6. Address review - Respond to reviewer comments and update the PR as needed.
 7. Merge - After approval and passing checks, merge into `develop`. Follow "Merge Process" below for exact steps.
-8. Adding a new Django app - Add the app to `INSTALLED_APPS`, create models and migrations, add a management command in `management/commands/`, and add the command to the list run by `run_all_collectors` (or the Celery task). Update docs as needed.
+8. Adding a new Django app - Add the app to `INSTALLED_APPS`, create models and migrations, add a management command in `management/commands/`, and either add the command to the list run by `run_all_collectors` (workflow app) or add it to `config/boost_collector_schedule.yaml` under the right group and schedule (boost_collector_runner). Update docs as needed.
 
 ## Development workflow
 
@@ -99,7 +99,7 @@ This guide walks you from setup to merged code.
 1. Create the app (e.g. `python manage.py startapp my_app` or add the app folder to the project).
 2. Add the app to `INSTALLED_APPS` in settings.
 3. Add a management command (e.g. in `my_app/management/commands/run_my_app.py`) that runs the app logic and returns the correct exit code.
-4. Add the command to the list run by `run_all_collectors` (or the Celery task) in the correct execution order.
+4. Add the command to the list run by `run_all_collectors` (workflow app) or add it to `config/boost_collector_schedule.yaml` under the right group with the right schedule (see [Workflow.md](Workflow.md#2-boost-collector-runner-and-yaml-schedule)).
 5. Create and run migrations; update documentation.
 
 ## Review process
@@ -141,7 +141,7 @@ Pull requests target the `develop` branch.
 
 - Command lives in `my_app/management/commands/run_my_app.py` (name must match the command: `run_my_app`).
 - Uses Django logging and Django ORM; no separate session or config module.
-- Returns 0 for success, non-zero for failure so `run_all_collectors` can detect failures.
+- Returns 0 for success, non-zero for failure so `run_all_collectors` or `run_scheduled_collectors` can detect failures.
 - Implement restart logic inside the task (check what is already processed and skip it).
 
 ## Related documentation

@@ -14,6 +14,7 @@ from github_ops.git_ops import (
     get_commit_file_changes,
     push,
     upload_file,
+    upload_folder_to_github,
 )
 from github_ops.tokens import get_github_client, get_github_token
 
@@ -28,4 +29,5 @@ __all__ = [
     "get_github_token",
     "push",
     "upload_file",
+    "upload_folder_to_github",
 ]

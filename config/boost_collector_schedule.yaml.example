@@ -1,0 +1,63 @@
+# Boost collector schedule (see docs/Workflow.md)
+# default_time is in UTC (24h "HH:MM"). Beat runs at that UTC time. The default batch
+# uses the UTC date for weekly/monthly eligibility so it matches the run time.
+#
+# Schedule types:
+#   daily       - runs at group default_time every day (part of group batch).
+#   weekly      - runs on the given weekday at default_time (use "on" or "day_of_week": monday..sunday or mon..sun).
+#   monthly     - runs on the given day of month at default_time (use "on" or "day_of_month": 1-31).
+#   on_release  - runs at default_time only when a new Boost release is detected (part of group batch).
+#   interval    - runs every N minutes (use "minutes": 1-180); one Beat entry per group per interval.
+
+groups:
+  github:
+    default_time: "16:10"
+    tasks:
+      - command: run_boost_usage_tracker
+        schedule: daily
+        args: ["--task", "monitor_content"]
+      - command: run_update_created_repos_by_language
+        schedule: daily
+      - command: run_boost_library_tracker
+        schedule: daily
+      - command: run_boost_library_usage_dashboard
+        schedule: daily
+      # Weekly: run every Monday at 16:10
+      - command: run_weekly_report
+        schedule: weekly
+        on: monday
+      # Monthly: run on the 1st at 16:10
+      - command: run_monthly_aggregate
+        schedule: monthly
+        on: 1
+      # When a new Boost release is published
+      - command: run_boost_library_tracker
+        schedule: on_release
+        args: ["--task", "check_release"]
+      # Every 15 minutes (separate Beat entry for this group)
+      - command: run_github_activity_sync
+        schedule: interval
+        minutes: 15
+
+  slack:
+    default_time: "16:30"
+    tasks:
+      - command: run_cppa_slack_tracker
+        schedule: daily
+      - command: run_slack_health_check
+        schedule: interval
+        minutes: 60
+
+  mailing_list:
+    default_time: "00:10"
+    tasks:
+      - command: run_boost_mailing_list_tracker
+        schedule: daily
+      # Weekly digest every Friday
+      - command: run_mailing_list_digest
+        schedule: weekly
+        day_of_week: friday
+      # Monthly on the 15th
+      - command: run_mailing_list_archive
+        schedule: monthly
+        day_of_month: 15

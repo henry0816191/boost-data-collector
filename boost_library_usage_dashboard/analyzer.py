@@ -48,7 +48,9 @@ class BoostUsageDashboardAnalyzer:
         self.stars_min_threshold = STARS_MIN_THRESHOLD
 
         self.version_info = list(
-            BoostVersion.objects.all().order_by("version")
+            BoostVersion.objects.filter(version__regex=r"^boost-\d+\.\d+\.0$").order_by(
+                "version"
+            )
         )  # pylint: disable=no-member
         self.version_name_list = [
             v.version.replace("boost-", "") for v in self.version_info

@@ -7,7 +7,6 @@ from pathlib import Path
 
 import environ
 
-from celery.schedules import crontab
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -37,18 +36,21 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Project apps (github_ops before github_activity_tracker - tracker depends on ops)
     "workflow",
+    "boost_collector_runner",  # YAML-driven schedule; run_scheduled_collectors
     "cppa_user_tracker",
     "github_ops",
     "operations",
     "github_activity_tracker",
     "boost_library_tracker",
+    "boost_library_docs_tracker",
     "boost_library_usage_dashboard",
     "boost_usage_tracker",
     "boost_mailing_list_tracker",
+    "cppa_pinecone_sync",
     "clang_github_tracker",
-    "cppa_slack_transcript_tracker",
     "cppa_slack_tracker",
     "discord_activity_tracker",
+    "slack_event_handler",
 ]
 
 MIDDLEWARE = [
@@ -135,9 +137,9 @@ RAW_DIR.mkdir(parents=True, exist_ok=True)
 _WORKSPACE_APP_SLUGS = (
     "github_activity_tracker",
     "boost_library_tracker",
+    "boost_library_docs_tracker",
     "boost_library_usage_dashboard",
     "boost_usage_tracker",
-    "cppa_slack_transcript_tracker",
     "cppa_slack_tracker",
     "discord_activity_tracker",
     "boost_mailing_list_tracker",
@@ -177,12 +179,30 @@ GITHUB_SLACK_HUDDLE_REPO_NAME = (
     env("GITHUB_SLACK_HUDDLE_REPO_NAME", default="") or ""
 ).strip()
 
+# Settings for publishing boost_library_usage_dashboard
+BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER = (
+    env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER", default="") or ""
+).strip()
+BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO = (
+    env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO", default="") or ""
+).strip()
+BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_TOKEN = (
+    env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_TOKEN", default="") or ""
+).strip() or GITHUB_TOKEN_WRITE
+BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH = (
+    env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH", default="") or ""
+).strip()
+
 
 # Slack (bot + app token for operations.slack_ops and cppa_slack_transcript_tracker)
 # SLACK_BOT_TOKEN: built from env (prefixed vars). In settings it is a dict (team_id -> token).
-# Env: SLACK_TEAM_IDS=T01234,T05678 and SLACK_BOT_TOKEN_T01234=xoxb-..., etc.
+# Env: SLACK_TEAM_IDS=id1,id2 and SLACK_BOT_TOKEN_id1=xoxb-..., etc.
+
+SLACK_TEAM_ID = (env("SLACK_TEAM_ID", default="") or "").strip()
+
+
 def _slack_bot_token_from_env():
-    """Build a dict of team_id -> bot token from SLACK_TEAM_IDS and SLACK_BOT_TOKEN_<team_id> env vars."""
+    """Build a dict of team_id -> bot token from SLACK_TEAM_IDS and SLACK_BOT_TOKEN_<id> env vars."""
     out = {}
     ids_raw = (env("SLACK_TEAM_IDS", default="") or "").strip()
     if not ids_raw:
@@ -200,11 +220,65 @@ def _slack_bot_token_from_env():
 
 SLACK_BOT_TOKEN = _slack_bot_token_from_env()
 
-SLACK_APP_TOKEN = (env("SLACK_APP_TOKEN", default="") or "").strip()
-# Optional: for cppa_slack_transcript_tracker (huddle transcript, token extraction)
-SLACK_TEAM_ID = (env("SLACK_TEAM_ID", default="") or "").strip()
 
-# Internal session tokens
+def _slack_app_token_from_env():
+    """Build a dict of team_id -> app token from SLACK_TEAM_IDS and SLACK_APP_TOKEN_<id> env vars."""
+    out = {}
+    ids_raw = (env("SLACK_TEAM_IDS", default="") or "").strip()
+    if not ids_raw:
+        return out
+    for tid in ids_raw.split(","):
+        tid = tid.strip()
+        if not tid:
+            continue
+        key = f"SLACK_APP_TOKEN_{tid}"
+        token = (env(key, default="") or "").strip()
+        if token:
+            out[tid] = token
+    return out
+
+
+SLACK_APP_TOKEN = _slack_app_token_from_env()
+
+
+def _slack_team_scope_from_env():
+    """
+    Build a dict of team_id -> list of scope ints from SLACK_TEAM_IDS and
+    SLACK_TEAM_SCOPE_<id> env vars. Scope: 0 = huddle support, 1 = PR bot.
+    Value is comma-separated, e.g. "0", "1", "0, 1". Invalid entries are skipped.
+    If SLACK_TEAM_SCOPE_<id> is missing or empty, that team gets [0, 1] (both).
+    """
+    out = {}
+    ids_raw = (env("SLACK_TEAM_IDS", default="") or "").strip()
+    if not ids_raw:
+        return out
+    valid_scopes = {0, 1}
+    for tid in ids_raw.split(","):
+        tid = tid.strip()
+        if not tid:
+            continue
+        key = f"SLACK_TEAM_SCOPE_{tid}"
+        raw = (env(key, default="") or "").strip()
+        if not raw:
+            out[tid] = [0, 1]
+            continue
+        scopes = []
+        for part in raw.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                n = int(part)
+                if n in valid_scopes:
+                    scopes.append(n)
+            except (ValueError, TypeError):
+                continue
+        out[tid] = scopes if scopes else [0, 1]
+
+    return out
+
+
+SLACK_TEAM_SCOPE = _slack_team_scope_from_env()
 _allow_internal_slack_tokens = (
     env("ALLOW_INTERNAL_SLACK_TOKENS", default="") or ""
 ).strip().lower() == "true"
@@ -233,6 +307,23 @@ _DEFAULT_CHROME_PROFILE = str(
 CHROME_PROFILE_PATH = (
     env("CHROME_PROFILE_PATH", default=_DEFAULT_CHROME_PROFILE) or ""
 ).strip()
+
+# Slack PR Bot configuration (for slack_event_handler)
+SLACK_PR_BOT_TEAM = (env("SLACK_PR_BOT_TEAM", default="") or "").strip()
+SLACK_PR_BOT_GITHUB_TOKEN = (env("SLACK_PR_BOT_GITHUB_TOKEN", default="") or "").strip()
+SLACK_PR_BOT_CHANNEL_NAME = (
+    env("SLACK_PR_BOT_CHANNEL_NAME", default="slack-bot") or "slack-bot"
+).strip()
+SLACK_PR_BOT_COMMENT_TEMPLATE = (
+    env("SLACK_PR_BOT_COMMENT_TEMPLATE", default="Automated comment from Slack bot.")
+    or ""
+).strip() or "Automated comment from Slack bot."
+SLACK_PR_BOT_COMMENTS_MAX_PER_WINDOW = int(
+    env("SLACK_PR_BOT_COMMENTS_MAX_PER_WINDOW", default="5") or "5"
+)
+SLACK_PR_BOT_COMMENTS_WINDOW_SECONDS = int(
+    env("SLACK_PR_BOT_COMMENTS_WINDOW_SECONDS", default="3600") or "3600"
+)
 
 # Discord configuration (for discord_activity_tracker)
 DISCORD_TOKEN = (env("DISCORD_TOKEN", default="") or "").strip()
@@ -297,6 +388,13 @@ LOGGING = {
         "handlers": ["console", "file"],
         "level": LOG_LEVEL,
     },
+    "loggers": {
+        # Celery internals (bootsteps, timer, consumer) are noisy at DEBUG; use INFO only then.
+        "celery": {
+            "level": "INFO" if LOG_LEVEL == "DEBUG" else LOG_LEVEL,
+            "propagate": True,
+        },
+    },
 }
 
 # Celery
@@ -312,14 +410,20 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "America/Los_Angeles"
+CELERY_ENABLE_UTC = True  # Beat schedule times (default_time from YAML) are UTC
 
-# Daily at 1:00 AM Pacific (PST/PDT)
-CELERY_BEAT_SCHEDULE = {
-    "run-all-collectors-daily": {
-        "task": "workflow.tasks.run_all_collectors_task",
-        "schedule": crontab(hour=1, minute=0),
-    },
-}
+# Schedule from YAML (boost_collector_runner); on load error fall back to empty beat schedule ({})
+BOOST_COLLECTOR_SCHEDULE_YAML = BASE_DIR / "config" / "boost_collector_schedule.yaml"
+try:
+    from boost_collector_runner.schedule_config import get_beat_schedule
+
+    CELERY_BEAT_SCHEDULE = get_beat_schedule()
+except Exception:
+    import logging
+     logging.getLogger(__name__).exception(
+        "Could not load boost collector schedule from YAML.",
+    )
+    CELERY_BEAT_SCHEDULE = {}
 
 # GitHub activity tracker: Redis for ETag cache (conditional GET). Use separate DB index.
 # To persist the cache across restarts, enable Redis persistence (RDB or AOF) in redis.conf:
@@ -329,7 +433,7 @@ GITHUB_ETAG_REDIS_URL = env(
     "GITHUB_ETAG_REDIS_URL",
     default="redis://localhost:6379/1",
 )
-
+   
 # Conditionally add Discord/Slack handlers for error notifications
 if ENABLE_ERROR_NOTIFICATIONS:
     if DISCORD_WEBHOOK_URL:
