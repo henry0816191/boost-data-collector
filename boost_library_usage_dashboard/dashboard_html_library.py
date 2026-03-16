@@ -45,13 +45,13 @@ def build_library_page(
         )
     ]
 
-    versions = sorted(
-        (data.get("all_versions_for_chart") or list(dep_chart.keys())), key=version_key
-    )
+    versions = sorted((list(dep_chart.keys())), key=version_key)
     dep_first = []
     dep_all = []
     for version in versions:
         entry = dep_chart.get(version, {})
+        if not version.startswith("boost-"):
+            entry = dep_chart.get(f"boost-{version}", {})
         dep_first.append(entry.get("first_level", 0) if isinstance(entry, dict) else 0)
         dep_all.append(entry.get("all_deeper", 0) if isinstance(entry, dict) else 0)
 
