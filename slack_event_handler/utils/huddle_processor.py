@@ -12,7 +12,7 @@ from github_ops import upload_file
 from operations.file_ops import sanitize_filename
 from operations.slack_ops import SlackFetcher, fetch_huddle_transcript
 
-from cppa_slack_transcript_tracker.workspace import get_data_dir
+from slack_event_handler.workspace import get_data_dir
 
 from .huddle_markdown import generate_huddle_markdown
 
