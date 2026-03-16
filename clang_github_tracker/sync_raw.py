@@ -65,7 +65,7 @@ def sync_raw_only(
     start_issue: datetime | None = None,
     start_pr: datetime | None = None,
     end_date: Optional[datetime] = None,
-) -> tuple[int, int, int]:
+) -> tuple[int, list[int], list[int]]:
     """
     Fetch llvm/llvm-project commits, issues, PRs from GitHub and save only to
     raw/github_activity_tracker/llvm/llvm-project. No DB writes.
@@ -77,7 +77,8 @@ def sync_raw_only(
         end_date: End date for all (default: now).
 
     Returns:
-        (commits_saved, issues_saved, prs_saved).
+        (commits_saved, issue_numbers, pr_numbers) — commit count and lists of
+        issue/PR numbers saved during this run.
     """
     from django.utils import timezone as django_tz
 
@@ -93,8 +94,8 @@ def sync_raw_only(
     client = get_github_client(use="scraping")
 
     commits_saved = 0
-    issues_saved = 0
-    prs_saved = 0
+    issue_numbers: list[int] = []
+    pr_numbers: list[int] = []
     latest_commit: datetime | None = None
     latest_issue: datetime | None = None
     latest_pr: datetime | None = None
@@ -118,9 +119,10 @@ def sync_raw_only(
         for issue_data in fetcher.fetch_issues_from_github(
             client, owner, repo, start_issue, end_date
         ):
-            if issue_data.get("number") is not None:
+            number = issue_data.get("number")
+            if number is not None:
                 save_issue_raw_source(owner, repo, issue_data)
-                issues_saved += 1
+                issue_numbers.append(number)
                 dt = _issue_date(issue_data)
                 if dt and (latest_issue is None or dt > latest_issue):
                     latest_issue = dt
@@ -131,9 +133,10 @@ def sync_raw_only(
         for pr_data in fetcher.fetch_pull_requests_from_github(
             client, owner, repo, start_pr, end_date
         ):
-            if pr_data.get("number") is not None:
+            number = pr_data.get("number")
+            if number is not None:
                 save_pr_raw_source(owner, repo, pr_data)
-                prs_saved += 1
+                pr_numbers.append(number)
                 dt = _pr_date(pr_data)
                 if dt and (latest_pr is None or dt > latest_pr):
                     latest_pr = dt
@@ -144,4 +147,4 @@ def sync_raw_only(
         logger.exception("clang_github_tracker sync failed: %s", e)
         raise
 
-    return commits_saved, issues_saved, prs_saved
+    return commits_saved, issue_numbers, pr_numbers

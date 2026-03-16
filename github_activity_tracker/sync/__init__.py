@@ -24,7 +24,7 @@ def sync_github(
     repo: GitHubRepository,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-) -> None:
+) -> dict[str, list[int]]:
     """Run full sync for one repo: repos (metadata), then commits, issues, pull requests.
 
     Accepts GitHubRepository or a subclass (e.g. BoostLibraryRepository); the same
@@ -34,8 +34,13 @@ def sync_github(
         repo: Repository to sync.
         start_date: Override start date for commits/issues/PRs (default: auto from DB).
         end_date: Override end date for commits/issues/PRs (default: now).
+
+    Returns:
+        Dict with "issues" and "pull_requests" keys, each a list of numbers processed
+        during this sync run.
     """
     sync_repos(repo)
     sync_commits(repo, start_date=start_date, end_date=end_date)
-    sync_issues(repo, start_date=start_date, end_date=end_date)
-    sync_pull_requests(repo, start_date=start_date, end_date=end_date)
+    issue_numbers = sync_issues(repo, start_date=start_date, end_date=end_date)
+    pr_numbers = sync_pull_requests(repo, start_date=start_date, end_date=end_date)
+    return {"issues": issue_numbers, "pull_requests": pr_numbers}
