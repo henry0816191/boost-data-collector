@@ -17,8 +17,6 @@ from django.core.management.base import BaseCommand, CommandError
 
 from boost_collector_runner.schedule_config import (
     get_tasks_for_schedule,
-    load_config,
-    _get_yaml_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,9 +33,16 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "--schedule",
-            choices=("daily", "weekly", "monthly", "on_release", "interval"),
+            choices=(
+                "daily",
+                "weekly",
+                "monthly",
+                "on_release",
+                "interval",
+                "default",
+            ),
             required=True,
-            help="Schedule type to run.",
+            help="Schedule type to run. default: daily + weekly(today) + monthly(today) + on_release(if new release).",
         )
         parser.add_argument(
             "--day-of-week",
@@ -69,56 +74,6 @@ class Command(BaseCommand):
             help="Stop running remaining collectors after the first failure.",
         )
 
-    def _get_group_batch_tasks(self, group_id):
-        """Return list of (group_id, task_dict) for this group: daily + weekly(today) + monthly(today) + on_release(if new release)."""
-        tz_name = getattr(settings, "CELERY_TIMEZONE", "UTC")
-        today = datetime.now(ZoneInfo(tz_name)).date()
-        today_weekday = today.strftime("%A").lower()
-        today_day = today.day
-        tasks = []
-        path = _get_yaml_path()
-        data = load_config(path)
-        tasks.extend(get_tasks_for_schedule("daily", group_id=group_id, data=data))
-        tasks.extend(
-            get_tasks_for_schedule(
-                "weekly", day_of_week=today_weekday, group_id=group_id, data=data
-            )
-        )
-        tasks.extend(
-            get_tasks_for_schedule(
-                "monthly",
-                day_of_month=today_day,
-                group_id=group_id,
-                month=today.month,
-                year=today.year,
-                data=data,
-            )
-        )
-        on_release_tasks = get_tasks_for_schedule(
-            "on_release", group_id=group_id, data=data
-        )
-        if not on_release_tasks:
-            return tasks
-        try:
-            from boost_library_tracker.release_check import (
-                has_new_boost_release,
-            )
-
-            if has_new_boost_release():
-                tasks.extend(on_release_tasks)
-        except ImportError as e:
-            logger.warning(
-                "Skipping on_release tasks for group=%s: release_check import failed (%s)",
-                group_id,
-                e,
-            )
-        except Exception:
-            logger.exception(
-                "Skipping on_release tasks for group=%s: release check failed",
-                group_id,
-            )
-        return tasks
-
     def handle(self, *args, **options):
         """Resolve tasks from YAML (group batch or single schedule), run them sequentially, exit non-zero on failure."""
         schedule_kind = options["schedule"]
@@ -126,7 +81,10 @@ class Command(BaseCommand):
         day_of_month = options.get("day_of_month")
         interval_minutes = options.get("interval_minutes")
         stop_on_failure = options["stop_on_failure"]
+        group_id = options.get("group")
 
+        if schedule_kind == "default" and group_id is None:
+            raise CommandError("--schedule default requires --group")
         if schedule_kind == "weekly" and not day_of_week:
             raise CommandError("--schedule weekly requires --day-of-week")
         if schedule_kind == "monthly" and day_of_month is None:
@@ -136,50 +94,47 @@ class Command(BaseCommand):
                 "--schedule interval requires --interval-minutes (1-180)"
             )
 
-        group_id = options.get("group")
-        if schedule_kind == "daily":
-            try:
-                tasks = self._get_group_batch_tasks(group_id)
-            except (FileNotFoundError, ValueError, yaml.YAMLError) as e:
-                raise CommandError(str(e)) from e
-        else:
-            kwargs = dict(
-                schedule_kind=schedule_kind,
-                day_of_week=day_of_week,
-                day_of_month=day_of_month,
-                interval_minutes=interval_minutes,
-                group_id=group_id,
-            )
-            if schedule_kind == "monthly" and day_of_month is not None:
-                tz_name = getattr(settings, "CELERY_TIMEZONE", "UTC")
-                today = datetime.now(ZoneInfo(tz_name)).date()
-                kwargs["month"] = today.month
-                kwargs["year"] = today.year
-            try:
-                tasks = get_tasks_for_schedule(**kwargs)
-            except (FileNotFoundError, ValueError, yaml.YAMLError) as e:
-                raise CommandError(str(e)) from e
-            if schedule_kind == "on_release":
-                if not tasks:
-                    return
-                try:
-                    from boost_library_tracker.release_check import (
-                        has_new_boost_release,
-                    )
+        kwargs = dict(
+            schedule_kind=schedule_kind,
+            day_of_week=day_of_week,
+            day_of_month=day_of_month,
+            interval_minutes=interval_minutes,
+            group_id=group_id,
+        )
 
-                    if not has_new_boost_release():
-                        logger.info(
-                            "run_scheduled_collectors: no new Boost release; skipping on_release tasks."
-                        )
-                        return
-                except ImportError as e:
-                    raise CommandError(
-                        "on_release requires boost_library_tracker (install and add to INSTALLED_APPS)."
-                    ) from e
-                except Exception as e:
-                    raise CommandError(
-                        f"Failed to check for new Boost release: {e}"
-                    ) from e
+        if (
+            schedule_kind == "monthly" and day_of_month is not None
+        ) or schedule_kind == "default":
+            tz_name = getattr(settings, "CELERY_TIMEZONE", "UTC")
+            today = datetime.now(ZoneInfo(tz_name)).date()
+            kwargs["month"] = today.month
+            kwargs["year"] = today.year
+        try:
+            tasks = get_tasks_for_schedule(**kwargs)
+        except (FileNotFoundError, ValueError, yaml.YAMLError) as e:
+            raise CommandError(str(e)) from e
+
+        run_on_release_tasks = False
+
+        if schedule_kind == "on_release" or schedule_kind == "default":
+            try:
+                from boost_library_tracker.release_check import (
+                    has_new_boost_release,
+                )
+
+                if not has_new_boost_release():
+                    logger.info(
+                        "run_scheduled_collectors: no new Boost release; skipping on_release tasks."
+                    )
+                    run_on_release_tasks = False
+                else:
+                    run_on_release_tasks = True
+            except ImportError as e:
+                raise CommandError(
+                    "on_release requires boost_library_tracker (install and add to INSTALLED_APPS)."
+                ) from e
+            except Exception as e:
+                raise CommandError(f"Failed to check for new Boost release: {e}") from e
 
         if not tasks:
             logger.info(
@@ -194,19 +149,22 @@ class Command(BaseCommand):
         results = []
         exit_code = 0
         logger.info(
-            "run_scheduled_collectors: starting schedule=%s (%d tasks)",
+            "run_scheduled_collectors: starting schedule=%s (%d tasks) run_on_release_tasks=%s",
             schedule_kind,
             len(tasks),
+            run_on_release_tasks,
         )
 
         for _task_group_id, task in tasks:
+            if not run_on_release_tasks and task.get("schedule") == "on_release":
+                continue
             name = task.get("command")
             args = task.get("args") or []
-            self.stdout.write(f"Running {name}...")
+            logger.info("Running %s...", name)
             try:
                 call_command(name, *args)
                 results.append((name, 0))
-                self.stdout.write(self.style.SUCCESS(f"  {name}: success"))
+                logger.info("  %s: success", name)
             except SystemExit as e:
                 if e.code is None:
                     code = 0
@@ -216,7 +174,7 @@ class Command(BaseCommand):
                     code = 1
                 results.append((name, code))
                 if code == 0:
-                    self.stdout.write(self.style.SUCCESS(f"  {name}: success"))
+                    logger.info("  %s: success", name)
                 else:
                     logger.error("%s exited with code %s", name, code)
                     exit_code = code
@@ -245,9 +203,9 @@ class Command(BaseCommand):
         )
         summary = f"Summary: {succeeded} succeeded, {failed} failed."
         if failed == 0:
-            self.stdout.write(self.style.SUCCESS(summary))
+            logger.info(summary)
         else:
-            self.stdout.write(self.style.WARNING(summary))
+            logger.warning(summary)
 
         if exit_code != 0:
             sys.exit(exit_code)

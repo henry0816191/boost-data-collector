@@ -45,3 +45,7 @@ discord_activity_tracker/tools/
 # macOS
 .DS_Store
 ._*
+
+
+# Config
+config/boost_collector_schedule.yaml

@@ -5,6 +5,7 @@ import pytest
 import yaml
 
 from boost_collector_runner.schedule_config import (
+    DEFAULT_GROUP_BATCH_SCHEDULE_KIND,
     INTERVAL_MINUTES_MAX,
     get_beat_schedule,
     get_tasks_for_schedule,
@@ -359,7 +360,12 @@ def test_validate_task_interval_valid():
     _validate_task({"command": "c1", "schedule": "interval", "minutes": 1}, "g1")
     _validate_task({"command": "c1", "schedule": "interval", "minutes": 60}, "g1")
     _validate_task(
-        {"command": "c1", "schedule": "interval", "minutes": INTERVAL_MINUTES_MAX}, "g1"
+        {
+            "command": "c1",
+            "schedule": "interval",
+            "minutes": INTERVAL_MINUTES_MAX,
+        },
+        "g1",
     )
 
 
@@ -426,8 +432,16 @@ def test_get_tasks_for_schedule_monthly_exact_match_with_month_year(tmp_path):
                     "g1": {
                         "default_time": "04:10",
                         "tasks": [
-                            {"command": "cmd_mid", "schedule": "monthly", "on": 15},
-                            {"command": "cmd_last", "schedule": "monthly", "on": 31},
+                            {
+                                "command": "cmd_mid",
+                                "schedule": "monthly",
+                                "on": 15,
+                            },
+                            {
+                                "command": "cmd_last",
+                                "schedule": "monthly",
+                                "on": 31,
+                            },
                         ],
                     },
                 },
@@ -477,7 +491,11 @@ def test_get_tasks_for_schedule_monthly_last_day_fallback(tmp_path):
                     "g1": {
                         "default_time": "04:10",
                         "tasks": [
-                            {"command": "month_end", "schedule": "monthly", "on": 31},
+                            {
+                                "command": "month_end",
+                                "schedule": "monthly",
+                                "on": 31,
+                            },
                         ],
                     },
                 },
@@ -548,7 +566,10 @@ def test_get_beat_schedule_generates_expected_entries(tmp_path, settings):
         == "boost_collector_runner.tasks.run_scheduled_collectors_task"
     )
     assert "kwargs" in schedule[group_key]
-    assert schedule[group_key]["kwargs"]["schedule_kind"] == "daily"
+    assert (
+        schedule[group_key]["kwargs"]["schedule_kind"]
+        == DEFAULT_GROUP_BATCH_SCHEDULE_KIND
+    )
     assert schedule[group_key]["kwargs"]["group_id"] == "github"
 
     interval_key = "boost-collector-interval-15min"
@@ -559,6 +580,152 @@ def test_get_beat_schedule_generates_expected_entries(tmp_path, settings):
     )
     assert schedule[interval_key]["kwargs"]["schedule_kind"] == "interval"
     assert schedule[interval_key]["kwargs"]["interval_minutes"] == 15
+    assert "group_id" not in schedule[interval_key]["kwargs"]
     from datetime import timedelta
 
     assert schedule[interval_key]["schedule"].run_every == timedelta(minutes=15)
+
+
+def test_get_beat_schedule_with_all_schedule_types(tmp_path, settings):
+    """get_beat_schedule with daily, weekly, monthly, on_release, interval yields correct entries per group and one per interval_minutes (no group_id)."""
+    from datetime import timedelta
+
+    yaml_path = tmp_path / "boost_collector_schedule.yaml"
+    yaml_path.write_text(
+        yaml.dump(
+            {
+                "groups": {
+                    "github": {
+                        "default_time": "16:10",
+                        "tasks": [
+                            {"command": "run_daily", "schedule": "daily"},
+                            {
+                                "command": "run_weekly",
+                                "schedule": "weekly",
+                                "on": "monday",
+                            },
+                            {
+                                "command": "run_monthly",
+                                "schedule": "monthly",
+                                "on": 1,
+                            },
+                            {"command": "run_on_release", "schedule": "on_release"},
+                            {
+                                "command": "run_interval_15",
+                                "schedule": "interval",
+                                "minutes": 15,
+                            },
+                        ],
+                    },
+                    "slack": {
+                        "default_time": "16:30",
+                        "tasks": [
+                            {"command": "run_slack_daily", "schedule": "daily"},
+                            {
+                                "command": "run_slack_interval",
+                                "schedule": "interval",
+                                "minutes": 60,
+                            },
+                        ],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings.BOOST_COLLECTOR_SCHEDULE_YAML = str(yaml_path)
+
+    schedule = get_beat_schedule()
+
+    assert isinstance(schedule, dict)
+    # Group batch entries (default schedule kind) — one per group with non-interval tasks
+    for group_id, time_str, key_suffix in [
+        ("github", "16-10", "16-10"),
+        ("slack", "16-30", "16-30"),
+    ]:
+        group_key = f"boost-collector-group-{group_id}-{key_suffix}"
+        assert group_key in schedule, f"missing {group_key}"
+        assert (
+            schedule[group_key]["kwargs"]["schedule_kind"]
+            == DEFAULT_GROUP_BATCH_SCHEDULE_KIND
+        )
+        assert schedule[group_key]["kwargs"]["group_id"] == group_id
+
+    # Interval entries — one per interval_minutes (no group_id)
+    interval_15_key = "boost-collector-interval-15min"
+    interval_60_key = "boost-collector-interval-60min"
+    assert interval_15_key in schedule
+    assert interval_60_key in schedule
+    assert schedule[interval_15_key]["kwargs"]["schedule_kind"] == "interval"
+    assert schedule[interval_15_key]["kwargs"]["interval_minutes"] == 15
+    assert "group_id" not in schedule[interval_15_key]["kwargs"]
+    assert schedule[interval_60_key]["kwargs"]["schedule_kind"] == "interval"
+    assert schedule[interval_60_key]["kwargs"]["interval_minutes"] == 60
+    assert "group_id" not in schedule[interval_60_key]["kwargs"]
+    assert schedule[interval_15_key]["schedule"].run_every == timedelta(minutes=15)
+    assert schedule[interval_60_key]["schedule"].run_every == timedelta(minutes=60)
+
+
+def test_get_tasks_for_schedule_interval_scoped_by_group_id(tmp_path):
+    """get_tasks_for_schedule(interval, ..., group_id=X) returns only that group's interval tasks; group_id=None returns all."""
+    path = tmp_path / "schedule.yaml"
+    path.write_text(
+        yaml.dump(
+            {
+                "groups": {
+                    "g1": {
+                        "default_time": "04:10",
+                        "tasks": [
+                            {
+                                "command": "interval_g1",
+                                "schedule": "interval",
+                                "minutes": 15,
+                            },
+                        ],
+                    },
+                    "g2": {
+                        "default_time": "04:20",
+                        "tasks": [
+                            {
+                                "command": "interval_g2",
+                                "schedule": "interval",
+                                "minutes": 15,
+                            },
+                        ],
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    data = load_config(path)
+
+    tasks_g1 = get_tasks_for_schedule(
+        "interval",
+        interval_minutes=15,
+        group_id="g1",
+        data=data,
+    )
+    assert len(tasks_g1) == 1
+    assert tasks_g1[0][0] == "g1"
+    assert tasks_g1[0][1]["command"] == "interval_g1"
+
+    tasks_g2 = get_tasks_for_schedule(
+        "interval",
+        interval_minutes=15,
+        group_id="g2",
+        data=data,
+    )
+    assert len(tasks_g2) == 1
+    assert tasks_g2[0][0] == "g2"
+    assert tasks_g2[0][1]["command"] == "interval_g2"
+
+    tasks_all = get_tasks_for_schedule(
+        "interval",
+        interval_minutes=15,
+        group_id=None,
+        data=data,
+    )
+    assert len(tasks_all) == 2
+    commands = {t[1]["command"] for t in tasks_all}
+    assert commands == {"interval_g1", "interval_g2"}

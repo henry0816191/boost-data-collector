@@ -2,6 +2,9 @@
 Load and validate boost collector schedule YAML; expose groups/tasks and Celery Beat schedule.
 Config file: config/boost_collector_schedule.yaml (see docs/Workflow.md).
 
+Times in the YAML (default_time) are in UTC. When building the Beat schedule, they are
+converted to CELERY_TIMEZONE so jobs run at the correct local time.
+
 Execution model: Tasks within a group run sequentially. Each group has one Beat entry (at the
 group's default_time); when it runs, all non-interval tasks in that group run together: daily,
 weekly (if today matches), monthly (if today matches), and on_release (if a new Boost release
@@ -12,13 +15,25 @@ a group run; they get separate Beat entries and run independently.
 
 import logging
 import calendar
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import yaml
 
 logger = logging.getLogger(__name__)
 
-SCHEDULE_TYPES = ("daily", "weekly", "monthly", "on_release", "interval")
+# Group batch (daily + weekly for today + monthly for today + on_release) uses this to separate from "daily" only.
+DEFAULT_GROUP_BATCH_SCHEDULE_KIND = "default"
+
+SCHEDULE_TYPES = (
+    "daily",
+    "weekly",
+    "monthly",
+    "on_release",
+    "interval",
+    DEFAULT_GROUP_BATCH_SCHEDULE_KIND,
+)
 # Interval schedule: minutes only; max 3 hours (use for short periodic runs, e.g. every 15 min).
 INTERVAL_MINUTES_MAX = 180
 DAY_OF_WEEK_FULL = {
@@ -78,13 +93,30 @@ def _parse_time(s):
     return h, m
 
 
-def _normalize_task(task, group_id, group_default_time):
+def _utc_time_to_celery_tz(hour_utc, minute_utc):
+    """
+    Convert (hour, minute) in UTC to (hour, minute) in CELERY_TIMEZONE.
+    Uses today as the reference date so DST is correct. Used when building
+    Beat crontab so YAML default_time (UTC) runs at the right local time.
+    """
+    from django.conf import settings
+
+    tz_name = getattr(settings, "CELERY_TIMEZONE", "UTC")
+    celery_tz = ZoneInfo(tz_name)
+    # Use today so DST is correct for current period
+    utc_dt = datetime.now(ZoneInfo("UTC")).replace(
+        hour=hour_utc, minute=minute_utc, second=0, microsecond=0
+    )
+    local_dt = utc_dt.astimezone(celery_tz)
+    return local_dt.hour, local_dt.minute
+
+
+def _normalize_task(task, group_id):
     """Build a normalized task dict; default enabled=True; time is always the group's default_time (tasks do not have their own time)."""
     t = dict(task)
     t.setdefault("enabled", True)
     if t.get("enabled") is False:
         return t
-    t["time"] = group_default_time
     t["_group_id"] = group_id
 
     schedule = t.get("schedule")
@@ -241,13 +273,12 @@ def get_groups_and_tasks(data=None):
             t = _normalize_task(
                 dict(task),
                 group_id,
-                group_default_time=group_time,
             )
             if t.get("enabled") is False:
                 continue
             tasks.append(t)
         if tasks:
-            result.append((group_id, tasks))
+            result.append((group_id, group_time, tasks))
     return result
 
 
@@ -265,7 +296,9 @@ def get_tasks_for_schedule(
     Return list of (group_id, task_dict) for tasks matching the given schedule.
     Only enabled tasks. Preserves task order within each group.
     When group_id is set, only tasks from that group are returned (use for daily/weekly/monthly per-group runs).
-    For interval, group_id should be None so all interval tasks with that minutes run in one independent task.
+    For interval: when group_id is provided, only interval tasks in that group with that minutes are returned
+    (one independent task per group per interval); when group_id is None, all interval tasks with that
+    minutes run in one task.
     For monthly: when month and year are provided, a task with day_of_month > last day of that month
     (e.g. 30 or 31) runs on the last day of the month (e.g. Feb 28/29).
 
@@ -305,16 +338,24 @@ def get_tasks_for_schedule(
     )
 
     out = []
-    for gid, tasks in get_groups_and_tasks(data=data):
+    for gid, _, tasks in get_groups_and_tasks(data=data):
         if group_id is not None and gid != group_id:
             continue
         for t in tasks:
-            if t.get("schedule") != schedule_kind:
+            if (
+                schedule_kind != DEFAULT_GROUP_BATCH_SCHEDULE_KIND
+                and t.get("schedule") != schedule_kind
+            ):
                 continue
-            if schedule_kind == "weekly":
+            if (
+                schedule_kind == DEFAULT_GROUP_BATCH_SCHEDULE_KIND
+                and t.get("schedule") == "interval"
+            ):
+                continue
+            if t.get("schedule") == "weekly":
                 if (t.get("day_of_week") or "").lower() != (day_of_week_full or ""):
                     continue
-            if schedule_kind == "monthly":
+            if t.get("schedule") == "monthly":
                 task_day = int(t.get("day_of_month", 0))
                 if month is not None and year is not None:
                     _, last_day = calendar.monthrange(year, month)
@@ -332,22 +373,21 @@ def get_tasks_for_schedule(
 
 def _collect_distinct_schedules(data=None):
     """
-    Yield (schedule_kind, day_of_week, day_of_month, time_str, interval_minutes, group_id).
+    Yield (schedule_kind, time_str, interval_minutes, group_id).
     One entry per group at the group's default_time ("group batch": daily + weekly for today +
     monthly for today + on_release if new release run together in the command). Interval tasks
     get one entry per interval_minutes with group_id=None and run independently.
     If data is provided, it is passed to get_groups_and_tasks to avoid loading the file again.
     """
     seen_interval = set()
-    for gid, tasks in get_groups_and_tasks(data=data):
+    for gid, group_time, tasks in get_groups_and_tasks(data=data):
         has_non_interval = any(t.get("schedule") != "interval" for t in tasks)
         if has_non_interval:
-            time_str = (tasks[0].get("time") or DEFAULT_TIME).strip()
-            yield ("daily", None, None, time_str, None, gid)
+            yield (DEFAULT_GROUP_BATCH_SCHEDULE_KIND, group_time, None, gid)
         for t in tasks:
             if t.get("schedule") == "interval":
                 mins = int(t.get("minutes", 0))
-                key = ("interval", None, None, None, mins, None)
+                key = ("interval", None, mins, None)
                 if key not in seen_interval:
                     seen_interval.add(key)
                     yield key
@@ -382,23 +422,18 @@ def get_beat_schedule():
     for row in _collect_distinct_schedules(data=data):
         (
             schedule_kind,
-            day_of_week,
-            day_of_month,
             time_str,
             interval_minutes,
             group_id,
         ) = row
         kwargs = {"schedule_kind": schedule_kind}
-        if day_of_week:
-            kwargs["day_of_week"] = day_of_week
-        if day_of_month:
-            kwargs["day_of_month"] = day_of_month
         if interval_minutes is not None:
             kwargs["interval_minutes"] = interval_minutes
         if group_id is not None:
             kwargs["group_id"] = group_id
 
         if schedule_kind == "interval":
+            # Interval entries are global (no group_id); one Beat entry per interval_minutes.
             key = f"boost-collector-interval-{interval_minutes}min"
             schedule[key] = {
                 "task": "boost_collector_runner.tasks.run_scheduled_collectors_task",
@@ -407,8 +442,9 @@ def get_beat_schedule():
                 ),
                 "kwargs": kwargs,
             }
-        elif schedule_kind == "daily":
-            h, m = _parse_time(time_str)
+        elif schedule_kind == DEFAULT_GROUP_BATCH_SCHEDULE_KIND:
+            h_utc, m_utc = _parse_time(time_str)
+            h, m = _utc_time_to_celery_tz(h_utc, m_utc)
             key = f"boost-collector-group-{group_id}-{time_str.replace(':', '-')}"
             schedule[key] = {
                 "task": "boost_collector_runner.tasks.run_scheduled_collectors_task",
