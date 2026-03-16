@@ -5,8 +5,9 @@ from datetime import date
 from unittest.mock import patch
 
 from cppa_slack_tracker.sync.sync_message import (
-    _ts_to_date,
+    _merge_messages_by_ts,
     _messages_by_day,
+    _ts_to_date,
 )
 
 
@@ -84,6 +85,61 @@ class TestMessagesByDay:
         assert date(2025, 1, 1) in result
         assert len(result[date(2025, 1, 1)]) == 1
         assert result[date(2025, 1, 1)][0]["text"] == "ok"
+
+
+class TestMergeMessagesByTs:
+    """Tests for _merge_messages_by_ts (same ts → update, new ts → add)."""
+
+    def test_empty_both_returns_empty(self):
+        assert _merge_messages_by_ts([], []) == []
+
+    def test_new_only_returns_new_sorted_by_ts(self):
+        new = [{"ts": "1735862400", "text": "b"}, {"ts": "1735689600", "text": "a"}]
+        result = _merge_messages_by_ts([], new)
+        assert len(result) == 2
+        assert result[0]["ts"] == "1735689600"
+        assert result[0]["text"] == "a"
+        assert result[1]["ts"] == "1735862400"
+        assert result[1]["text"] == "b"
+
+    def test_same_ts_updates(self):
+        existing = [{"ts": "1735689600", "text": "old"}]
+        new = [{"ts": "1735689600", "text": "updated"}]
+        result = _merge_messages_by_ts(existing, new)
+        assert len(result) == 1
+        assert result[0]["text"] == "updated"
+
+    def test_new_ts_adds(self):
+        existing = [{"ts": "1735689600", "text": "first"}]
+        new = [{"ts": "1735862400", "text": "second"}]
+        result = _merge_messages_by_ts(existing, new)
+        assert len(result) == 2
+        by_ts = {m["ts"]: m for m in result}
+        assert by_ts["1735689600"]["text"] == "first"
+        assert by_ts["1735862400"]["text"] == "second"
+
+    def test_mix_update_and_add(self):
+        existing = [
+            {"ts": "1735689600", "text": "a"},
+            {"ts": "1735776000", "text": "b"},
+        ]
+        new = [
+            {"ts": "1735776000", "text": "b_updated"},
+            {"ts": "1735862400", "text": "c"},
+        ]
+        result = _merge_messages_by_ts(existing, new)
+        assert len(result) == 3
+        by_ts = {m["ts"]: m for m in result}
+        assert by_ts["1735689600"]["text"] == "a"
+        assert by_ts["1735776000"]["text"] == "b_updated"
+        assert by_ts["1735862400"]["text"] == "c"
+
+    def test_message_without_ts_skipped(self):
+        existing = [{"ts": "1735689600", "text": "ok"}]
+        new = [{"text": "no_ts"}]
+        result = _merge_messages_by_ts(existing, new)
+        assert len(result) == 1
+        assert result[0]["text"] == "ok"
 
 
 @pytest.mark.django_db

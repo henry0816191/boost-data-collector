@@ -11,6 +11,10 @@ Boost Data Collector is a Django project that collects and manages data from var
 - Python 3.11+
 - Django (version in `requirements.txt`)
 - PostgreSQL database access
+- **pandoc** — required by `boost_library_docs_tracker` for HTML→Markdown conversion (`pypandoc` calls the `pandoc` binary at runtime):
+  - macOS: `brew install pandoc`
+  - Debian/Ubuntu: `sudo apt-get install pandoc`
+  - Windows: `winget install JohnMacFarlane.Pandoc` or download from [pandoc.org](https://pandoc.org/installing.html)
 - Environment variables for database URL and API keys (e.g. via `.env`)
 
 ### Initial setup
@@ -58,6 +62,10 @@ python manage.py run_all_collectors
 ```
 
 For local development you can start the dev server: `python manage.py runserver`.
+
+## Running with Docker
+
+You can run the whole stack (Django, PostgreSQL, Redis, Celery worker and beat) in Docker. See **[docs/Docker.md](docs/Docker.md)** for step-by-step instructions, including first-time setup and useful commands.
 
 ## Celery
 

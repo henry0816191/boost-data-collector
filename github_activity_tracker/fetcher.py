@@ -264,17 +264,25 @@ def fetch_issues_from_github(
                     continue
 
             issue_number = issue.get("number")
-            if issue_number:
+            if issue_number is not None:
+                # Fetch full issue detail (list endpoint returns summary only)
+                try:
+                    full_issue = client.rest_request(
+                        f"/repos/{owner}/{repo}/issues/{issue_number}"
+                    )
+                    if full_issue and isinstance(full_issue, dict):
+                        issue = full_issue
+                except Exception as e:
+                    logger.debug("Failed to fetch full issue #%s: %s", issue_number, e)
                 logger.debug(f"Fetching comments for issue #{issue_number}")
                 comments = fetch_comments_from_github(
                     client, owner, repo, issue_number, start_time, end_time
                 )
-                issue["comments"] = comments
                 logger.debug(
                     f"Found {len(comments)} comments for issue #{issue_number}"
                 )
-
-            yield issue
+                # Yield nested format: { issue_info: <detail>, comments: [...] }
+                yield {"issue_info": issue, "comments": comments}
 
         if len(issues) < per_page:
             logger.debug(
@@ -386,9 +394,8 @@ def fetch_pull_requests_from_github(
         flag = False
         for pr in prs:
             updated_str = pr.get("updated_at") or pr.get("created_at")
-            logger.debug(
-                f"Fetching PR #{pr.get('number')} with updated_str: {updated_str}"
-            )
+            pr_number = pr.get("number")
+            logger.debug("Fetching PR #%s with updated_str: %s", pr_number, updated_str)
             if updated_str:
                 try:
                     pr_dt = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
@@ -411,22 +418,35 @@ def fetch_pull_requests_from_github(
                         )
                         if pr_dt > end_time_aware:
                             continue
-
-                    logger.debug(f"Fetching comments for PR #{pr['number']}")
-                    pr["comments"] = fetch_comments_from_github(
-                        client, owner, repo, pr["number"], start_time, end_time
-                    )
-                    time.sleep(0.5)
-
-                    logger.debug(f"Fetching reviews for PR #{pr['number']}")
-                    pr["reviews"] = fetch_pr_reviews_from_github(
-                        client, owner, repo, pr["number"], start_time, end_time
-                    )
-                    time.sleep(0.5)
-
-                    yield pr
                 except Exception as e:
-                    logger.debug(f"Failed to parse PR date '{updated_str}': {e}")
+                    logger.debug("Failed to parse PR date '%s': %s", updated_str, e)
+                    continue
+
+            if pr_number is None:
+                continue
+
+            # Fetch full PR detail (list endpoint returns summary only)
+            try:
+                full_pr = client.rest_request(
+                    f"/repos/{owner}/{repo}/pulls/{pr_number}"
+                )
+                if full_pr and isinstance(full_pr, dict):
+                    pr = full_pr
+            except Exception as e:
+                logger.debug("Failed to fetch full PR #%s: %s", pr_number, e)
+
+            logger.debug("Fetching comments for PR #%s", pr_number)
+            comments = fetch_comments_from_github(
+                client, owner, repo, pr_number, start_time, end_time
+            )
+            time.sleep(0.2)
+            logger.debug("Fetching reviews for PR #%s", pr_number)
+            reviews = fetch_pr_reviews_from_github(
+                client, owner, repo, pr_number, start_time, end_time
+            )
+            time.sleep(0.2)
+            # Yield nested format: { pr_info: <detail>, comments: [...], reviews: [...] }
+            yield {"pr_info": pr, "comments": comments, "reviews": reviews}
 
         if len(prs) < per_page or flag:
             logger.debug(f"Last page reached (got {len(prs)} PRs, expected {per_page})")

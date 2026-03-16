@@ -225,6 +225,8 @@ def create_or_update_github_file(
     is_deleted: bool = False,
 ) -> tuple[GitHubFile, bool]:
     """Create or update a GitHubFile by repo + filename. Returns (file, created)."""
+    # PostgreSQL TEXT cannot contain NUL (0x00)
+    filename = (filename or "").replace("\x00", "")
     github_file, created = GitHubFile.objects.get_or_create(
         repo=repo,
         filename=filename,
@@ -245,7 +247,8 @@ def add_commit_file_change(
     patch: str = "",
 ) -> tuple[GitCommitFileChange, bool]:
     """Add or update a file change for a commit. If exists, updates status, additions, deletions, patch. Returns (file_change, created)."""
-    patch_val = patch or ""
+    # PostgreSQL TEXT cannot contain NUL (0x00); strip from patch (e.g. from git diff of binary files)
+    patch_val = (patch or "").replace("\x00", "")
     obj, created = GitCommitFileChange.objects.get_or_create(
         commit=commit,
         github_file=github_file,

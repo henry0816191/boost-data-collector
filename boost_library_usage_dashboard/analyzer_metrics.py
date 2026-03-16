@@ -3,13 +3,38 @@
 from __future__ import annotations
 
 import math
+import os
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
 from django.db.models import Avg, Count, Max, Min
 
-from .models import BoostUsage
+from boost_usage_tracker.models import BoostUsage
+
+_ENV_ACTIVITY_DERIVATION = "BOOST_DASHBOARD_ACTIVITY_DERIVATION_WEIGHT"
+_ENV_ACTIVITY_TREND = "BOOST_DASHBOARD_ACTIVITY_TREND_WEIGHT"
+_ENV_ACTIVITY_MOMENTUM = "BOOST_DASHBOARD_ACTIVITY_MOMENTUM_WEIGHT"
+_DEFAULT_DERIVATION = 0.4
+_DEFAULT_TREND = 0.3
+_DEFAULT_MOMENTUM = 0.3
+
+
+def _float_from_env(key: str, default: float) -> float:
+    raw = os.getenv(key, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+ACTIVITY_DERIVATION_WEIGHT = _float_from_env(
+    _ENV_ACTIVITY_DERIVATION, _DEFAULT_DERIVATION
+)
+ACTIVITY_TREND_WEIGHT = _float_from_env(_ENV_ACTIVITY_TREND, _DEFAULT_TREND)
+ACTIVITY_MOMENTUM_WEIGHT = _float_from_env(_ENV_ACTIVITY_MOMENTUM, _DEFAULT_MOMENTUM)
 
 
 def calculate_library_metrics_by_file_usage(
@@ -29,7 +54,7 @@ def calculate_library_metrics_by_file_usage(
         .filter(
             excepted_at__isnull=True,
             boost_header__isnull=False,
-            repo__githubrepository_ptr__stars__gte=analyzer.stars_min_threshold,
+            repo__githubrepository_ptr__stars__gt=analyzer.stars_min_threshold,
         )
         .iterator()
     )
@@ -155,9 +180,9 @@ def calculate_trend_metrics(
 
     return {
         "total_usage": total_usage,
-        "activity_score": derivation_score * 0.4
-        + trend_score * 0.3
-        + momentum_score * 0.3,
+        "activity_score": derivation_score * ACTIVITY_DERIVATION_WEIGHT
+        + trend_score * ACTIVITY_TREND_WEIGHT
+        + momentum_score * ACTIVITY_MOMENTUM_WEIGHT,
         "recent_usage": recent_usage,
         "past_usage": past_usage,
     }
@@ -169,7 +194,7 @@ def calculate_library_metrics_by_repository(analyzer: Any) -> dict[str, dict[str
         BoostUsage.objects.filter(  # pylint: disable=no-member
             excepted_at__isnull=True,
             boost_header__isnull=False,
-            repo__githubrepository_ptr__stars__gte=analyzer.stars_min_threshold,
+            repo__githubrepository_ptr__stars__gt=analyzer.stars_min_threshold,
         )
         .values("boost_header__library__name")
         .annotate(

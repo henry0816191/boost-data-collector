@@ -17,7 +17,7 @@ from django.conf import settings
 from operations.file_ops import sanitize_filename
 
 from .client import SlackAPIClient
-from .tokens import get_slack_client
+from .tokens import get_slack_client, get_default_team_key
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class SlackFetcher:
         else:
             self._client = get_slack_client()
         self.bot_token = self._client.token
-        self.team_id = getattr(settings, "SLACK_TEAM_ID", None) or None
+        self.team_id = get_default_team_key() or None
         logger.debug("SlackFetcher initialized")
 
     def get_user_info(self, user_id):
@@ -250,11 +250,13 @@ def fetch_huddle_transcript(file_id):
     """Fetch a huddle transcript/file info with transcription (uses xoxc/xoxd when set)."""
     xoxc_token = getattr(settings, "SLACK_XOXC_TOKEN", None) or None
     xoxd_token = getattr(settings, "SLACK_XOXD_TOKEN", None) or None
-    team_id = getattr(settings, "SLACK_TEAM_ID", None) or None
+    team_id = get_default_team_key() or None
     if not xoxc_token or not xoxd_token:
         logger.debug("Tokens not found in .env, extracting from Slack...")
         if not team_id:
-            logger.error("Missing SLACK_TEAM_ID. Set it in .env file.")
+            logger.error(
+                "No default team. Set SLACK_TEAM_IDS and SLACK_BOT_TOKEN_<id> in .env."
+            )
             return None
         from cppa_slack_transcript_tracker.utils.slack_tokens import (
             extract_slack_tokens_auto,

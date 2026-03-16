@@ -9,7 +9,24 @@ celery[redis]>=5.3
 redis>=5.0
 PyYAML>=6.0.1
 
+# boost_library_docs_tracker (HTML parsing, crawling)
+beautifulsoup4>=4.12
+lxml>=4.9
+pypandoc
+
+# cppa_pinecone_sync (vector index, chunking)
+pinecone>=5.0
+langchain-text-splitters>=0.2
+langchain-core>=0.2
+
 # cppa_slack_transcript_tracker app (Slack Bolt, token extraction, etc.)
 slack-bolt>=1.18
 pytz>=2024.1
 selenium>=4.35
+
+# slack_event_handler (GitHub PR comments)
+PyGithub>=2.0
+# cppa_pinecone_sync app
+pinecone>=3.0
+langchain-core>=0.1
+langchain-text-splitters>=0.0.1

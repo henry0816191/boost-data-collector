@@ -171,9 +171,9 @@ def _get_tags_to_process(clone_dir: Path, version_arg: str | None) -> list[str]:
         v = version_arg.strip()
         if v.lower() == "all":
             return list(
-                BoostVersion.objects.order_by("version").values_list(
-                    "version", flat=True
-                )
+                BoostVersion.objects.order_by("version")
+                .filter(version__regex=r"^boost-\d+\.\d+\.0$")
+                .values_list("version", flat=True)
             )
         return [v]
 

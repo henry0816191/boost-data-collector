@@ -24,6 +24,7 @@ from django.utils import timezone
 from github_ops import get_github_client
 from github_ops.client import ConnectionException, RateLimitException
 from github_activity_tracker.sync.utils import (
+    normalize_pr_json,
     parse_datetime,
     parse_github_user,
 )
@@ -35,7 +36,9 @@ logger = logging.getLogger(__name__)
 
 
 def _process_pr_data(repo: GitHubRepository, pr_data: dict) -> None:
-    """Apply one PR dict (with comments, reviews, assignees, labels) to the database."""
+    """Apply one PR dict (with comments, reviews, assignees, labels) to the database.
+    Accepts flat or nested { pr_info, comments, reviews } format."""
+    pr_data = normalize_pr_json(pr_data)
     user_info = parse_github_user(pr_data.get("user"))
     if not user_info["account_id"]:
         logger.warning(
@@ -182,7 +185,9 @@ def sync_pull_requests(
         for pr_data in fetcher.fetch_pull_requests_from_github(
             client, owner, repo_name, start_date, end_date
         ):
-            pr_number = pr_data.get("number")
+            pr_number = (pr_data.get("pr_info") or {}).get("number") or pr_data.get(
+                "number"
+            )
             if pr_number is None:
                 continue
             json_path = get_pr_json_path(owner, repo_name, pr_number)

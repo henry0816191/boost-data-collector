@@ -50,6 +50,7 @@ WORKSPACE_DIR.mkdir(exist_ok=True)
 for _slug in (
     "github_activity_tracker",
     "boost_library_tracker",
+    "clang_github_activity",
     "discord_activity_tracker",
     "shared",
 ):
@@ -60,3 +61,7 @@ LOG_DIR.mkdir(exist_ok=True)
 GITHUB_TOKEN = ""
 GITHUB_TOKENS_SCRAPING = []
 GITHUB_TOKEN_WRITE = ""
+
+# Clang GitHub Tracker (tests use defaults)
+CLANG_GITHUB_OWNER = "llvm"
+CLANG_GITHUB_REPO = "llvm-project"
