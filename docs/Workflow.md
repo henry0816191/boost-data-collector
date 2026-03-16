@@ -42,7 +42,7 @@ The **boost_collector_runner** app runs collectors from a single config file so 
 
 ### Structure
 
-- **groups:** Each group has **default_time** (required; 24h `"HH:MM"`, project timezone America/Los_Angeles) and a **tasks** list.
+- **groups:** Each group has **default_time** (required; 24h `"HH:MM"`, UTC) and a **tasks** list.
 - **Each task:**
   - **command** (required) – Management command name (e.g. `run_boost_library_tracker`).
   - **schedule** (required) – `daily` | `weekly` | `monthly` | `interval` | `on_release`.
