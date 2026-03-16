@@ -3,14 +3,14 @@ Sync Slack messages with the database.
 
 Flow when start_date is None:
   1. Process any existing workspace JSONs for the channel (old → new), remove them.
-  2. Determine start_date from the last message datetime in DB (same day, not next day,
-     to avoid missing same-day messages). Falls back to today if DB is empty.
+  2. Determine start_date: same day as last message in DB (to avoid missing same-day
+     messages). If DB has no messages, pass start_date=None so the API is called
+     without oldest (fetch from beginning of channel up to end_date).
 
 Flow always:
   3. end_date defaults to today (UTC) if not given.
-  4. Fetch all messages from API for [start_date, end_date]; divide them per day.
-  5. For each day: write JSON to workspace and raw (raw is never removed),
-     process workspace → save to DB → remove workspace file.
+  4. Fetch messages from API ([start_date, end_date] or all up to end_date if start_date None).
+  5. For each day: write JSON to workspace; merge into raw (by ts); process → save to DB → remove workspace file.
 
 Returns (success_count, error_count).
 """
@@ -133,6 +133,20 @@ def _last_message_date(channel: SlackChannel) -> Optional[date]:
     return last_dt
 
 
+def _merge_messages_by_ts(
+    existing_list: list[dict], new_messages: list[dict]
+) -> list[dict]:
+    """Merge new_messages into existing_list by ts: same ts → update, new ts → add. Returns list sorted by ts."""
+    by_ts: dict[str, dict] = {}
+    for msg in existing_list:
+        if isinstance(msg, dict) and msg.get("ts"):
+            by_ts[msg["ts"]] = msg
+    for msg in new_messages:
+        if isinstance(msg, dict) and msg.get("ts"):
+            by_ts[msg["ts"]] = msg
+    return sorted(by_ts.values(), key=lambda m: m.get("ts") or "")
+
+
 def sync_messages(
     channel: SlackChannel,
     start_date: date | datetime | None = None,
@@ -143,15 +157,14 @@ def sync_messages(
 
     If start_date is None:
       - Process existing workspace JSONs (old to new) and remove them.
-      - Set start_date to the date of the last message in DB (same day, not next day),
-        or today if the DB has no messages for this channel.
+      - Set start_date to the date of the last message in DB (same day), or leave
+        None if DB has no messages (fetch from beginning of channel; API called without oldest).
 
     end_date defaults to today (UTC).
 
-    For each day in [start_date, end_date]:
-      - Fetch messages from the Slack API.
-      - Write JSON to workspace and raw (raw is never deleted).
-      - Process workspace JSON → save to DB → remove workspace file.
+    For each day in the fetched range:
+      - Write JSON to workspace. Merge into raw file by ts (same ts → update, new ts → add).
+      - Process workspace → save to DB → remove workspace file.
 
     Returns (success_count, error_count).
     """
@@ -166,25 +179,27 @@ def sync_messages(
     if end_date is None:
         end_date = today
 
-    # Step 1: process existing workspace JSONs
+    # Step 1: process existing workspace JSONs (old → new), remove them
     if start_date is None:
         s, e = _process_workspace_jsons(channel)
         success_count += s
         error_count += e
-        # Step 2: determine start_date from DB (same day as last message)
+        # Determine start_date: same day as last message, or None to fetch from beginning
         last_d = _last_message_date(channel)
-        start_date = last_d if last_d is not None else today
+        start_date = last_d if last_d is not None else None
 
-    if start_date > end_date:
+    if start_date is not None and start_date > end_date:
         return success_count, error_count
 
     team_slug = channel.team.team_name
     channel_slug = channel.channel_name
     channel_id = channel.channel_id
 
-    # Step 4: fetch all messages for the range, then divide per day
+    # Step 2: fetch messages ([start_date, end_date] or all up to end_date if start_date is None)
     try:
-        all_messages = fetch_messages(channel_id, start_date, end_date)
+        all_messages = fetch_messages(
+            channel_id, start_date, end_date, team_id=channel.team.team_id
+        )
     except Exception:
         logger.exception(
             "Failed to fetch messages for channel_id=%s (%s..%s)",
@@ -193,9 +208,28 @@ def sync_messages(
             end_date,
         )
         return success_count, error_count
+
+    if not all_messages:
+        return success_count, error_count
+
+    # When we fetched without start_date, derive range from messages for grouping
+    if start_date is None:
+        min_d = min(
+            (
+                d
+                for m in all_messages
+                for d in [_ts_to_date(m.get("ts"))]
+                if d is not None
+            ),
+            default=None,
+        )
+        if min_d is None:
+            return success_count, error_count
+        start_date = min_d
+
     messages_by_day = _messages_by_day(all_messages, start_date, end_date)
 
-    # Step 5: for each day with messages, write workspace + raw → process → remove workspace
+    # Step 3: for each day with messages, write workspace; merge into raw; process → remove workspace
     d = start_date
     while d <= end_date:
         messages = messages_by_day.get(d, [])
@@ -206,12 +240,25 @@ def sync_messages(
         date_str = d.strftime("%Y-%m-%d")
         workspace_path = get_message_json_path(team_slug, channel_slug, date_str)
         raw_path = get_raw_message_json_path(team_slug, channel_slug, date_str)
-        payload = json.dumps(messages, indent=2, default=str)
+
+        # Raw: merge with existing file if present (same ts → update, new ts → add)
+        existing_list: list[dict] = []
+        if raw_path.exists():
+            try:
+                data = json.loads(raw_path.read_text(encoding="utf-8"))
+                if isinstance(data, list):
+                    existing_list = data
+            except (json.JSONDecodeError, OSError):
+                logger.debug("Could not load existing raw %s for merge", raw_path)
+        merged_raw = _merge_messages_by_ts(existing_list, messages)
+        raw_payload = json.dumps(merged_raw, indent=2, default=str)
+
+        workspace_payload = json.dumps(messages, indent=2, default=str)
         try:
             workspace_path.parent.mkdir(parents=True, exist_ok=True)
             raw_path.parent.mkdir(parents=True, exist_ok=True)
-            workspace_path.write_text(payload, encoding="utf-8")
-            raw_path.write_text(payload, encoding="utf-8")
+            workspace_path.write_text(workspace_payload, encoding="utf-8")
+            raw_path.write_text(raw_payload, encoding="utf-8")
         except OSError:
             logger.exception(
                 "Failed to write JSON for channel_id=%s date=%s", channel_id, date_str
@@ -219,10 +266,11 @@ def sync_messages(
             d += timedelta(days=1)
             continue
         logger.debug(
-            "Wrote %s and %s (%s messages)",
+            "Wrote %s and %s (%s messages, raw merged %s)",
             workspace_path,
             raw_path,
             len(messages),
+            len(merged_raw),
         )
 
         try:

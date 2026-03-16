@@ -1,0 +1,50 @@
+# Git and IDE
+.git
+.gitignore
+.cursor
+.vscode
+*.swp
+*.swo
+
+# Python
+venv
+.venv
+env
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.coverage
+htmlcov
+.tox
+
+# Local env (use docker-compose env or secrets; do not bake into image)
+.env
+.env.*
+!.env.example
+
+# Docs and dev (not needed at runtime)
+docs
+*.md
+!README.md
+
+# Workspace and logs (mounted as volumes in docker-compose)
+workspace
+logs
+staticfiles
+
+# Tests and dev tools (not needed at runtime; run tests locally with: make test)
+tests
+*_test.py
+test_*.py
+conftest.py
+pytest.ini
+setup.cfg
+.pre-commit-config.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+# macOS AppleDouble / resource fork (avoids xattr errors on external volumes)
+._*
+._Dockerfile

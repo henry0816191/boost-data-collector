@@ -45,9 +45,7 @@ def build_library_page(
         )
     ]
 
-    versions = sorted(
-        (data.get("all_versions_for_chart") or list(dep_chart.keys())), key=version_key
-    )
+    versions = sorted(list(dep_chart.keys()), key=version_key)
     dep_first = []
     dep_all = []
     for version in versions:

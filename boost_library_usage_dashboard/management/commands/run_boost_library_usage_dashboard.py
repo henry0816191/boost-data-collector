@@ -1,7 +1,8 @@
 import logging
 import shutil
-import subprocess
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -10,7 +11,7 @@ from boost_library_usage_dashboard.analyzer import BoostUsageDashboardAnalyzer
 from boost_library_usage_dashboard.renderer import render_dashboard_html
 from boost_library_usage_dashboard.report import write_summary_report
 from config.workspace import get_workspace_path
-from github_ops.git_ops import clone_repo, push
+from github_ops.git_ops import clone_repo, pull, push
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +26,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--publish",
             action="store_true",
-            help="Publish generated files to --target-repo.",
-        )
-        parser.add_argument(
-            "--target-repo",
-            type=str,
-            default="",
-            help="Target repository slug or URL for dashboard artifacts (e.g. org/repo).",
+            help="Publish generated files to the repository configured in settings.",
         )
         parser.add_argument(
             "--target-branch",
@@ -75,61 +70,103 @@ class Command(BaseCommand):
         )
 
         if options["publish"]:
-            target_repo = (options["target_repo"] or "").strip()
-            if not target_repo:
-                raise CommandError("--publish requires --target-repo")
-            self._publish(
-                output_dir=output_dir,
-                target_repo=target_repo,
-                branch=options["target_branch"],
+            owner = (
+                getattr(settings, "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER", "")
+                or ""
+            ).strip()
+            repo = (
+                getattr(settings, "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO", "")
+                or ""
+            ).strip()
+            branch = (
+                getattr(
+                    settings,
+                    "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH",
+                    "",
+                )
+                or ""
+            ).strip() or options["target_branch"]
+            if owner and repo:
+                self._publish_via_raw_clone(
+                    output_dir=output_dir,
+                    owner=owner,
+                    repo=repo,
+                    branch=branch,
+                )
+            else:
+                raise CommandError(
+                    "Cannot publish: BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER "
+                    "and BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO must be set in settings."
+                )
+
+    def _publish_via_raw_clone(
+        self,
+        output_dir: Path,
+        owner: str,
+        repo: str,
+        branch: str,
+    ) -> None:
+        """
+        Publish using persistent clone at raw/boost_library_usage_dashboard/owner/repo.
+        Clone if missing, pull, remove contents, copy output_dir, add/commit/push.
+        """
+        clone_dir = (
+            Path(settings.RAW_DIR) / "boost_library_usage_dashboard" / owner / repo
+        )
+        clone_dir = clone_dir.resolve()
+        output_dir = output_dir.resolve()
+        if (
+            clone_dir == output_dir
+            or clone_dir in output_dir.parents
+            or output_dir in clone_dir.parents
+        ):
+            raise CommandError(
+                "--output-dir must not overlap with the publish clone path: "
+                f"{clone_dir}"
             )
-
-    def _publish(self, output_dir: Path, target_repo: str, branch: str) -> None:
+        clone_dir.parent.mkdir(parents=True, exist_ok=True)
+        token = (
+            getattr(settings, "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_TOKEN", None)
+            or None
+        )
+        repo_slug = f"{owner}/{repo}"
         self.stdout.write(
-            f"Publishing dashboard artifacts to {target_repo} ({branch})..."
+            f"Publishing dashboard artifacts to {repo_slug} ({branch})..."
         )
-        publish_root = (
-            get_workspace_path("shared") / "boost_library_usage_dashboard_publish"
-        )
-        if publish_root.exists():
-            shutil.rmtree(publish_root)
-        clone_repo(target_repo, publish_root)
-
-        subprocess.run(["git", "-C", str(publish_root), "checkout", branch], check=True)
-
-        # Replace repository contents with generated artifacts.
-        for child in publish_root.iterdir():
+        if not clone_dir.exists() or not (clone_dir / ".git").is_dir():
+            if clone_dir.exists():
+                shutil.rmtree(clone_dir)
+            self.stdout.write(f"Cloning {repo_slug} to {clone_dir}...")
+            clone_repo(repo_slug, clone_dir, token=token)
+        self.stdout.write("Pulling latest...")
+        pull(clone_dir, branch=branch, token=token)
+        for child in clone_dir.iterdir():
             if child.name == ".git":
                 continue
-            if child.is_dir():
+            if child.is_dir() and child.name == "develop":
                 shutil.rmtree(child)
-            else:
-                child.unlink()
-
+        publish_subdir = clone_dir / "develop"
+        publish_subdir.mkdir(parents=True, exist_ok=True)
         for child in output_dir.iterdir():
-            dest = publish_root / child.name
+            dest = publish_subdir / child.name
             if child.is_dir():
                 shutil.copytree(child, dest)
             else:
+                if child.suffix != ".html":
+                    continue
                 shutil.copy2(child, dest)
-
-        subprocess.run(["git", "-C", str(publish_root), "add", "."], check=True)
-        status = subprocess.run(
-            ["git", "-C", str(publish_root), "status", "--porcelain"],
-            check=True,
-            capture_output=True,
-            text=True,
+        tz_name = getattr(settings, "CELERY_TIMEZONE", None) or settings.TIME_ZONE
+        commit_time = datetime.now(ZoneInfo(tz_name)).strftime("%Y-%m-%d %H:%M:%S")
+        commit_message = (
+            f"Update Boost library usage dashboard artifacts ({commit_time})"
         )
-        if not status.stdout.strip():
-            self.stdout.write("No dashboard changes to publish.")
-            return
-
-        commit_message = "Update Boost library usage dashboard artifacts"
-        subprocess.run(
-            ["git", "-C", str(publish_root), "commit", "-m", commit_message],
-            check=True,
+        push(
+            clone_dir,
+            remote="origin",
+            branch=branch,
+            commit_message=commit_message,
+            token=token,
         )
-        push(publish_root, branch=branch)
         self.stdout.write(
             self.style.SUCCESS("Dashboard artifacts published successfully.")
         )

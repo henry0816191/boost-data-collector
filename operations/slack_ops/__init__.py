@@ -23,6 +23,7 @@ from operations.slack_ops.tokens import (
     get_slack_app_token,
     get_slack_bot_token,
     get_slack_client,
+    get_default_team_key,
 )
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "download_file",
     "fetch_huddle_transcript",
     "get_channel_messages",
+    "get_default_team_key",
     "get_file_info",
     "get_slack_app_token",
     "get_slack_bot_token",

@@ -24,6 +24,7 @@ from django.utils import timezone
 from github_ops import get_github_client
 from github_ops.client import ConnectionException, RateLimitException
 from github_activity_tracker.sync.utils import (
+    normalize_issue_json,
     parse_datetime,
     parse_github_user,
 )
@@ -35,7 +36,9 @@ logger = logging.getLogger(__name__)
 
 
 def _process_issue_data(repo: GitHubRepository, issue_data: dict) -> None:
-    """Apply one issue dict (with comments, assignees, labels) to the database."""
+    """Apply one issue dict (with comments, assignees, labels) to the database.
+    Accepts flat or nested { issue_info, comments } format."""
+    issue_data = normalize_issue_json(issue_data)
     user_info = parse_github_user(issue_data.get("user"))
     if not user_info["account_id"]:
         logger.warning(
@@ -158,7 +161,9 @@ def sync_issues(
         for issue_data in fetcher.fetch_issues_from_github(
             client, owner, repo_name, start_date, end_date
         ):
-            issue_number = issue_data.get("number")
+            issue_number = (issue_data.get("issue_info") or {}).get(
+                "number"
+            ) or issue_data.get("number")
             if issue_number is None:
                 continue
             json_path = get_issue_json_path(owner, repo_name, issue_number)

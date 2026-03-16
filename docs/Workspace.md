@@ -13,8 +13,15 @@ workspace/                                    # WORKSPACE_DIR (configurable via 
 │       └── prs/<pr_number>.json
 ├── boost_library_tracker/                    # PDFs, converted files, etc.
 ├── raw/
+│   ├── github_activity_tracker/             # Raw GitHub API responses (llvm/llvm-project from clang_github_tracker; kept)
+│   │   └── <owner>/<repo>/
+│   │       ├── commits/<sha>.json
+│   │       ├── issues/<number>.json
+│   │       └── prs/<number>.json
 │   └── boost_mailing_list_tracker/           # Raw API responses (kept, not removed)
 │       └── <list_name>/<msg_id>.json
+├── clang_github_activity/                    # State for clang_github_tracker (last sync dates)
+│   └── state.json
 ├── boost_mailing_list_tracker/               # Mailing list messages (see below)
 │   └── <list_name>/
 │       └── messages/<msg_id>.json            # Formatted cache (processed then removed)
