@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -62,7 +62,12 @@ def _md_path(
         number: Issue or PR number.
         title: Issue or PR title (will be sanitized and truncated).
     """
-    d = created_at or datetime.now()
+    if created_at is None:
+        d = datetime.now(timezone.utc).replace(tzinfo=None)
+    elif created_at.tzinfo is not None:
+        d = created_at.astimezone(timezone.utc).replace(tzinfo=None)
+    else:
+        d = created_at
     filename = f"#{number} - {_safe_title(title)}.md"
     parts: list[Path | str] = [output_dir]
     if folder_prefix:
@@ -288,6 +293,9 @@ def _parse_dt(value: object) -> Optional[datetime]:
     if not isinstance(value, str) or not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00")).replace(tzinfo=None)
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
     except (ValueError, AttributeError):
         return None

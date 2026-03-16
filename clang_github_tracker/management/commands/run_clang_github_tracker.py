@@ -75,7 +75,7 @@ class Command(BaseCommand):
         to_date_str = (options.get("to_date") or "").strip()
 
         if upload_only:
-            self._upload_md_only()
+            self._upload_md_only(dry_run=dry_run)
             return
 
         from_date = None
@@ -230,8 +230,13 @@ class Command(BaseCommand):
             logger.exception("run_clang_github_tracker: MD export/upload failed: %s", e)
             raise
 
-    def _upload_md_only(self):
+    def _upload_md_only(self, *, dry_run: bool = False):
         """Upload existing MD files from workspace/clang_github_activity/md_export (no sync, no generation)."""
+        if dry_run:
+            logger.info(
+                "run_clang_github_tracker: --upload-only with --dry-run; skipping upload."
+            )
+            return
         md_output_dir = get_workspace_root() / "md_export"
         if not md_output_dir.is_dir():
             self.stdout.write(
