@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "boost_library_usage_dashboard",
     "boost_usage_tracker",
     "boost_mailing_list_tracker",
+    "cppa_pinecone_sync",
     "clang_github_tracker",
     "cppa_slack_transcript_tracker",
     "cppa_slack_tracker",

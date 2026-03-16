@@ -675,22 +675,22 @@ erDiagram
     PineconeFailList {
         int id PK
         string failed_id "IX"
-        string type "IX"
+        string app_type "IX"
         datetime created_at
     }
 
     PineconeSyncStatus {
         int id PK
-        string type UK "IX"
+        string app_type UK "IX"
         datetime final_sync_at
         datetime created_at
         datetime updated_at
     }
 ```
 
-**Note:** **PineconeFailList** - Records failed sync operations by `failed_id` and `type` for retry or audit.
+**Note:** **PineconeFailList** - Records failed sync operations by `failed_id` and `app_type` for retry or audit.
 
-**Note:** **PineconeSyncStatus** - Tracks the last successful sync per source type. One row per `type` (e.g. slack, mailing list, wg21). `final_sync_at` is when the last sync for that type completed; `created_at` and `updated_at` are for the row.
+**Note:** **PineconeSyncStatus** - Tracks the last successful sync per app. One row per `app_type`. `final_sync_at` is when the last sync for that type completed; `created_at` and `updated_at` are for the row.
 
 ---
 
@@ -708,7 +708,7 @@ erDiagram
 | **MailingListProfile**               | Profile for mailing list; extends BaseProfile.                                                           | 1       |
 | **WG21PaperAuthorProfile**           | Profile for WG21 paper authors; extends BaseProfile.                                                     | 1       |
 | **TmpIdentity**                      | Temporary identity for staging (CPPA User Tracker).                                                      | 1       |
-| **TempProfileIdentityRelation**     | Staging table: base_profile_id -> target_identity_id (CPPA User Tracker).                                | 1       |
+| **TempProfileIdentityRelation**      | Staging table: base_profile_id -> target_identity_id (CPPA User Tracker).                                | 1       |
 | **GitHubRepository**                 | Repository metadata (owner, repo_name, stars, forks, etc.). Base table for repo subtypes.                | 2       |
 | **GitHubFile**                       | File in a repo (filename, repo_id, is_deleted). Base for file subtypes.                                  | 2       |
 | **Language**                         | Reference: language name.                                                                                | 2       |
@@ -756,12 +756,12 @@ erDiagram
 
 ### Appendix B: Relationship summary
 
-| From                         | To                                                                                                                     | Relationship                               |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Identity                     | BaseProfile                                                                                                            | One identity has many profiles             |
-| BaseProfile                  | Email                                                                                                                  | One profile has many emails                |
-| BaseProfile                  | GitHubAccount, SlackUser, MailingListProfile, WG21PaperAuthorProfile                                                   | Extends (1:1 subtype)                      |
-| TmpIdentity                  | TempProfileIdentityRelation                                                                                           | Has many (target)                          |
+| From                        | To                                                                                                                     | Relationship                               |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Identity                    | BaseProfile                                                                                                            | One identity has many profiles             |
+| BaseProfile                 | Email                                                                                                                  | One profile has many emails                |
+| BaseProfile                 | GitHubAccount, SlackUser, MailingListProfile, WG21PaperAuthorProfile                                                   | Extends (1:1 subtype)                      |
+| TmpIdentity                 | TempProfileIdentityRelation                                                                                            | Has many (target)                          |
 | TempProfileIdentityRelation | BaseProfile                                                                                                            | Has many (base_profile_id)                 |
 | GitHubAccount                | GitHubRepository                                                                                                       | Owns many                                  |
 | GitHubRepository             | RepoLanguage, RepoLicense                                                                                              | Has many                                   |
