@@ -19,11 +19,12 @@ Each Django app that has **models** provides a **`services.py`** module. This is
 
 ### Which apps have a service layer
 
-| App                        | File                                   | Notes                                                       |
-| -------------------------- | -------------------------------------- | ----------------------------------------------------------- |
-| `cppa_user_tracker`        | `cppa_user_tracker/services.py`        | Identity, profiles, emails, staging.                        |
-| `github_activity_tracker`  | `github_activity_tracker/services.py`  | Repos, languages, licenses, issues, PRs.                    |
-| `boost_library_tracker`    | `boost_library_tracker/services.py`    | Boost libraries, versions, dependencies, categories, roles. |
+| App                       | File                                  | Notes                                         |
+| ------------------------- | ------------------------------------- | --------------------------------------------- |
+| `cppa_user_tracker`       | `cppa_user_tracker/services.py`       | Identity, profiles, emails, staging.     |
+| `github_activity_tracker` | `github_activity_tracker/services.py` | Repos, languages, licenses, issues, PRs. |
+| `boost_library_tracker`   | `boost_library_tracker/services.py`   | Boost libraries, versions, dependencies, categories, roles. |
+| `boost_library_docs_tracker` | `boost_library_docs_tracker/services.py` | BoostDocContent and BoostLibraryDocumentation (doc scrape and sync status). |
 | `boost_usage_tracker`     | `boost_usage_tracker/services.py`     | External repos, Boost usage, missing-header tmp. |
 | `cppa_pinecone_sync`       | `cppa_pinecone_sync/services.py`       | Pinecone fail list and sync status writes.                  |
 | `discord_activity_tracker` | `discord_activity_tracker/services.py` | Servers, users, channels, messages, reactions.              |

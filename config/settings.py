@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     "operations",
     "github_activity_tracker",
     "boost_library_tracker",
+    "boost_library_docs_tracker",
     "boost_library_usage_dashboard",
     "boost_usage_tracker",
     "boost_mailing_list_tracker",
@@ -136,6 +137,7 @@ RAW_DIR.mkdir(parents=True, exist_ok=True)
 _WORKSPACE_APP_SLUGS = (
     "github_activity_tracker",
     "boost_library_tracker",
+    "boost_library_docs_tracker",
     "boost_library_usage_dashboard",
     "boost_usage_tracker",
     "cppa_slack_tracker",
