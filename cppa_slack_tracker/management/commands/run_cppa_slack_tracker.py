@@ -42,7 +42,9 @@ def _parse_date(date_str: Optional[str]) -> Optional[datetime]:
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt.astimezone(timezone.utc)
-        return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        return datetime.strptime(date_str, "%Y-%m-%d").replace(
+            tzinfo=timezone.utc
+        )
     except ValueError:
         return None
 
@@ -109,6 +111,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Print what would be synced without making changes.",
         )
+        parser.add_argument(
+            "--ignore-pinecone",
+            action="store_true",
+            help="Skip Pinecone sync after message sync (default: sync to Pinecone)",
+        )
 
     def handle(self, *_args, **options):
         """Run the requested sync(s) for the given team (and optional channel)."""
@@ -131,24 +138,33 @@ class Command(BaseCommand):
         # --sync-channel-users, and --sync-messages runs its corresponding sync
         # when set; multiple flags can be combined. If none are set, default to
         # syncing users, channels, and messages.
-        if options.get("sync_users"):
-            self.sync_users(options, team)
-        if options.get("sync_channels"):
-            self.sync_channels(options, team)
-        if options.get("sync_channel_users"):
-            self.sync_channel_users(options, team)
-        if options.get("sync_messages"):
-            self.sync_messages(options, team)
+        # if options.get("sync_users"):
+        #     self.sync_users(options, team)
+        # if options.get("sync_channels"):
+        #     self.sync_channels(options, team)
+        # if options.get("sync_channel_users"):
+        #     self.sync_channel_users(options, team)
+        # if options.get("sync_messages"):
+        #     self.sync_messages(options, team)
 
-        if (
-            not options.get("sync_users")
-            and not options.get("sync_channels")
-            and not options.get("sync_channel_users")
-            and not options.get("sync_messages")
-        ):
-            self.sync_users(options, team)
-            self.sync_channels(options, team)
-            self.sync_messages(options, team)
+        # if (
+        #     not options.get("sync_users")
+        #     and not options.get("sync_channels")
+        #     and not options.get("sync_channel_users")
+        #     and not options.get("sync_messages")
+        # ):
+        #     self.sync_users(options, team)
+        #     self.sync_channels(options, team)
+        #     self.sync_messages(options, team)
+
+        # Sync to Pinecone after message sync (unless --ignore-pinecone is set)
+        if not options.get("ignore_pinecone"):
+            if options.get("sync_messages") or (
+                not options.get("sync_users")
+                and not options.get("sync_channels")
+                and not options.get("sync_channel_users")
+            ):
+                self.sync_to_pinecone(team)
 
     def _print_dry_run(self, options, team_id: str) -> None:
         """Log what would be synced when --dry-run is set."""
@@ -164,17 +180,27 @@ class Command(BaseCommand):
         if options.get("sync_channels"):
             logger.info(
                 "  Would run: sync channels%s",
-                f" (channel_id={channel_id})" if channel_id else " (all channels)",
+                (
+                    f" (channel_id={channel_id})"
+                    if channel_id
+                    else " (all channels)"
+                ),
             )
             printed = True
         if options.get("sync_channel_users"):
             logger.info(
                 "  Would run: sync channel memberships%s",
-                f" (channel_id={channel_id})" if channel_id else " (all channels)",
+                (
+                    f" (channel_id={channel_id})"
+                    if channel_id
+                    else " (all channels)"
+                ),
             )
             printed = True
         if options.get("sync_messages"):
-            start_str = (options.get("start_date") or "").strip() or "from DB or today"
+            start_str = (
+                options.get("start_date") or ""
+            ).strip() or "from DB or today"
             end_str = (options.get("end_date") or "").strip() or "today"
             logger.info(
                 "  Would run: sync messages (start=%s, end=%s)",
@@ -189,11 +215,15 @@ class Command(BaseCommand):
             printed = True
         if printed:
             return
-        logger.info("  Would run: sync users, channels, and messages (default)")
+        logger.info(
+            "  Would run: sync users, channels, and messages (default)"
+        )
         logger.info("    channel memberships require --sync-channel-users")
         if channel_id:
             logger.info("    (channel_id=%s)", channel_id)
-        start_str = (options.get("start_date") or "").strip() or "from DB or today"
+        start_str = (
+            options.get("start_date") or ""
+        ).strip() or "from DB or today"
         end_str = (options.get("end_date") or "").strip() or "today"
         logger.info("    start=%s, end=%s", start_str, end_str)
         if options.get("messages_json"):
@@ -267,7 +297,9 @@ class Command(BaseCommand):
                     data = json.load(f)
                 _append_payload(data)
             except (OSError, json.JSONDecodeError):
-                logger.exception("Failed to load legacy messages JSON: %s", path)
+                logger.exception(
+                    "Failed to load legacy messages JSON: %s", path
+                )
         elif os.path.isdir(path):
             for name in sorted(os.listdir(path)):
                 if name.endswith(".json"):
@@ -297,7 +329,9 @@ class Command(BaseCommand):
 
         start_date_str = (options.get("start_date") or "").strip() or None
         end_date_str = (options.get("end_date") or "").strip() or None
-        messages_json_path = (options.get("messages_json") or "").strip() or None
+        messages_json_path = (
+            options.get("messages_json") or ""
+        ).strip() or None
 
         start_dt = _parse_date(start_date_str)
         end_dt = _parse_date(end_date_str)
@@ -357,3 +391,49 @@ class Command(BaseCommand):
                 s,
                 e,
             )
+
+    def sync_to_pinecone(self, team: SlackTeam):
+        """Sync Slack messages to Pinecone after message sync."""
+        try:
+            from cppa_pinecone_sync.sync import sync_to_pinecone
+            from cppa_pinecone_sync.ingestion import PineconeInstance
+            from cppa_slack_tracker.preprocessor import (
+                preprocess_slack_for_pinecone,
+            )
+
+            logger.info(
+                "Syncing Slack messages to Pinecone (team=%s, team_id=%s)...",
+                team.team_name,
+                team.team_id,
+            )
+
+            namespace = f"slack-{team.team_name}"
+            result = sync_to_pinecone(
+                app_type="slack",
+                namespace=namespace,
+                preprocess_fn=preprocess_slack_for_pinecone,
+                instance=PineconeInstance.PUBLIC,
+            )
+
+            logger.info(
+                "Pinecone sync complete: upserted=%d, total=%d, failed=%d",
+                result["upserted"],
+                result["total"],
+                result["failed_count"],
+            )
+
+            if result.get("errors"):
+                logger.warning(
+                    "Pinecone sync had %d errors: %s",
+                    len(result["errors"]),
+                    result["errors"][:3],  # Log first 3 errors
+                )
+
+        except ImportError as e:
+            logger.warning(
+                "Pinecone sync skipped: missing dependencies (%s). "
+                "Install with: pip install pinecone langchain-text-splitters langchain-core",
+                e,
+            )
+        except Exception:
+            logger.exception("Error during Pinecone sync")
