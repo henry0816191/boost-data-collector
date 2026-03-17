@@ -318,7 +318,7 @@ def preprocess_slack_for_pinecone(
         if final_sync_at is not None:
             # Incremental sync: get messages created/updated after last sync
             # Use slack_message_created_at since SlackMessage doesn't have created_at
-            criteria_new = Q(slack_message_created_at__gt=final_sync_at)
+            criteria_new = Q(slack_message_updated_at__gt=final_sync_at)
             candidates_new = queryset.filter(criteria_new)
             messages_new = list(candidates_new)
             logger.info(
