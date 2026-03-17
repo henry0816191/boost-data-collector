@@ -42,9 +42,7 @@ def _parse_date(date_str: Optional[str]) -> Optional[datetime]:
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt.astimezone(timezone.utc)
-        return datetime.strptime(date_str, "%Y-%m-%d").replace(
-            tzinfo=timezone.utc
-        )
+        return datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
     except ValueError:
         return None
 
@@ -180,27 +178,17 @@ class Command(BaseCommand):
         if options.get("sync_channels"):
             logger.info(
                 "  Would run: sync channels%s",
-                (
-                    f" (channel_id={channel_id})"
-                    if channel_id
-                    else " (all channels)"
-                ),
+                (f" (channel_id={channel_id})" if channel_id else " (all channels)"),
             )
             printed = True
         if options.get("sync_channel_users"):
             logger.info(
                 "  Would run: sync channel memberships%s",
-                (
-                    f" (channel_id={channel_id})"
-                    if channel_id
-                    else " (all channels)"
-                ),
+                (f" (channel_id={channel_id})" if channel_id else " (all channels)"),
             )
             printed = True
         if options.get("sync_messages"):
-            start_str = (
-                options.get("start_date") or ""
-            ).strip() or "from DB or today"
+            start_str = (options.get("start_date") or "").strip() or "from DB or today"
             end_str = (options.get("end_date") or "").strip() or "today"
             logger.info(
                 "  Would run: sync messages (start=%s, end=%s)",
@@ -215,15 +203,11 @@ class Command(BaseCommand):
             printed = True
         if printed:
             return
-        logger.info(
-            "  Would run: sync users, channels, and messages (default)"
-        )
+        logger.info("  Would run: sync users, channels, and messages (default)")
         logger.info("    channel memberships require --sync-channel-users")
         if channel_id:
             logger.info("    (channel_id=%s)", channel_id)
-        start_str = (
-            options.get("start_date") or ""
-        ).strip() or "from DB or today"
+        start_str = (options.get("start_date") or "").strip() or "from DB or today"
         end_str = (options.get("end_date") or "").strip() or "today"
         logger.info("    start=%s, end=%s", start_str, end_str)
         if options.get("messages_json"):
@@ -297,9 +281,7 @@ class Command(BaseCommand):
                     data = json.load(f)
                 _append_payload(data)
             except (OSError, json.JSONDecodeError):
-                logger.exception(
-                    "Failed to load legacy messages JSON: %s", path
-                )
+                logger.exception("Failed to load legacy messages JSON: %s", path)
         elif os.path.isdir(path):
             for name in sorted(os.listdir(path)):
                 if name.endswith(".json"):
@@ -329,9 +311,7 @@ class Command(BaseCommand):
 
         start_date_str = (options.get("start_date") or "").strip() or None
         end_date_str = (options.get("end_date") or "").strip() or None
-        messages_json_path = (
-            options.get("messages_json") or ""
-        ).strip() or None
+        messages_json_path = (options.get("messages_json") or "").strip() or None
 
         start_dt = _parse_date(start_date_str)
         end_dt = _parse_date(end_date_str)

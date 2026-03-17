@@ -1,7 +1,5 @@
 """Tests for cppa_slack_tracker.utils.text_processing."""
 
-import pytest
-
 from cppa_slack_tracker.utils.text_processing import (
     clean_text,
     filter_sentence,

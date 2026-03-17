@@ -142,9 +142,7 @@ def _merge_thread_messages(
         "message_ids": message_ids,
         "text": " ".join(merged_parts),
         "user_name": _get_user_name(first_msg),
-        "channel_id": (
-            first_msg.channel.channel_id if first_msg.channel else ""
-        ),
+        "channel_id": (first_msg.channel.channel_id if first_msg.channel else ""),
         "ts": first_msg.ts,
         "thread_ts": thread_ts,
         "is_grouped": True,
@@ -271,9 +269,7 @@ def filter_and_group_messages(
             if group := _merge_thread_messages(thread_messages, thread_ts):
                 grouped_messages.append(group)
         else:
-            grouped_messages.extend(
-                _merge_none_thread_messages(thread_messages)
-            )
+            grouped_messages.extend(_merge_none_thread_messages(thread_messages))
     return grouped_messages
 
 
@@ -304,9 +300,9 @@ def preprocess_slack_for_pinecone(
     normalized_failed = _normalize_failed_ids(failed_ids or [])
 
     # Query SlackMessage with efficient joins
-    queryset = SlackMessage.objects.select_related(
-        "channel__team", "user"
-    ).order_by("ts")
+    queryset = SlackMessage.objects.select_related("channel__team", "user").order_by(
+        "ts"
+    )
 
     messages_new = []
     messages_failed = []
@@ -340,9 +336,7 @@ def preprocess_slack_for_pinecone(
     if messages_failed:
         grouped_messages.extend(filter_and_group_messages(messages_failed))
 
-    logger.info(
-        f"Grouped into {len(grouped_messages)} document groups after filtering"
-    )
+    logger.info(f"Grouped into {len(grouped_messages)} document groups after filtering")
 
     # Build document dicts
     docs: list[dict[str, Any]] = []

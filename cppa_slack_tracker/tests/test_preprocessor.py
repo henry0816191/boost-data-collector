@@ -1,6 +1,6 @@
 """Tests for cppa_slack_tracker.preprocessor."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 import pytest
 from django.utils import timezone as django_timezone
@@ -59,7 +59,7 @@ def test_preprocessor_incremental_by_created_at(
     now = django_timezone.now()
 
     # Create old message
-    old_msg = SlackMessage.objects.create(
+    _old_msg = SlackMessage.objects.create(
         channel=sample_slack_channel,
         ts="1234567890.111111",
         user=sample_slack_user,
@@ -69,7 +69,7 @@ def test_preprocessor_incremental_by_created_at(
     )
 
     # Create new message
-    new_msg = SlackMessage.objects.create(
+    _new_msg = SlackMessage.objects.create(
         channel=sample_slack_channel,
         ts="1234567890.222222",
         user=sample_slack_user,
@@ -95,7 +95,7 @@ def test_preprocessor_retries_failed_ids(
     now = django_timezone.now()
 
     # Create old message
-    retry_msg = SlackMessage.objects.create(
+    _retry_msg = SlackMessage.objects.create(
         channel=sample_slack_channel,
         ts="1234567890.111111",
         user=sample_slack_user,
@@ -122,7 +122,7 @@ def test_preprocessor_deduplicates_failed_ids(
     """Same message in failed_ids and incremental set is emitted once."""
     now = django_timezone.now()
 
-    msg = SlackMessage.objects.create(
+    _msg = SlackMessage.objects.create(
         channel=sample_slack_channel,
         ts="1234567890.111111",
         user=sample_slack_user,
@@ -149,7 +149,7 @@ def test_preprocessor_document_shape_and_metadata_fields(
     """Each output item has required top-level keys and guideline-compatible metadata."""
     now = django_timezone.now()
 
-    msg = SlackMessage.objects.create(
+    _msg = SlackMessage.objects.create(
         channel=sample_slack_channel,
         ts="1234567890.123456",
         user=sample_slack_user,

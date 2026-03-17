@@ -432,9 +432,7 @@ except Exception:
 # Public API key (default). Used when instance=public or unset.
 PINECONE_API_KEY = (env("PINECONE_API_KEY", default="") or "").strip()
 # Private API key. Used when instance=private.
-PINECONE_PRIVATE_API_KEY = (
-    env("PINECONE_PRIVATE_API_KEY", default="") or ""
-).strip()
+PINECONE_PRIVATE_API_KEY = (env("PINECONE_PRIVATE_API_KEY", default="") or "").strip()
 # Index name (required for sync). Set in .env to enable Slack/mailing list → Pinecone.
 PINECONE_INDEX_NAME = (env("PINECONE_INDEX_NAME", default="") or "").strip()
 PINECONE_ENVIRONMENT = (
@@ -444,9 +442,7 @@ PINECONE_CLOUD = (env("PINECONE_CLOUD", default="aws") or "aws").strip()
 PINECONE_BATCH_SIZE = int(env("PINECONE_BATCH_SIZE", default="96") or "96")
 PINECONE_CHUNK_SIZE = int(env("PINECONE_CHUNK_SIZE", default="1000") or "1000")
 PINECONE_CHUNK_OVERLAP = int(env("PINECONE_CHUNK_OVERLAP", default="200") or "200")
-PINECONE_MIN_TEXT_LENGTH = int(
-    env("PINECONE_MIN_TEXT_LENGTH", default="50") or "50"
-)
+PINECONE_MIN_TEXT_LENGTH = int(env("PINECONE_MIN_TEXT_LENGTH", default="50") or "50")
 PINECONE_MIN_WORDS = int(env("PINECONE_MIN_WORDS", default="5") or "5")
 PINECONE_DENSE_MODEL = (
     env("PINECONE_DENSE_MODEL", default="multilingual-e5-large")
