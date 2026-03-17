@@ -315,7 +315,10 @@ SLACK_PR_BOT_CHANNEL_NAME = (
     env("SLACK_PR_BOT_CHANNEL_NAME", default="slack-bot") or "slack-bot"
 ).strip()
 SLACK_PR_BOT_COMMENT_TEMPLATE = (
-    env("SLACK_PR_BOT_COMMENT_TEMPLATE", default="Automated comment from Slack bot.")
+    env(
+        "SLACK_PR_BOT_COMMENT_TEMPLATE",
+        default="Automated comment from Slack bot.",
+    )
     or ""
 ).strip() or "Automated comment from Slack bot."
 SLACK_PR_BOT_COMMENTS_MAX_PER_WINDOW = int(
@@ -376,7 +379,7 @@ LOGGING = {
             "formatter": "verbose",
         },
         "file": {
-            "class": "logging.handlers.RotatingFileHandler",
+            "class": "config.logging_handlers.SafeRotatingFileHandler",
             "filename": str(_LOG_FILE_PATH),
             "maxBytes": LOG_MAX_BYTES,
             "backupCount": LOG_BACKUP_COUNT,
@@ -409,7 +412,7 @@ CELERY_RESULT_BACKEND = env(
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "America/Los_Angeles"
+# CELERY_TIMEZONE = "America/Los_Angeles"
 CELERY_ENABLE_UTC = True  # Beat schedule times (default_time from YAML) are UTC
 
 # Schedule from YAML (boost_collector_runner); on load error fall back to empty beat schedule ({})

@@ -196,9 +196,10 @@ class GitHubAPIClient:
     ) -> requests.Response:
         """Perform one HTTP request. Retries on 429/403 rate limit (wait then retry).
         Retries on 5xx only when allow_retry_on_5xx=True; retries on connection errors
-        only when allow_retry_on_connection_errors=True. Mutating methods (POST, DELETE,
-        GraphQL) should not pass allow_retry_on_connection_errors=True to avoid replaying
-        writes that may have succeeded on the server despite a transient failure.
+        only when allow_retry_on_connection_errors=True. Mutating methods (e.g. REST POST/DELETE)
+        should not pass allow_retry_on_connection_errors=True to avoid replaying writes that
+        may have succeeded on the server despite a transient failure. GraphQL is retried
+        because this client uses it only for read-only queries (e.g. file content).
         """
         attempts_5xx = self.max_retries if allow_retry_on_5xx else 1
         attempts_conn = self.max_retries if allow_retry_on_connection_errors else 1
@@ -542,7 +543,9 @@ class GitHubAPIClient:
         )
 
     def graphql_request(self, query: str, variables: Optional[dict] = None) -> dict:
-        """Make GraphQL API request with rate limit and connection error handling."""
+        """Make GraphQL API request with rate limit and connection error handling.
+        Connection errors are retried (used for read-only queries only).
+        """
         payload: dict = {"query": query}
         if variables:
             payload["variables"] = variables
@@ -554,7 +557,7 @@ class GitHubAPIClient:
             headers={"Content-Type": "application/json"},
             timeout=30,
             allow_retry_on_5xx=True,
-            allow_retry_on_connection_errors=False,
+            allow_retry_on_connection_errors=True,
         )
         self._raise_if_error_and_update_rate_limit(response, "GraphQL request")
         data = response.json()

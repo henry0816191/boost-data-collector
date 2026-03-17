@@ -1,11 +1,20 @@
 """
-Custom logging handlers for Discord and Slack notifications.
-Automatically sends error logs to configured channels.
+Custom logging handlers for the Boost Data Collector project.
+
+SafeRotatingFileHandler: RotatingFileHandler that serializes emit() with a lock
+so rollover (close → rename → reopen) is not run while another thread is writing.
+Fixes PermissionError [WinError 32] on Windows when multiple threads log to the
+same file (e.g. Celery worker + ThreadPoolExecutor workers in boost_searcher).
+
+DiscordHandler / SlackHandler: send ERROR-level log records to Discord/Slack
+webhooks when ENABLE_ERROR_NOTIFICATIONS is True and webhook URLs are set.
 """
 
 import json
 import logging
+import logging.handlers
 import sys
+import threading
 import time
 import traceback
 from datetime import datetime, timezone
@@ -230,3 +239,20 @@ class SlackHandler(logging.Handler):
         except Exception as e:
             # Prevent handler from breaking the logging system
             sys.stderr.write(f"Error in SlackHandler: {e}\n")
+
+
+class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """
+    Thread-safe RotatingFileHandler. Use this when multiple threads write to
+    the same log file (e.g. Celery + thread pools). On Windows, the standard
+    RotatingFileHandler can raise PermissionError during rollover because
+    os.rename() fails if the file is still open by another thread.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._emit_lock = threading.Lock()
+
+    def emit(self, record):
+        with self._emit_lock:
+            super().emit(record)
