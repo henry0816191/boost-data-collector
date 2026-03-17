@@ -58,9 +58,7 @@ class Command(BaseCommand):
         workspace_base = Path("workspace/raw/github_activity_tracker/boostorg")
         if not workspace_base.exists():
             self.stdout.write(
-                self.style.ERROR(
-                    f"Workspace directory not found: {workspace_base}"
-                )
+                self.style.ERROR(f"Workspace directory not found: {workspace_base}")
             )
             return
 
@@ -93,17 +91,13 @@ class Command(BaseCommand):
 
             if not commits_dir.exists():
                 self.stdout.write(
-                    self.style.WARNING(
-                        f"  Skipping {repo_name}: no commits directory"
-                    )
+                    self.style.WARNING(f"  Skipping {repo_name}: no commits directory")
                 )
                 continue
 
             # Get GitHubRepository from database
             try:
-                repo = GitHubRepository.objects.select_related(
-                    "owner_account"
-                ).get(
+                repo = GitHubRepository.objects.select_related("owner_account").get(
                     owner_account__username="boostorg",
                     repo_name=repo_name,
                 )
@@ -162,26 +156,19 @@ class Command(BaseCommand):
                             # Update database
                             try:
                                 with transaction.atomic():
-                                    old_file, _ = (
-                                        GitHubFile.objects.get_or_create(
-                                            repo=repo,
-                                            filename=previous_filename,
-                                            defaults={"is_deleted": False},
-                                        )
+                                    old_file, _ = GitHubFile.objects.get_or_create(
+                                        repo=repo,
+                                        filename=previous_filename,
+                                        defaults={"is_deleted": False},
                                     )
-                                    new_file, _ = (
-                                        GitHubFile.objects.get_or_create(
-                                            repo=repo,
-                                            filename=filename,
-                                            defaults={"is_deleted": False},
-                                        )
+                                    new_file, _ = GitHubFile.objects.get_or_create(
+                                        repo=repo,
+                                        filename=filename,
+                                        defaults={"is_deleted": False},
                                     )
 
                                     # Only update if not already set
-                                    if (
-                                        new_file.previous_filename_id
-                                        != old_file.id
-                                    ):
+                                    if new_file.previous_filename_id != old_file.id:
                                         set_github_file_previous_filename(
                                             new_file, old_file
                                         )
@@ -224,9 +211,7 @@ class Command(BaseCommand):
                         "Failed to process commit file %s: %s", commit_file, e
                     )
                     self.stdout.write(
-                        self.style.ERROR(
-                            f"  Error processing {commit_file.name}: {e}"
-                        )
+                        self.style.ERROR(f"  Error processing {commit_file.name}: {e}")
                     )
 
             self.stdout.write(
@@ -252,18 +237,14 @@ class Command(BaseCommand):
             )
         else:
             self.stdout.write(
-                self.style.SUCCESS(
-                    f"{total_updated} file renames updated in database"
-                )
+                self.style.SUCCESS(f"{total_updated} file renames updated in database")
             )
             if total_failed > 0:
                 self.stdout.write(
                     self.style.ERROR(f"{total_failed} file renames failed")
                 )
                 self.stdout.write("")
-                self.stdout.write(
-                    self.style.ERROR("Not linked (failed):")
-                )
+                self.stdout.write(self.style.ERROR("Not linked (failed):"))
                 for rname, prev, new, err in failed_renames:
                     self.stdout.write(f"  {rname}: {prev} -> {new}")
                     self.stdout.write(f"    ({err})")
