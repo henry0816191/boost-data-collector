@@ -215,6 +215,14 @@ class GitHubFile(models.Model):
     )
     filename = models.CharField(max_length=1024, db_index=True)
     is_deleted = models.BooleanField(default=False)
+    previous_filename = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="renamed_to",
+        db_column="previous_filename_id",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
