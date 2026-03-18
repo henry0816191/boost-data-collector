@@ -96,6 +96,26 @@ class PineconeIngestion:
     # Initialization helpers
     # ------------------------------------------------------------------
 
+    def _validate_config(self) -> None:
+        """Ensure required Pinecone settings are set; raise ValueError with clear message if not."""
+        if not (self.index_name or "").strip():
+            raise ValueError(
+                "PINECONE_INDEX_NAME is not set or is empty. "
+                "Set PINECONE_INDEX_NAME in .env (e.g. PINECONE_INDEX_NAME=boost-dashboard) "
+                "to enable Pinecone sync."
+            )
+        active_key = self._active_api_key
+        if not (active_key or "").strip():
+            key_name = (
+                "PINECONE_PRIVATE_API_KEY"
+                if self.instance == PineconeInstance.PRIVATE
+                else "PINECONE_API_KEY"
+            )
+            raise ValueError(
+                f"{key_name} is not set or is empty. "
+                f"Set {key_name}=pc-xxxx in .env to enable Pinecone sync."
+            )
+
     @staticmethod
     def _validate_imports() -> None:
         """Validate required imports are available."""
@@ -145,6 +165,8 @@ class PineconeIngestion:
 
     def _get_or_create_indexes(self) -> None:
         """Get existing indexes or create new ones."""
+        self._validate_config()
+
         if self._dense_index_initialized and self._sparse_index_initialized:
             return
 
@@ -173,7 +195,9 @@ class PineconeIngestion:
         self, existing_indexes: set, dense_name: str, sparse_name: str
     ) -> None:
         logger.info(
-            "Creating indexes: %s (dense) and %s (sparse)", dense_name, sparse_name
+            "Creating indexes: %s (dense) and %s (sparse)",
+            dense_name,
+            sparse_name,
         )
         if self.pc is None:
             raise RuntimeError("Pinecone client not initialized")
@@ -363,7 +387,8 @@ class PineconeIngestion:
         record_idx: int,
     ) -> str:
         original_doc_id = metadata.get(
-            "doc_id", metadata.get("url", f"doc_{batch_start_idx}_{record_idx}")
+            "doc_id",
+            metadata.get("url", f"doc_{batch_start_idx}_{record_idx}"),
         )
         if "start_index" in metadata:
             original_doc_id = f"{original_doc_id}_{metadata['start_index']}"
@@ -590,9 +615,15 @@ class PineconeIngestion:
                 logger.error(error_msg)
                 errors.append(error_msg)
 
-        result = {"deleted": total_deleted, "total": len(ids), "errors": errors}
+        result = {
+            "deleted": total_deleted,
+            "total": len(ids),
+            "errors": errors,
+        }
         logger.info(
-            "Delete complete: %d/%d documents", result["deleted"], result["total"]
+            "Delete complete: %d/%d documents",
+            result["deleted"],
+            result["total"],
         )
         return result
 
@@ -619,7 +650,10 @@ class PineconeIngestion:
             index.delete(ids=ids, namespace=namespace)
         except Exception as e:
             logger.error(
-                "Failed to delete batch %d from %s index: %s", batch_num, index_type, e
+                "Failed to delete batch %d from %s index: %s",
+                batch_num,
+                index_type,
+                e,
             )
             raise
 
@@ -628,7 +662,9 @@ class PineconeIngestion:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _format_single_index_stats(stats_dict: dict[str, Any]) -> dict[str, Any]:
+    def _format_single_index_stats(
+        stats_dict: dict[str, Any],
+    ) -> dict[str, Any]:
         """Format one index's describe_index_stats() into a standard dict."""
         return {
             "total_vectors": stats_dict.get("total_vector_count", 0),

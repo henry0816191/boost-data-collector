@@ -315,7 +315,10 @@ SLACK_PR_BOT_CHANNEL_NAME = (
     env("SLACK_PR_BOT_CHANNEL_NAME", default="slack-bot") or "slack-bot"
 ).strip()
 SLACK_PR_BOT_COMMENT_TEMPLATE = (
-    env("SLACK_PR_BOT_COMMENT_TEMPLATE", default="Automated comment from Slack bot.")
+    env(
+        "SLACK_PR_BOT_COMMENT_TEMPLATE",
+        default="Automated comment from Slack bot.",
+    )
     or ""
 ).strip() or "Automated comment from Slack bot."
 SLACK_PR_BOT_COMMENTS_MAX_PER_WINDOW = int(
@@ -376,7 +379,7 @@ LOGGING = {
             "formatter": "verbose",
         },
         "file": {
-            "class": "logging.handlers.RotatingFileHandler",
+            "class": "config.logging_handlers.SafeRotatingFileHandler",
             "filename": str(_LOG_FILE_PATH),
             "maxBytes": LOG_MAX_BYTES,
             "backupCount": LOG_BACKUP_COUNT,
@@ -409,7 +412,7 @@ CELERY_RESULT_BACKEND = env(
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "America/Los_Angeles"
+# CELERY_TIMEZONE = "America/Los_Angeles"
 CELERY_ENABLE_UTC = True  # Beat schedule times (default_time from YAML) are UTC
 
 # Schedule from YAML (boost_collector_runner); on load error fall back to empty beat schedule ({})
@@ -425,6 +428,39 @@ except Exception:
         "Could not load boost collector schedule from YAML.",
     )
     CELERY_BEAT_SCHEDULE = {}
+
+# =============================================================================
+# Pinecone (cppa_pinecone_sync) - vector index for RAG sync
+# =============================================================================
+# Public API key (default). Used when instance=public or unset.
+PINECONE_API_KEY = (env("PINECONE_API_KEY", default="") or "").strip()
+# Private API key. Used when instance=private.
+PINECONE_PRIVATE_API_KEY = (env("PINECONE_PRIVATE_API_KEY", default="") or "").strip()
+# Index name (required for sync). Set in .env to enable Slack/mailing list → Pinecone.
+PINECONE_INDEX_NAME = (env("PINECONE_INDEX_NAME", default="") or "").strip()
+PINECONE_ENVIRONMENT = (
+    env("PINECONE_ENVIRONMENT", default="us-east-1") or "us-east-1"
+).strip()
+PINECONE_CLOUD = (env("PINECONE_CLOUD", default="aws") or "aws").strip()
+PINECONE_BATCH_SIZE = int(env("PINECONE_BATCH_SIZE", default="96") or "96")
+PINECONE_CHUNK_SIZE = int(env("PINECONE_CHUNK_SIZE", default="1000") or "1000")
+PINECONE_CHUNK_OVERLAP = int(env("PINECONE_CHUNK_OVERLAP", default="200") or "200")
+PINECONE_MIN_TEXT_LENGTH = int(env("PINECONE_MIN_TEXT_LENGTH", default="50") or "50")
+PINECONE_MIN_WORDS = int(env("PINECONE_MIN_WORDS", default="5") or "5")
+PINECONE_SLACK_NAMESPACE_PREFIX = (
+    env("PINECONE_SLACK_NAMESPACE_PREFIX", default="slack") or "slack"
+).strip()
+PINECONE_SLACK_APP_TYPE_PREFIX = (
+    env("PINECONE_SLACK_APP_TYPE_PREFIX", default="slack") or "slack"
+).strip()
+PINECONE_DENSE_MODEL = (
+    env("PINECONE_DENSE_MODEL", default="multilingual-e5-large")
+    or "multilingual-e5-large"
+).strip()
+PINECONE_SPARSE_MODEL = (
+    env("PINECONE_SPARSE_MODEL", default="pinecone-sparse-english-v0")
+    or "pinecone-sparse-english-v0"
+).strip()
 
 # GitHub activity tracker: Redis for ETag cache (conditional GET). Use separate DB index.
 # To persist the cache across restarts, enable Redis persistence (RDB or AOF) in redis.conf:
