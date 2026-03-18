@@ -447,6 +447,12 @@ PINECONE_CHUNK_SIZE = int(env("PINECONE_CHUNK_SIZE", default="1000") or "1000")
 PINECONE_CHUNK_OVERLAP = int(env("PINECONE_CHUNK_OVERLAP", default="200") or "200")
 PINECONE_MIN_TEXT_LENGTH = int(env("PINECONE_MIN_TEXT_LENGTH", default="50") or "50")
 PINECONE_MIN_WORDS = int(env("PINECONE_MIN_WORDS", default="5") or "5")
+PINECONE_SLACK_NAMESPACE_PREFIX = (
+    env("PINECONE_SLACK_NAMESPACE_PREFIX", default="slack") or "slack"
+).strip()
+PINECONE_SLACK_APP_TYPE_PREFIX = (
+    env("PINECONE_SLACK_APP_TYPE_PREFIX", default="slack") or "slack"
+).strip()
 PINECONE_DENSE_MODEL = (
     env("PINECONE_DENSE_MODEL", default="multilingual-e5-large")
     or "multilingual-e5-large"

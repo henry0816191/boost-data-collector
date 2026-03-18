@@ -387,9 +387,10 @@ class Command(BaseCommand):
                 team.team_id,
             )
 
-            namespace = f"slack-{team.team_name}"
+            namespace = f"{settings.PINECONE_SLACK_NAMESPACE_PREFIX}-{team.team_name}"
+            app_type = f"{settings.PINECONE_SLACK_APP_TYPE_PREFIX}-{team.team_name}"
             result = sync_to_pinecone(
-                app_type="slack",
+                app_type=app_type,
                 namespace=namespace,
                 preprocess_fn=preprocess_slack_for_pinecone,
                 instance=PineconeInstance.PUBLIC,
