@@ -149,6 +149,64 @@ WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 for _slug in _WORKSPACE_APP_SLUGS:
     (WORKSPACE_DIR / _slug).mkdir(parents=True, exist_ok=True)
 
+# Boost GitHub owner (used by boost_library_tracker preprocessors for Pinecone sync)
+BOOST_GITHUB_OWNER = (
+    env("BOOST_GITHUB_OWNER", default="boostorg") or "boostorg"
+).strip() or "boostorg"
+
+# Pinecone (cppa_pinecone_sync) — read from .env
+# Public API key (used when --pinecone-instance=public or unset)
+PINECONE_API_KEY = (env("PINECONE_API_KEY", default="") or "").strip()
+# Private API key (used when --pinecone-instance=private)
+PINECONE_PRIVATE_API_KEY = (env("PINECONE_PRIVATE_API_KEY", default="") or "").strip()
+PINECONE_INDEX_NAME = (
+    env("PINECONE_INDEX_NAME", default="") or ""
+).strip() or "boost-dashboard"
+PINECONE_ENVIRONMENT = (
+    env("PINECONE_ENVIRONMENT", default="us-east-1") or "us-east-1"
+).strip() or "us-east-1"
+PINECONE_CLOUD = (env("PINECONE_CLOUD", default="aws") or "aws").strip() or "aws"
+# Chunking and batching
+PINECONE_BATCH_SIZE = env.int("PINECONE_BATCH_SIZE", default=96)
+PINECONE_CHUNK_SIZE = env.int("PINECONE_CHUNK_SIZE", default=1000)
+PINECONE_CHUNK_OVERLAP = env.int("PINECONE_CHUNK_OVERLAP", default=200)
+PINECONE_MIN_TEXT_LENGTH = env.int("PINECONE_MIN_TEXT_LENGTH", default=50)
+PINECONE_MIN_WORDS = env.int("PINECONE_MIN_WORDS", default=5)
+# Embedding models (Pinecone integrated embeddings)
+PINECONE_DENSE_MODEL = (
+    env("PINECONE_DENSE_MODEL", default="multilingual-e5-large")
+    or "multilingual-e5-large"
+).strip() or "multilingual-e5-large"
+PINECONE_SPARSE_MODEL = (
+    env("PINECONE_SPARSE_MODEL", default="pinecone-sparse-english-v0")
+    or "pinecone-sparse-english-v0"
+).strip() or "pinecone-sparse-english-v0"
+
+# Pinecone sync: app_type and namespace per app (used when CLI does not pass --pinecone-app-type/--pinecone-namespace)
+# Boost Mailing List Tracker
+BOOST_MAILING_LIST_PINECONE_APP_TYPE = (
+    env("BOOST_MAILING_LIST_PINECONE_APP_TYPE", default="mailing") or "mailing"
+).strip() or "mailing"
+BOOST_MAILING_LIST_PINECONE_NAMESPACE = (
+    env("BOOST_MAILING_LIST_PINECONE_NAMESPACE", default="mailing") or "mailing"
+).strip() or "mailing"
+# Boost Library Tracker (GitHub issues/PRs)
+BOOST_GITHUB_PINECONE_APP_TYPE = (
+    env("BOOST_GITHUB_PINECONE_APP_TYPE", default="github-boostorg")
+    or "github-boostorg"
+).strip() or "github-boostorg"
+BOOST_GITHUB_PINECONE_NAMESPACE = (
+    env("BOOST_GITHUB_PINECONE_NAMESPACE", default="github-boostorg")
+    or "github-boostorg"
+).strip() or "github-boostorg"
+# Clang GitHub Tracker (GitHub issues/PRs)
+CLANG_GITHUB_PINECONE_APP_TYPE = (
+    env("CLANG_GITHUB_PINECONE_APP_TYPE", default="github-clang") or "github-clang"
+).strip() or "github-clang"
+CLANG_GITHUB_PINECONE_NAMESPACE = (
+    env("CLANG_GITHUB_PINECONE_NAMESPACE", default="github-clang") or "github-clang"
+).strip() or "github-clang"
+
 # Clang GitHub Tracker (raw sync: commits, issues, PRs for one repo)
 CLANG_GITHUB_OWNER = (
     env("CLANG_GITHUB_OWNER", default="llvm") or "llvm"

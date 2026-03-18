@@ -10,8 +10,8 @@ See docs/Workflow.md and docs/Workspace.md.
 
 import json
 import logging
-import os
 
+from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.utils.dateparse import parse_datetime
@@ -23,7 +23,6 @@ from boost_mailing_list_tracker.fetcher import (
     fetch_all_emails,
 )
 from boost_mailing_list_tracker.models import MailingListMessage
-from boost_mailing_list_tracker.preprocesser import preprocess_mailing_list_for_pinecone
 from boost_mailing_list_tracker.services import get_or_create_mailing_list_message
 from boost_mailing_list_tracker.workspace import (
     get_raw_json_path,
@@ -43,12 +42,12 @@ def _clean_text(value: object) -> str:
     return str(value).replace("\x00", "")
 
 
-def _run_pinecone_sync(app_id: str, namespace: str) -> None:
+def _run_pinecone_sync(app_type: str, namespace: str) -> None:
     """
     Trigger cppa-pinecone-sync command if available.
     """
-    if not app_id:
-        logger.warning("Pinecone sync skipped: --pinecone-app-id is empty.")
+    if not app_type:
+        logger.warning("Pinecone sync skipped: --pinecone-app-type is empty.")
         return
     if not namespace:
         logger.warning(
@@ -60,13 +59,13 @@ def _run_pinecone_sync(app_id: str, namespace: str) -> None:
     try:
         call_command(
             "run_cppa_pinecone_sync",
-            app_id=app_id,
+            app_type=app_type,
             namespace=namespace,
-            preprocess_fn=preprocess_mailing_list_for_pinecone,
+            preprocessor="boost_mailing_list_tracker.preprocesser.preprocess_mailing_list_for_pinecone",
         )
         logger.info(
-            "run_boost_mailing_list_tracker: pinecone sync completed (app_id=%s, namespace=%s)",
-            app_id,
+            "run_boost_mailing_list_tracker: pinecone sync completed (app_type=%s, namespace=%s)",
+            app_type,
             namespace,
         )
     except Exception as exc:  # pylint: disable=broad-exception-caught
@@ -203,15 +202,15 @@ class Command(BaseCommand):
             help="Fetch and report counts but do not write to DB or workspace.",
         )
         parser.add_argument(
-            "--pinecone-app-id",
+            "--pinecone-app-type",
             type=str,
-            default="",
-            help="App ID passed to run_cppa_pinecone_sync (usually provided by workflow).",
+            default=settings.BOOST_MAILING_LIST_PINECONE_APP_TYPE,
+            help="App type passed to run_cppa_pinecone_sync. Default from env BOOST_MAILING_LIST_PINECONE_APP_TYPE.",
         )
         parser.add_argument(
             "--pinecone-namespace",
             type=str,
-            default=os.getenv(PINECONE_NAMESPACE_ENV_KEY, ""),
+            default=settings.BOOST_MAILING_LIST_PINECONE_NAMESPACE,
             help=f"Pinecone namespace for sync. Default from env {PINECONE_NAMESPACE_ENV_KEY}.",
         )
 
@@ -219,8 +218,12 @@ class Command(BaseCommand):
         start_date = options["start_date"]
         end_date = options["end_date"]
         dry_run = options["dry_run"]
-        pinecone_app_id = (options.get("pinecone_app_id") or "").strip()
-        pinecone_namespace = (options.get("pinecone_namespace") or "").strip()
+        pinecone_app_type = (
+            options.get("pinecone_app_type") or ""
+        ).strip() or settings.BOOST_MAILING_LIST_PINECONE_APP_TYPE
+        pinecone_namespace = (
+            options.get("pinecone_namespace") or ""
+        ).strip() or settings.BOOST_MAILING_LIST_PINECONE_NAMESPACE
 
         logger.info(
             "run_boost_mailing_list_tracker: starting (start_date=%s, end_date=%s, dry_run=%s)",
@@ -264,7 +267,7 @@ class Command(BaseCommand):
             if not emails:
                 self.stdout.write(self.style.WARNING("No emails fetched from API."))
                 logger.info("run_boost_mailing_list_tracker: no emails fetched")
-                return
+                emails = []
 
             self.stdout.write(f"Fetched {len(emails)} emails from API.")
 
@@ -333,7 +336,7 @@ class Command(BaseCommand):
             )
             # Phase 4: upsert to Pinecone as final processing.
             _run_pinecone_sync(
-                app_id=pinecone_app_id,
+                app_type=pinecone_app_type,
                 namespace=pinecone_namespace,
             )
 

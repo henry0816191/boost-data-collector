@@ -5,13 +5,14 @@ Runs several tasks in order:
   1. Fetch GitHub activity (main repo boostorg/boost + all submodules)
   2. If new version releases exist: collect_boost_libraries (--new-only) and import_boost_dependencies for each new version
   3. Library tracker (stub; to be implemented)
-  4. ...
+  4. Upsert Boost GitHub issues and PRs to Pinecone (if --pinecone-app-type / env is set)
 """
 
 import logging
 from datetime import datetime, timezone
 
 import requests
+from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 MAIN_OWNER = "boostorg"
 MAIN_REPO = "boost"
+PINECONE_NAMESPACE_ENV_KEY = "BOOST_GITHUB_PINECONE_NAMESPACE"
 
 
 def _parse_gitmodules_owner_repo(
@@ -240,6 +242,66 @@ def task_library_tracker(self, dry_run: bool = False) -> None:
         pass  # TODO: implement
 
 
+def _run_pinecone_sync(
+    app_type: str, namespace: str, preprocessor_dotted_path: str
+) -> None:
+    """Trigger run_cppa_pinecone_sync if app_type and namespace are both set."""
+    if not app_type:
+        logger.warning("Pinecone sync skipped: --pinecone-app-type is empty.")
+        return
+    if not namespace:
+        logger.warning(
+            "Pinecone sync skipped: namespace is empty (set --pinecone-namespace or %s).",
+            PINECONE_NAMESPACE_ENV_KEY,
+        )
+        return
+    try:
+        call_command(
+            "run_cppa_pinecone_sync",
+            app_type=app_type,
+            namespace=namespace,
+            preprocessor=preprocessor_dotted_path,
+        )
+        logger.info(
+            "run_boost_library_tracker: pinecone sync completed (app_type=%s, namespace=%s)",
+            app_type,
+            namespace,
+        )
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.warning(
+            "Pinecone sync skipped/failed (run_cppa_pinecone_sync unavailable or errored): %s",
+            exc,
+        )
+
+
+def task_pinecone_sync(
+    self, app_type: str, namespace: str, dry_run: bool = False
+) -> None:
+    """Upsert Boost GitHub issues and PRs to Pinecone."""
+    self.stdout.write("Task 4: Upsert Boost GitHub issues and PRs to Pinecone...")
+    if dry_run:
+        self.stdout.write("  Would run Pinecone sync for issues and PRs.")
+        return
+
+    from boost_library_tracker.preprocessors.issue_preprocessor import (
+        APP_TYPE as ISSUES_APP_TYPE,
+        NAMESPACE as ISSUES_NAMESPACE,
+    )
+
+    effective_app_type = app_type or ISSUES_APP_TYPE
+    effective_namespace = namespace or ISSUES_NAMESPACE
+    _run_pinecone_sync(
+        effective_app_type,
+        effective_namespace,
+        "boost_library_tracker.preprocessors.issue_preprocessor.preprocess_for_pinecone",
+    )
+    _run_pinecone_sync(
+        effective_app_type,
+        effective_namespace,
+        "boost_library_tracker.preprocessors.pr_preprocessor.preprocess_for_pinecone",
+    )
+
+
 class Command(BaseCommand):
     """Run the Boost Library Tracker pipeline: GitHub sync, collect/import if new releases, library tracker."""
 
@@ -265,7 +327,7 @@ class Command(BaseCommand):
             "--task",
             type=str,
             default=None,
-            help="Run only this task: 'github_activity', 'collect_and_import_if_new', 'collect_libraries', or 'library_tracker'. Default: run all.",
+            help="Run only this task: 'github_activity', 'collect_and_import_if_new', 'collect_libraries', 'library_tracker', or 'pinecone_sync'. Default: run all.",
         )
         parser.add_argument(
             "--from-date",
@@ -287,11 +349,29 @@ class Command(BaseCommand):
             help="Start at this repo (including the main repo when NAME is 'boost') and sync it and all after. "
             "Use 'boost' for main repo or a submodule name (e.g. 'build', 'algorithm'). Default: sync all.",
         )
+        parser.add_argument(
+            "--pinecone-app-type",
+            type=str,
+            default=settings.BOOST_GITHUB_PINECONE_APP_TYPE,
+            help="App type passed to run_cppa_pinecone_sync. Default from env BOOST_GITHUB_PINECONE_APP_TYPE.",
+        )
+        parser.add_argument(
+            "--pinecone-namespace",
+            type=str,
+            default=settings.BOOST_GITHUB_PINECONE_NAMESPACE,
+            help=f"Pinecone namespace for sync. Default from env {PINECONE_NAMESPACE_ENV_KEY}.",
+        )
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
         ref = (options.get("ref") or "develop").strip()
         task_filter = (options["task"] or "").strip().lower()
+        pinecone_app_type = (
+            options.get("pinecone_app_type") or ""
+        ).strip() or settings.BOOST_GITHUB_PINECONE_APP_TYPE
+        pinecone_namespace = (
+            options.get("pinecone_namespace") or ""
+        ).strip() or settings.BOOST_GITHUB_PINECONE_NAMESPACE
 
         valid_tasks = {
             "",
@@ -299,12 +379,13 @@ class Command(BaseCommand):
             "collect_and_import_if_new",
             "collect_libraries",
             "library_tracker",
+            "pinecone_sync",
         }
         if task_filter not in valid_tasks:
             self.stderr.write(
                 self.style.ERROR(
                     "Invalid --task. Use one of: github_activity, "
-                    "collect_and_import_if_new, collect_libraries, library_tracker."
+                    "collect_and_import_if_new, collect_libraries, library_tracker, pinecone_sync."
                 )
             )
             return
@@ -369,6 +450,13 @@ class Command(BaseCommand):
                 task_collect_libraries(self, ref=ref, dry_run=dry_run)
             if not task_filter or task_filter == "library_tracker":
                 task_library_tracker(self, dry_run=dry_run)
+            if not task_filter or task_filter == "pinecone_sync":
+                task_pinecone_sync(
+                    self,
+                    app_type=pinecone_app_type,
+                    namespace=pinecone_namespace,
+                    dry_run=dry_run,
+                )
 
             self.stdout.write(
                 self.style.SUCCESS("run_boost_library_tracker: finished successfully")
