@@ -59,9 +59,25 @@ def _process_commit_files(
             else FileChangeStatus.CHANGED
         )
         is_deleted = status == FileChangeStatus.REMOVED
-        github_file, _ = services.create_or_update_github_file(
-            repo, filename, is_deleted=is_deleted
-        )
+
+        # Handle rename: link new filename to old filename
+        previous_filename = file_info.get("previous_filename")
+        if status == FileChangeStatus.RENAMED and previous_filename:
+            previous_filename = previous_filename.strip()
+            old_file, _ = services.create_or_update_github_file(
+                repo, previous_filename, is_deleted=False
+            )
+            github_file, _ = services.create_or_update_github_file(
+                repo, filename, is_deleted=is_deleted
+            )
+            # Link new file to old file
+            if github_file.previous_filename_id != old_file.id:
+                services.set_github_file_previous_filename(github_file, old_file)
+        else:
+            github_file, _ = services.create_or_update_github_file(
+                repo, filename, is_deleted=is_deleted
+            )
+
         services.add_commit_file_change(
             commit_obj,
             github_file,

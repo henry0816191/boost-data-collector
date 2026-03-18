@@ -30,7 +30,8 @@ def test_process_commit_files_creates_files_and_changes():
             "deletions": 100,
         },
         {
-            "previous_filename": "renamed.txt",
+            "filename": "new_name.txt",
+            "previous_filename": "old_name.txt",
             "status": "renamed",
         },
         {
@@ -51,7 +52,8 @@ def test_process_commit_files_creates_files_and_changes():
     mock_github_file_1 = MagicMock()
     mock_github_file_2 = MagicMock()
     mock_github_file_3 = MagicMock()
-    mock_github_file_4 = MagicMock()
+    mock_old_file = MagicMock()
+    mock_new_file = MagicMock()
     mock_github_file_5 = MagicMock()
 
     mock_create_file = MagicMock(
@@ -59,12 +61,14 @@ def test_process_commit_files_creates_files_and_changes():
             (mock_github_file_1, True),
             (mock_github_file_2, False),
             (mock_github_file_3, False),
-            (mock_github_file_4, True),
+            (mock_old_file, False),
+            (mock_new_file, True),
             (mock_github_file_5, True),
         ]
     )
 
     mock_add_change = MagicMock()
+    mock_set_previous = MagicMock()
 
     with patch(
         "github_activity_tracker.sync.commits.services.create_or_update_github_file",
@@ -72,20 +76,26 @@ def test_process_commit_files_creates_files_and_changes():
     ), patch(
         "github_activity_tracker.sync.commits.services.add_commit_file_change",
         mock_add_change,
+    ), patch(
+        "github_activity_tracker.sync.commits.services.set_github_file_previous_filename",
+        mock_set_previous,
     ):
         _process_commit_files(mock_repo, mock_commit, files)
 
-    assert mock_create_file.call_count == 5
+    assert mock_create_file.call_count == 6
     # added.txt
     mock_create_file.assert_any_call(mock_repo, "added.txt", is_deleted=False)
     # modified.txt
     mock_create_file.assert_any_call(mock_repo, "modified.txt", is_deleted=False)
     # deleted.txt
     mock_create_file.assert_any_call(mock_repo, "deleted.txt", is_deleted=True)
-    # renamed.txt (fallback to previous_filename)
-    mock_create_file.assert_any_call(mock_repo, "renamed.txt", is_deleted=False)
+    # renamed: old then new
+    mock_create_file.assert_any_call(mock_repo, "old_name.txt", is_deleted=False)
+    mock_create_file.assert_any_call(mock_repo, "new_name.txt", is_deleted=False)
     # spaced.txt (trimmed)
     mock_create_file.assert_any_call(mock_repo, "spaced.txt", is_deleted=False)
+
+    mock_set_previous.assert_called_once_with(mock_new_file, mock_old_file)
 
     assert mock_add_change.call_count == 5
     # added.txt
@@ -115,10 +125,10 @@ def test_process_commit_files_creates_files_and_changes():
         deletions=100,
         patch="",
     )
-    # renamed.txt
+    # renamed (new_name.txt)
     mock_add_change.assert_any_call(
         mock_commit,
-        mock_github_file_4,
+        mock_new_file,
         status="renamed",
         additions=0,
         deletions=0,
@@ -129,6 +139,56 @@ def test_process_commit_files_creates_files_and_changes():
         mock_commit,
         mock_github_file_5,
         status=FileChangeStatus.CHANGED,
+        additions=0,
+        deletions=0,
+        patch="",
+    )
+
+
+def test_process_commit_files_renamed_already_linked_does_not_call_set_previous():
+    """When renamed file already has previous_filename_id set, set_github_file_previous_filename is not called."""
+    mock_repo = MagicMock()
+    mock_commit = MagicMock()
+
+    files = [
+        {
+            "filename": "new.txt",
+            "previous_filename": "old.txt",
+            "status": "renamed",
+        },
+    ]
+
+    mock_old_file = MagicMock()
+    mock_old_file.id = 1
+    mock_new_file = MagicMock()
+    mock_new_file.previous_filename_id = 1  # Already linked to old_file
+
+    mock_create_file = MagicMock(
+        side_effect=[
+            (mock_old_file, False),
+            (mock_new_file, False),
+        ]
+    )
+    mock_add_change = MagicMock()
+    mock_set_previous = MagicMock()
+
+    with patch(
+        "github_activity_tracker.sync.commits.services.create_or_update_github_file",
+        mock_create_file,
+    ), patch(
+        "github_activity_tracker.sync.commits.services.add_commit_file_change",
+        mock_add_change,
+    ), patch(
+        "github_activity_tracker.sync.commits.services.set_github_file_previous_filename",
+        mock_set_previous,
+    ):
+        _process_commit_files(mock_repo, mock_commit, files)
+
+    mock_set_previous.assert_not_called()
+    mock_add_change.assert_called_once_with(
+        mock_commit,
+        mock_new_file,
+        status="renamed",
         additions=0,
         deletions=0,
         patch="",
