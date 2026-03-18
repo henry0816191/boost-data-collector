@@ -24,7 +24,10 @@ from clang_github_tracker import state_manager as clang_state
 from clang_github_tracker.sync_raw import sync_raw_only
 from clang_github_tracker.workspace import OWNER, REPO, get_workspace_root
 from github_ops import get_github_token, upload_folder_to_github
-from operations.md_ops.github_export import detect_renames_from_dirs, write_md_files
+from operations.md_ops.github_export import (
+    detect_renames_from_dirs,
+    write_md_files,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -213,7 +216,8 @@ class Command(BaseCommand):
                 folder_prefix="",
             )
             logger.info(
-                "run_clang_github_tracker: generated %s MD file(s).", len(new_files)
+                "run_clang_github_tracker: generated %s MD file(s).",
+                len(new_files),
             )
 
             if not new_files:
@@ -287,6 +291,24 @@ class Command(BaseCommand):
         except Exception as e:
             logger.exception("run_clang_github_tracker: MD export/upload failed: %s", e)
             raise
+
+        # Phase: upsert issues and PRs to Pinecone
+        effective_app_type = (
+            pinecone_app_type or settings.CLANG_GITHUB_PINECONE_APP_TYPE
+        )
+        effective_namespace = (
+            pinecone_namespace or settings.CLANG_GITHUB_PINECONE_NAMESPACE
+        )
+        _run_pinecone_sync(
+            effective_app_type,
+            effective_namespace,
+            "clang_github_tracker.preprocessors.issue_preprocessor.preprocess_for_pinecone",
+        )
+        _run_pinecone_sync(
+            effective_app_type,
+            effective_namespace,
+            "clang_github_tracker.preprocessors.pr_preprocessor.preprocess_for_pinecone",
+        )
 
     def _upload_md_only(self, *, dry_run: bool = False):
         """Upload existing MD files from workspace/clang_github_activity/md_export (no sync, no generation)."""
@@ -393,20 +415,3 @@ class Command(BaseCommand):
         except Exception as e:
             logger.exception("run_clang_github_tracker: upload-only failed: %s", e)
             raise
-        # Phase: upsert issues and PRs to Pinecone
-        effective_app_type = (
-            pinecone_app_type or settings.CLANG_GITHUB_PINECONE_APP_TYPE
-        )
-        effective_namespace = (
-            pinecone_namespace or settings.CLANG_GITHUB_PINECONE_NAMESPACE
-        )
-        _run_pinecone_sync(
-            effective_app_type,
-            effective_namespace,
-            "clang_github_tracker.preprocessors.issue_preprocessor.preprocess_for_pinecone",
-        )
-        _run_pinecone_sync(
-            effective_app_type,
-            effective_namespace,
-            "clang_github_tracker.preprocessors.pr_preprocessor.preprocess_for_pinecone",
-        )
