@@ -29,7 +29,6 @@ Document dict shape (per docs/Pinecone_preprocess_guideline.md):
       "updated_at": <float timestamp>,
       "closed_at": <float timestamp>,
       "repo_name": <str>,
-      "owner": <str>,
     },
   }
 """
@@ -170,6 +169,7 @@ def build_issue_document(
             "url": html_url,
             "author": (info.get("user") or {}).get("login", "") or "",
             "state": (info.get("state") or "").lower(),
+            "state_reason": (info.get("state_reason") or "").lower(),
             "created_at": _to_timestamp(info.get("created_at")),
             "updated_at": _to_timestamp(info.get("updated_at")),
             "closed_at": _to_timestamp(info.get("closed_at")),
