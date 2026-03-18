@@ -476,6 +476,46 @@ def test_add_commit_file_change_strips_nul_from_patch(
     assert fc.patch == "diff --git a/f.py\nbinarycontent\n"
 
 
+# --- set_github_file_previous_filename ---
+
+
+@pytest.mark.django_db
+def test_set_github_file_previous_filename_links_rename(github_repository):
+    """set_github_file_previous_filename sets previous_filename and saves when different."""
+    old_file, _ = services.create_or_update_github_file(
+        github_repository, "old_path.py", is_deleted=False
+    )
+    new_file, _ = services.create_or_update_github_file(
+        github_repository, "new_path.py", is_deleted=False
+    )
+    assert new_file.previous_filename_id is None
+
+    services.set_github_file_previous_filename(new_file, old_file)
+
+    new_file.refresh_from_db()
+    assert new_file.previous_filename_id == old_file.id
+    assert new_file.previous_filename.id == old_file.id
+
+
+@pytest.mark.django_db
+def test_set_github_file_previous_filename_no_op_when_already_set(github_repository):
+    """set_github_file_previous_filename does not save when previous_filename_id already matches."""
+    old_file, _ = services.create_or_update_github_file(
+        github_repository, "old_path.py", is_deleted=False
+    )
+    new_file, _ = services.create_or_update_github_file(
+        github_repository, "new_path.py", is_deleted=False
+    )
+    services.set_github_file_previous_filename(new_file, old_file)
+    new_file.refresh_from_db()
+    assert new_file.previous_filename_id == old_file.id
+
+    # Call again with same old_file; should not mutate (idempotent)
+    services.set_github_file_previous_filename(new_file, old_file)
+    new_file.refresh_from_db()
+    assert new_file.previous_filename_id == old_file.id
+
+
 # --- create_or_update_issue ---
 
 

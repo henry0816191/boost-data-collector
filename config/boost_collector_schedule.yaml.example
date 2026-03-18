@@ -25,11 +25,11 @@ groups:
       # Weekly: run every Monday at 16:10
       - command: run_weekly_report
         schedule: weekly
-        on: monday
+        "on": monday
       # Monthly: run on the 1st at 16:10
       - command: run_monthly_aggregate
         schedule: monthly
-        on: 1
+        "on": 1
       # When a new Boost release is published
       - command: run_boost_library_tracker
         schedule: on_release

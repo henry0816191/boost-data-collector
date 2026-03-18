@@ -268,6 +268,16 @@ def add_commit_file_change(
     return obj, created
 
 
+def set_github_file_previous_filename(
+    github_file: GitHubFile,
+    previous_file: GitHubFile,
+) -> None:
+    """Set the previous_filename reference for a renamed file."""
+    if github_file.previous_filename_id != previous_file.id:
+        github_file.previous_filename = previous_file
+        github_file.save(update_fields=["previous_filename"])
+
+
 # --- Issue ---
 def add_issue_assignee(issue: Issue, account: GitHubAccount) -> None:
     """Add an assignee to an issue (M2M). Idempotent."""
