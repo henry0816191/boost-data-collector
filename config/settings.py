@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.staticfiles",
     # Project apps (github_ops before github_activity_tracker - tracker depends on ops)
+    "core",
     "workflow",
     "boost_collector_runner",  # YAML-driven schedule; run_scheduled_collectors
     "cppa_user_tracker",
@@ -258,19 +259,19 @@ GITHUB_SLACK_HUDDLE_REPO_NAME = (
 # Boost Library Tracker
 # Syncs boostorg/boost + all submodules (issues, PRs, commits) to DB.
 # After sync, updated issues/PRs are exported as Markdown and pushed to the
-# private repo below. If OWNER or NAME is not set, upload is skipped and an
-# error is logged.
+# repo below. If OWNER or NAME is not set, upload is skipped and an error is
+# logged.
 # Folder structure: boost/issues/YYYY/YYYY-MM/#N - title.md        (main repo)
 #                   boost.<submodule>/issues/YYYY/YYYY-MM/#N - title.md
 # =============================================================================
-BOOST_LIBRARY_TRACKER_PRIVATE_REPO_OWNER = (
-    env("BOOST_LIBRARY_TRACKER_PRIVATE_REPO_OWNER", default="") or ""
+BOOST_LIBRARY_TRACKER_REPO_OWNER = (
+    env("BOOST_LIBRARY_TRACKER_REPO_OWNER", default="") or ""
 ).strip()
-BOOST_LIBRARY_TRACKER_PRIVATE_REPO_NAME = (
-    env("BOOST_LIBRARY_TRACKER_PRIVATE_REPO_NAME", default="") or ""
+BOOST_LIBRARY_TRACKER_REPO_NAME = (
+    env("BOOST_LIBRARY_TRACKER_REPO_NAME", default="") or ""
 ).strip()
-BOOST_LIBRARY_TRACKER_PRIVATE_REPO_BRANCH = (
-    env("BOOST_LIBRARY_TRACKER_PRIVATE_REPO_BRANCH", default="main") or "main"
+BOOST_LIBRARY_TRACKER_REPO_BRANCH = (
+    env("BOOST_LIBRARY_TRACKER_REPO_BRANCH", default="master") or "master"
 ).strip()
 
 # Settings for publishing boost_library_usage_dashboard

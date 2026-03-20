@@ -1,8 +1,14 @@
 """
-Check whether a new Boost release exists (GitHub API vs BoostVersion in DB).
-Used by boost_collector_runner when running schedule=on_release tasks.
-Only considers stable releases: tag must be boost-X.Y.Z (e.g. boost-1.90.0).
-Excludes pre-releases (beta, rc, rc1, etc.). Minimum version: 1.16.1.
+Detect stable Boost release tags on GitHub vs ``BoostVersion`` rows in the database.
+
+Used by ``boost_collector_runner`` for ``schedule=on_release`` tasks.
+
+Rules:
+- Tag must match ``boost-X.Y.Z`` (three numeric parts only; no ``-beta``, ``-rc``, etc.).
+- Minimum version: 1.16.1.
+
+Uses the repository **tags** API so new tags are visible as soon as they are pushed
+(without requiring a GitHub ``Release`` object).
 """
 
 import logging
@@ -22,10 +28,12 @@ BOOST_TAG_PATTERN = re.compile(r"^boost-(\d+)\.(\d+)\.(\d+)$")
 MIN_BOOST_VERSION = (1, 16, 1)
 
 
-def _parse_stable_version(tag_name: str) -> tuple[int, int, int] | None:
+def _parse_stable_version(tag_name: str) -> str | None:
     """
-    Return (major, minor, patch) if tag is a stable release boost-X.Y.Z and version >= MIN_BOOST_VERSION.
-    Return None for pre-releases (boost-1.90.0-beta, rc1, etc.) or versions below minimum.
+    If ``tag_name`` is a stable release tag ``boost-X.Y.Z`` with version >= MIN_BOOST_VERSION,
+    return the canonical tag string (e.g. ``boost-1.90.0``).
+
+    Return ``None`` for non-matching names, pre-release-style tags, or versions below the minimum.
     """
     if not tag_name:
         return None
@@ -35,50 +43,84 @@ def _parse_stable_version(tag_name: str) -> tuple[int, int, int] | None:
     major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
     if (major, minor, patch) < MIN_BOOST_VERSION:
         return None
-    return (major, minor, patch)
+    return f"boost-{major}.{minor}.{patch}"
 
 
-def has_new_boost_release() -> bool:
+def all_boost_versions_from_api() -> list[tuple[str, str]] | None:
     """
-    Return True if the GitHub API has at least one tag (from /tags) whose name
-    is a stable boost-X.Y.Z (>= 1.16.1) not yet in BoostVersion. Return False
-    if all known tags are already in the DB, or on API/network errors.
-    Pre-releases (beta, rc, etc.) are ignored. Uses /tags so new tags are
-    detected as soon as they are pushed, without waiting for a Release object.
+    List stable Boost release tags from GitHub (``/repos/boostorg/boost/tags``).
+
+    Returns:
+        List of ``(tag_name, commit_sha)`` for each stable tag, newest pages first
+        (same order as the API). ``commit_sha`` may be empty if the payload omits it.
+        ``None`` if the token is missing or the fetch cannot run (error is logged).
     """
     try:
         token = get_github_token(use="scraping")
     except ValueError as e:
-        logger.warning("No GitHub token; cannot check for new Boost release: %s", e)
-        return False
+        logger.warning("No GitHub token; cannot fetch Boost tags from API: %s", e)
+        return None
 
     if not token:
-        logger.warning("No GitHub token; cannot check for new Boost release")
-        return False
+        logger.warning("No GitHub token; cannot fetch Boost tags from API")
+        return None
+    client = GitHubAPIClient(token)
+    per_page = 100
+    page = 1
+    boost_versions: list[tuple[str, str]] = []
+    while True:
+        page_tags = client.rest_request(
+            f"/repos/{MAIN_OWNER}/{MAIN_REPO}/tags",
+            params={"per_page": per_page, "page": page},
+        )
+        if not page_tags:
+            break
+        for tag in page_tags:
+            stable_tag = _parse_stable_version(tag.get("name", ""))
+            if not stable_tag:
+                continue
+            tag_commit = tag.get("commit") or {}
+            if not tag_commit:
+                continue
+            sha = (tag_commit.get("sha") or "").strip()
+            boost_versions.append((stable_tag, sha))
+        if len(page_tags) < per_page:
+            break
+        page += 1
+    return boost_versions
 
-    try:
-        client = GitHubAPIClient(token)
-        existing = set(BoostVersion.objects.values_list("version", flat=True))
-        page = 1
-        per_page = 100
-        while True:
-            page_tags = client.rest_request(
-                f"/repos/{MAIN_OWNER}/{MAIN_REPO}/tags",
-                params={"per_page": per_page, "page": page},
-            )
-            if not page_tags:
-                break
-            for r in page_tags:
-                tag = r.get("name")
-                if not tag or tag in existing:
-                    continue
-                if _parse_stable_version(tag) is not None:
-                    logger.info("New Boost release detected: %s", tag)
-                    return True
-            if len(page_tags) < per_page:
-                break
-            page += 1
-    except Exception:
-        logger.exception("Failed to check for new Boost release")
+
+def has_new_boost_release() -> bool:
+    """
+    Return True if GitHub has at least one stable ``boost-X.Y.Z`` tag (>= 1.16.1)
+    that is not present in ``BoostVersion``.
+
+    Return False if every such tag already exists in the database, if no stable tags
+    were returned, or if the API could not be queried (errors logged elsewhere).
+    """
+    boost_versions = all_boost_versions_from_api()
+    if boost_versions is None:
         return False
-    return False
+    if not boost_versions:
+        logger.warning("No stable Boost tags found from API")
+        return False
+    existing_versions = set(BoostVersion.objects.values_list("version", flat=True))
+    return any(version not in existing_versions for version, _sha in boost_versions)
+
+
+def new_boost_versions_from_api() -> list[tuple[str, str]]:
+    """
+    Return stable ``(tag_name, commit_sha)`` pairs from GitHub that are not yet in ``BoostVersion``.
+
+    Same filtering as :func:`has_new_boost_release`, but returns the full list of new pairs.
+    On API/token failure, returns an empty list (failure is logged by
+    :func:`all_boost_versions_from_api`).
+    """
+    boost_versions = all_boost_versions_from_api()
+    if boost_versions is None:
+        return []
+    if not boost_versions:
+        logger.warning("No stable Boost tags found from API")
+        return []
+    existing_versions = set(BoostVersion.objects.values_list("version", flat=True))
+    return [pair for pair in boost_versions if pair[0] not in existing_versions]

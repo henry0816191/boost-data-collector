@@ -1,15 +1,18 @@
-"""Tests for boost_library_tracker management commands (run_boost_library_tracker, backfill_file_renames)."""
+"""Tests for boost_library_tracker management commands (tracker commands, backfill_file_renames)."""
 
 import json
+import logging
 import pytest
 from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from django.core.management import call_command
+from django.core.management.base import CommandError
 
 
 CMD_NAME = "run_boost_library_tracker"
+ACTIVITY_CMD = "run_boost_github_activity_tracker"
 BACKFILL_CMD = "backfill_file_renames"
 
 
@@ -349,3 +352,55 @@ def test_backfill_file_renames_failed_count_and_not_linked_list(
     assert "failed" in combined
     assert "Not linked" in combined
     assert "fail_old.txt" in combined and "fail_new.txt" in combined
+
+
+@pytest.mark.django_db
+def test_run_boost_github_activity_tracker_dry_run_lists_repos(caplog):
+    """Dry-run calls sync preview (repo list) without sync_github; progress is logged."""
+    mock_client = MagicMock()
+    mock_client.get_file_content.return_value = (b"", "utf-8")
+    mock_account = MagicMock()
+    mock_account.username = "boostorg"
+    caplog.set_level(logging.INFO)
+    with patch(
+        "boost_library_tracker.management.commands.run_boost_github_activity_tracker.get_github_client",
+        return_value=mock_client,
+    ), patch(
+        "boost_library_tracker.management.commands.run_boost_github_activity_tracker.get_or_create_owner_account",
+        return_value=mock_account,
+    ), patch(
+        "boost_library_tracker.management.commands.run_boost_github_activity_tracker.sync_github",
+    ) as sync_mock:
+        call_command(ACTIVITY_CMD, "--dry-run", stdout=StringIO(), stderr=StringIO())
+    sync_mock.assert_not_called()
+    combined = caplog.text.lower()
+    assert "would sync" in combined or "repo" in combined
+
+
+@pytest.mark.django_db
+def test_run_boost_github_activity_tracker_invalid_since_errors():
+    """Invalid --since raises CommandError; fetch task is not run."""
+    mock_client = MagicMock()
+    mock_client.get_file_content.return_value = (b"", "utf-8")
+    mock_account = MagicMock()
+    mock_account.username = "boostorg"
+    with patch(
+        "boost_library_tracker.management.commands.run_boost_github_activity_tracker.get_github_client",
+        return_value=mock_client,
+    ), patch(
+        "boost_library_tracker.management.commands.run_boost_github_activity_tracker.get_or_create_owner_account",
+        return_value=mock_account,
+    ), patch(
+        "boost_library_tracker.management.commands.run_boost_github_activity_tracker.sync_github",
+    ), patch(
+        "boost_library_tracker.management.commands.run_boost_github_activity_tracker.task_fetch_github_activity",
+    ) as task_mock:
+        with pytest.raises(CommandError, match="Invalid ISO datetime"):
+            call_command(
+                ACTIVITY_CMD,
+                "--since=not-a-date",
+                "--dry-run",
+                stdout=StringIO(),
+                stderr=StringIO(),
+            )
+    task_mock.assert_not_called()

@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 _scraping_token_cycle: Optional[itertools.cycle] = None
 
+_GITHUB_TOKEN_USES = ("scraping", "push", "create_pr", "write")
+
 
 def get_github_token(
     use: Literal["scraping", "push", "create_pr", "write"] = "scraping",
@@ -29,6 +31,8 @@ def get_github_token(
     - create_pr: same as write (GITHUB_TOKEN_WRITE or GITHUB_TOKEN)
     - write: GITHUB_TOKEN_WRITE (create PR, issues, comments, git push) or GITHUB_TOKEN
     """
+    if use not in _GITHUB_TOKEN_USES:
+        raise ValueError(f"Unknown use {use!r}; valid: {', '.join(_GITHUB_TOKEN_USES)}")
     if use == "scraping":
         raw_tokens = getattr(settings, "GITHUB_TOKENS_SCRAPING", None) or []
         # Only include non-empty strings (skip whitespace-only or non-string entries)
@@ -61,17 +65,21 @@ def get_github_token(
         if not token:
             raise ValueError("No write token: set GITHUB_TOKEN_WRITE or GITHUB_TOKEN.")
         return token
-    raise ValueError(
-        f"Unknown use: {use!r}. Use 'scraping', 'push', 'create_pr', or 'write'."
-    )
 
 
 def get_github_client(
     use: Literal["scraping", "push", "create_pr", "write"] = "scraping",
-) -> GitHubAPIClient:
+) -> GitHubAPIClient | None:
     """
     Get a GitHub API client with the token for the given use case.
     """
-    token = get_github_token(use=use)
+    try:
+        token = get_github_token(use=use)
+    except ValueError as e:
+        logger.error("Error getting GitHub token: %s", e)
+        return None
+    if not token:
+        logger.error("No GitHub token")
+        return None
     logger.debug("Creating GitHub API client (use=%s)", use)
     return GitHubAPIClient(token)

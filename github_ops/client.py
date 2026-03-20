@@ -16,6 +16,8 @@ import requests
 from requests.exceptions import ConnectionError, RequestException, Timeout
 from urllib3.exceptions import ProtocolError
 
+from core.utils.datetime_parsing import parse_iso_datetime
+
 logger = logging.getLogger(__name__)
 
 MAX_RATE_LIMIT_RETRIES = 5
@@ -358,6 +360,24 @@ class GitHubAPIClient:
             return (None, response_etag)
         return (response.json(), response_etag)
 
+    def rest_raw_request(
+        self, url: str, params: Optional[dict] = None
+    ) -> Optional[bytes] | None:
+        """Make raw request to REST API with rate limit and connection error handling."""
+        response = self._do_request(
+            "GET",
+            url,
+            "raw",
+            params=params,
+            timeout=30,
+            allow_retry_on_5xx=True,
+            allow_retry_on_connection_errors=True,
+            headers={"Accept": "application/vnd.github.raw"},
+        )
+        if response is None:
+            return None
+        return response.content
+
     def rest_post(self, endpoint: str, json_data: Optional[dict] = None) -> dict:
         """POST to REST API with rate limit and connection error handling."""
         url = f"{self.rest_base_url}{endpoint}"
@@ -683,3 +703,23 @@ class GitHubAPIClient:
         except Exception as e:
             logger.error(f"Error getting submodules for {owner}/{repo}: {e}")
             return []
+
+    def get_tag_sha(self, owner: str, repo: str, tag: str) -> Optional[str]:
+        """Get the SHA of a tag."""
+        response = self.rest_request(f"/repos/{owner}/{repo}/git/ref/tags/{tag}")
+        if not response:
+            return None
+        return response.get("object", {}).get("sha")
+
+    def get_tag_published_at(
+        self, owner: str, repo: str, sha: str
+    ) -> Optional[datetime]:
+        """Get the published at date of a tag."""
+        response = self.rest_request(f"/repos/{owner}/{repo}/git/commits/{sha}")
+        if not response:
+            return None
+        author = response.get("author", {}) or response.get("committer", {})
+        if not author:
+            return None
+        date_str = author.get("date") or ""
+        return parse_iso_datetime(date_str) or datetime.now(timezone.utc)

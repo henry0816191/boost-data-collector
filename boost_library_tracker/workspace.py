@@ -30,3 +30,10 @@ def get_boost_clone_dir() -> Path:
     path = get_raw_dir() / "boost"
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def get_md_export_dir() -> Path:
+    """Return workspace/boost_library_tracker/md_export/; Markdown export output; creates dir if missing."""
+    path = get_workspace_root() / "md_export"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
