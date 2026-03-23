@@ -38,12 +38,12 @@ services:
       test:
         [
           "CMD-SHELL",
-          'curl -sf http://localhost:4444/status | grep -q ''"ready":true'' || exit 1',
+          'curl -sf http://localhost:4444/status | grep -qE ''"ready"[[:space:]]*:[[:space:]]*true'' || exit 1',
         ]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 12
-      start_period: 15s
+      start_period: 60s
 
   web:
     build: .

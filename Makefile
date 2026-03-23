@@ -31,6 +31,7 @@ help:
 	@echo ""
 	@echo "  Logs & status"
 	@echo "    ps             Show running containers"
+	@echo "    health         Verify DB, Redis, Selenium, and Celery containers"
 	@echo "    logs           Follow logs for all services"
 	@echo "    logs-web       Follow logs for the web service"
 	@echo "    logs-worker    Follow logs for the Celery worker"
@@ -91,6 +92,14 @@ reset:
 .PHONY: ps
 ps:
 	$(COMPOSE) ps
+
+.PHONY: health
+health:
+	$(COMPOSE) exec -T $(APP) python manage.py check --database default
+	$(COMPOSE) exec -T redis redis-cli ping | grep -q PONG
+	$(COMPOSE) exec -T selenium curl -sf http://localhost:4444/status | grep -qE '"ready"[[:space:]]*:[[:space:]]*true'
+	$(COMPOSE) ps --status running celery_worker | grep -q celery_worker
+	$(COMPOSE) ps --status running celery_beat | grep -q celery_beat
 
 .PHONY: logs
 logs:

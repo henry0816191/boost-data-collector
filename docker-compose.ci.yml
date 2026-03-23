@@ -1,0 +1,29 @@
+# CI-only overlay: enables Postgres (base compose references @db but db is commented out).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: boost
+      POSTGRES_PASSWORD: boost
+      POSTGRES_DB: boost_dashboard
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boost -d boost_dashboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  celery_worker:
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  celery_beat:
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      celery_worker: { condition: service_started }
