@@ -250,9 +250,11 @@ def fetch_issues_from_github(
     endpoint = f"/repos/{owner}/{repo}/issues"
     next_url: Optional[str] = None
     page_num = 1
-    response_etag: Optional[str] = None
 
     while True:
+        # Fresh each page: rest_request_url does not return an ETag; do not reuse
+        # page N-1's tag when caching page N (conditional path sets this below).
+        response_etag: Optional[str] = None
         try:
             if next_url is not None:
                 issues, next_url = client.rest_request_url(next_url)

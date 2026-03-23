@@ -123,11 +123,9 @@ class GitHubAPIClient:
         if retry_after is not None:
             retry_after = retry_after.strip()
             try:
-                remaining = max(0, int(retry_after))
-                if remaining != 0:
-                    return remaining
-                else:
-                    return None
+                retry_secs = int(retry_after)
+                if retry_secs > 0:
+                    return retry_secs
             except ValueError:
                 try:
                     dt = parsedate_to_datetime(retry_after)
@@ -136,10 +134,9 @@ class GitHubAPIClient:
                     wait = (dt - datetime.now(timezone.utc)).total_seconds()
                     if wait > 0:
                         return wait
-                    else:
-                        return None
                 except (ValueError, TypeError):
                     pass
+        # Retry-After missing or did not yield a positive delay; try X-RateLimit-*.
         remaining = response.headers.get("X-RateLimit-Remaining")
         if remaining is None:
             return None

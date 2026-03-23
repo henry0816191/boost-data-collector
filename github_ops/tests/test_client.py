@@ -650,7 +650,7 @@ def test_validate_rest_pagination_url_accepts_api_github():
 def test_validate_rest_pagination_url_rejects_foreign_host():
     """Refuse absolute URLs on another host so the token is not sent elsewhere."""
     client = GitHubAPIClient("token")
-    with pytest.raises(ValueError, match="outside api.github.com"):
+    with pytest.raises(ValueError, match=r"outside api\.github\.com"):
         client._validate_rest_pagination_url("https://evil.example/api")
 
 
