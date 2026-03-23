@@ -145,7 +145,12 @@ def _push_markdown_to_github(
         token=token,
     )
     if delete_paths:
+        for repo_rel in delete_paths:
+            stale_local = md_output_dir / repo_rel
+            if stale_local.exists():
+                stale_local.unlink()
         logger.info("detected %d renamed file(s) to delete", len(delete_paths))
+
     result = upload_folder_to_github(
         local_folder=md_output_dir,
         owner=owner,
