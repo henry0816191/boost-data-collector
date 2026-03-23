@@ -12,6 +12,7 @@ import time
 from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 from typing import Optional, Union
+from urllib.parse import urlparse
 
 import requests
 from requests.exceptions import ConnectionError, RequestException, Timeout
@@ -436,8 +437,33 @@ class GitHubAPIClient:
         next_url = self._parse_link_next(response.headers.get("Link"))
         return (data, next_url)
 
+    def _validate_rest_pagination_url(self, full_url: str) -> None:
+        """Ensure full_url is same origin as rest_base_url so the auth token is not sent elsewhere."""
+        expected = urlparse(self.rest_base_url)
+        if not expected.scheme or not expected.netloc:
+            raise ValueError(
+                "GitHubAPIClient.rest_base_url must be an absolute URL with host"
+            )
+        target = urlparse(full_url)
+        if not target.netloc:
+            raise ValueError(
+                "Refusing relative or invalid pagination URL (missing host)"
+            )
+        if target.scheme.lower() != "https":
+            raise ValueError(
+                f"Refusing pagination URL with scheme {target.scheme!r}; only https is allowed"
+            )
+        if (target.scheme.lower(), target.netloc.lower()) != (
+            expected.scheme.lower(),
+            expected.netloc.lower(),
+        ):
+            raise ValueError(
+                f"Refusing to follow pagination URL outside {expected.netloc}"
+            )
+
     def _rest_get_url(self, full_url: str) -> requests.Response:
         """GET by full URL (e.g. from Link rel=\"next\"). For pagination only."""
+        self._validate_rest_pagination_url(full_url)
         response = self._do_request(
             "GET",
             full_url,
