@@ -17,13 +17,10 @@ jobs:
   deploy:
     if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     environment: ${{ github.event.workflow_run.head_branch == 'main' && 'production' || (github.event.workflow_run.head_branch == 'develop' && 'staging' || '')}}
     env:
       BRANCH: ${{ github.event.workflow_run.head_branch }}
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
       REPO_URL: https://github.com/${{ github.repository }}.git
       SCRIPT_URL: ${{ secrets.DEPLOY_SCRIPT_URL || format('https://raw.githubusercontent.com/{0}/{1}/.github/workflows/deploy-script/deploy.sh', github.repository, github.event.workflow_run.head_sha) }}
     steps:
@@ -36,7 +33,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           passphrase: ${{ secrets.SSH_KEY_PASSPHRASE }}
-          port: ${{ env.SSH_PORT }}
+          port: ${{ secrets.SSH_PORT || '22' }}
           envs: SCRIPT_URL,DEPLOY_SCRIPT_TOKEN,BRANCH,REPO_URL
           script: |
             set -euo pipefail

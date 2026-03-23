@@ -46,4 +46,18 @@ log "Building and starting stack..."
 make build
 make up
 
+log "Waiting for stack to be healthy..."
+max_attempts=12
+attempt=0
+until make health >/dev/null 2>&1; do
+  attempt=$((attempt + 1))
+  if [[ $attempt -ge $max_attempts ]]; then
+    log "ERROR: Health check failed after ${max_attempts} attempts. Aborting."
+    exit 1
+  fi
+  log "  Health check attempt ${attempt}/${max_attempts} failed, retrying in 5 s..."
+  sleep 5
+done
+log "Stack is healthy."
+
 log "Deploy completed."

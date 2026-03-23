@@ -115,3 +115,36 @@ jobs:
         with:
           name: pytest-results
           path: junit.xml
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE_FILE: docker-compose.yml:docker-compose.ci.yml
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create .env for CI
+        run: |
+          cp .env.example .env
+          echo "DATABASE_URL=postgres://boost:boost@db:5432/boost_dashboard" >> .env
+          echo "SECRET_KEY=ci-only-secret-key" >> .env
+          echo "DEBUG=True" >> .env
+
+      - name: Build images
+        run: make build
+
+      - name: Start stack and wait for health
+        run: docker compose up -d --wait
+
+      - name: Run migrations
+        run: docker compose exec -T web python manage.py migrate --noinput
+
+      - name: Health check
+        run: make health
+
+      - name: Tear down
+        if: always()
+        run: make down
