@@ -2,23 +2,23 @@
 # Runs: PostgreSQL, Redis, Django (gunicorn), Celery worker, Celery beat
 
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-boost}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-boost}
-      POSTGRES_DB: ${POSTGRES_DB:-boost_dashboard}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-boost} -d ${POSTGRES_DB:-boost_dashboard}",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+  # db:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_USER: ${POSTGRES_USER:-boost}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-boost}
+  #     POSTGRES_DB: ${POSTGRES_DB:-boost_dashboard}
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD-SHELL",
+  #         "pg_isready -U ${POSTGRES_USER:-boost} -d ${POSTGRES_DB:-boost_dashboard}",
+  #       ]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
 
   redis:
     image: redis:7-alpine
@@ -61,7 +61,7 @@ services:
       - workspace_data:/app/workspace
       - logs_data:/app/logs
     depends_on:
-      db: { condition: service_healthy }
+      # db: { condition: service_healthy }
       redis: { condition: service_healthy }
 
   celery_worker:
@@ -78,7 +78,7 @@ services:
       - logs_data:/app/logs
     command: celery -A config worker -l info
     depends_on:
-      db: { condition: service_healthy }
+      # db: { condition: service_healthy }
       redis: { condition: service_healthy }
 
   celery_beat:
@@ -93,9 +93,9 @@ services:
       - workspace_data:/app/workspace
       - logs_data:/app/logs
       - celerybeat_data:/app/celerybeat
-    command: celery -A config beat -l info --schedule /app/celerybeat/celerybeat-schedule
+    command: celery -A config beat -l info
     depends_on:
-      db: { condition: service_healthy }
+      # db: { condition: service_healthy }
       redis: { condition: service_healthy }
       celery_worker: { condition: service_started }
 

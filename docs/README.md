@@ -13,6 +13,7 @@ Documentation is organized **by topic**, not by app. Each doc covers one cross-c
 | **Schema** | [Schema.md](Schema.md) | Database schema and table relationships. |
 | **Development** | [Development_guideline.md](Development_guideline.md) | Development setup, app requirements, and step-by-step workflow. |
 | **Testing** | [README.md](../README.md#running-tests), [Development_guideline.md](Development_guideline.md#testing-workflow) | How to run tests (pytest), coverage, and when to run them. |
+| **Deployment** | [Deployment.md](Deployment.md) | CI/CD pipeline, environment secrets (`SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`; optional `SSH_PORT`), server setup, and deploy script behavior. |
 | **Contributing** | [Contributing.md](Contributing.md) | Service layer (single place for writes) and contributor guidelines. |
 | **Service API** | [Service_API.md](Service_API.md) | API reference and index for all service layer functions. |
 | **Service API (per app)** | [service_api/](service_api/) | Per-app service API docs (name, description, parameters, return types, validation). |

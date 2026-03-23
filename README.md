@@ -176,12 +176,24 @@ Docs are organized **by topic** (one doc per concern: workflow, workspace, servi
 - [operations/](docs/operations/README.md) – **Operations group:** shared I/O (GitHub, Discord, etc.); index and per-operation docs.
 - [Workflow.md](docs/Workflow.md) – Main application workflow, execution order, and project details.
 - [operations/github.md](docs/operations/github.md) – GitHub layer (clone, push, fetch file, create PR/issue/comment) and token use.
+- [Deployment.md](docs/Deployment.md) – CI/CD pipeline, GitHub secrets, server setup, and deploy script behavior.
 - [Workspace.md](docs/Workspace.md) – Workspace layout and usage for file processing.
 - [Schema.md](docs/Schema.md) – Database schema and table relationships.
 - [Development_guideline.md](docs/Development_guideline.md) – Development setup, app requirements, and step-by-step workflow.
 - [Contributing.md](docs/Contributing.md) – Service layer (single place for writes) and contributor guidelines.
 - [Service_API.md](docs/Service_API.md) – API reference and index for all service layer functions.
 - [service_api/](docs/service_api/) – Per-app service API docs (name, description, parameters, return types, validation).
+
+## Deployment
+
+The project deploys automatically over SSH after CI passes. Pushes to `develop` deploy to staging; pushes to `main` deploy to production.
+
+See **[docs/Deployment.md](docs/Deployment.md)** for:
+
+- Required environment secrets (`SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`) and optional `SSH_PORT` (defaults to `22`) — set per environment (production / staging)
+- GitHub Environments setup (approval gates for production)
+- One-time server setup (prerequisites, `.env`, SSH key)
+- Deploy script behavior and override options
 
 ## Branching strategy
 
