@@ -56,7 +56,7 @@ def test_run_clang_github_tracker_calls_sync_raw_only_when_not_dry_run(caplog):
     """Without --dry-run, command calls sync_raw_only with resolved dates."""
     with patch(
         "clang_github_tracker.management.commands.run_clang_github_tracker.sync_raw_only",
-        return_value=(0, 0, 0),
+        return_value=(0, [], []),  # commits_saved, issue_numbers, pr_numbers (lists)
     ) as sync_mock:
         with caplog.at_level(logging.INFO):
             call_command(

@@ -31,7 +31,7 @@ def test_run_scheduled_collectors_daily_runs_tasks_from_yaml(tmp_path, settings)
                         "default_time": "04:10",
                         "tasks": [
                             {
-                                "command": "run_boost_library_tracker",
+                                "command": "run_boost_github_activity_tracker",
                                 "schedule": "daily",
                             },
                         ],
@@ -61,7 +61,7 @@ def test_run_scheduled_collectors_daily_runs_tasks_from_yaml(tmp_path, settings)
         )
     # Command uses logger, not stdout; verify it ran the task from YAML
     assert mock_call.call_count == 1
-    mock_call.assert_called_once_with("run_boost_library_tracker")
+    mock_call.assert_called_once_with("run_boost_github_activity_tracker")
 
 
 @pytest.mark.django_db

@@ -108,43 +108,56 @@ def _process_issue_data(repo: GitHubRepository, issue_data: dict) -> None:
     logger.debug("Issue #%s: saved to DB", issue_data.get("number"))
 
 
-def _process_existing_issue_jsons(repo: GitHubRepository) -> int:
-    """Load each issues/*.json in workspace for this repo, save to DB, remove file. Returns count processed."""
+def _process_existing_issue_jsons(repo: GitHubRepository) -> tuple[int, list[int]]:
+    """Load each issues/*.json in workspace for this repo, save to DB, remove file.
+
+    Returns:
+        (count, issue_numbers) — count of processed files and their issue numbers.
+    """
     owner = repo.owner_account.username
     repo_name = repo.repo_name
     count = 0
+    numbers: list[int] = []
     for path in iter_existing_issue_jsons(owner, repo_name):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             _process_issue_data(repo, data)
             save_issue_raw_source(owner, repo_name, data)
             path.unlink()
+            number = (data.get("issue_info") or {}).get("number") or data.get("number")
+            if number is not None:
+                numbers.append(number)
             count += 1
         except Exception as e:
             logger.exception("Failed to process %s: %s", path, e)
-    return count
+    return count, numbers
 
 
 def sync_issues(
     repo: GitHubRepository,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-) -> None:
+) -> list[int]:
     """1) Process existing workspace JSONs; 2) Fetch from GitHub, save as JSON, persist to DB, remove file.
 
     Args:
         repo: Repository to sync.
         start_date: Override start date (default: last issue updated_at + 1s, or None if no issues).
         end_date: Override end date (default: None = no end; stable ETag cache).
+
+    Returns:
+        List of issue numbers processed during this sync run.
     """
     logger.info("sync_issues: starting for repo id=%s (%s)", repo.pk, repo.repo_name)
 
     owner = repo.owner_account.username
     repo_name = repo.repo_name
+    processed_numbers: list[int] = []
 
     try:
         # Phase 1: process existing JSON files
-        n_existing = _process_existing_issue_jsons(repo)
+        n_existing, existing_numbers = _process_existing_issue_jsons(repo)
+        processed_numbers.extend(existing_numbers)
         if n_existing:
             logger.info("sync_issues: processed %s existing issue JSON(s)", n_existing)
 
@@ -174,6 +187,7 @@ def sync_issues(
             _process_issue_data(repo, issue_data)
             save_issue_raw_source(owner, repo_name, issue_data)
             json_path.unlink()
+            processed_numbers.append(issue_number)
             count += 1
 
         logger.info(
@@ -189,3 +203,5 @@ def sync_issues(
     except Exception as e:
         logger.exception("sync_issues: unexpected error for repo id=%s: %s", repo.pk, e)
         raise
+
+    return processed_numbers

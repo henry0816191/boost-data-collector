@@ -353,6 +353,167 @@ def upload_file(
         return None
 
 
+def get_remote_tree(
+    owner: str,
+    repo: str,
+    branch: str = "master",
+    *,
+    token: Optional[str] = None,
+) -> list[dict]:
+    """Fetch the full recursive Git tree for a branch via the GitHub API.
+
+    Returns a list of tree item dicts (path, sha, type, mode, size).
+    Returns an empty list if the repo/branch is empty or on any error.
+
+    GitHub limits recursive trees to 100,000 entries and 7 MB. If the tree is
+    larger, the API sets "truncated": true and returns a partial list. This
+    function logs a warning when truncated; callers (e.g. detect_renames) may
+    then miss some paths.
+
+    Args:
+        owner: Repository owner.
+        repo: Repository name.
+        branch: Branch name (default: "master").
+        token: GitHub token (default: write token from settings).
+    """
+    if token is None:
+        token = get_github_token(use="write")
+    base = f"https://api.github.com/repos/{owner}/{repo}"
+    session = requests.Session()
+    session.headers.update(
+        {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json",
+        }
+    )
+    try:
+        r = session.get(f"{base}/git/ref/heads/{branch}", timeout=30)
+        if r.status_code == 404:
+            return []
+        r.raise_for_status()
+        commit_sha = r.json()["object"]["sha"]
+
+        r = session.get(f"{base}/git/commits/{commit_sha}", timeout=30)
+        r.raise_for_status()
+        tree_sha = r.json()["tree"]["sha"]
+
+        r = session.get(f"{base}/git/trees/{tree_sha}?recursive=1", timeout=60)
+        r.raise_for_status()
+        data = r.json()
+        tree = data.get("tree") or []
+        if data.get("truncated"):
+            logger.warning(
+                "get_remote_tree: tree for %s/%s (branch %s) was truncated by GitHub "
+                "(limit 100,000 entries / 7 MB); returned %s entries. Rename detection may be incomplete.",
+                owner,
+                repo,
+                branch,
+                len(tree),
+            )
+        return tree
+    except Exception as e:
+        logger.warning("get_remote_tree failed for %s/%s: %s", owner, repo, e)
+        return []
+
+
+# macOS resource-fork / metadata files to exclude from uploads (e.g. ._filename)
+_UPLOAD_IGNORE_PREFIX = "._"
+
+
+def list_remote_directory(
+    owner: str,
+    repo: str,
+    branch: str,
+    dir_path: str,
+    *,
+    token: Optional[str] = None,
+) -> list[str]:
+    """List file paths in a single directory via GitHub GraphQL API (non-recursive).
+
+    Uses one GraphQL request per directory instead of multiple REST Git Tree calls.
+    Use this for large repos (100k+ files) where get_remote_tree() would be truncated.
+
+    Args:
+        owner: Repository owner.
+        repo: Repository name.
+        branch: Branch name.
+        dir_path: Repository-relative directory path (e.g. "boost/issues/2024/2024-03").
+            Use "" for the repository root.
+        token: GitHub token (default: write token from settings).
+
+    Returns:
+        List of full repo-relative paths for each file (blob) in that directory.
+        Empty list if the path does not exist or on error.
+    """
+    if token is None:
+        token = get_github_token(use="write")
+    try:
+        return _list_remote_directory_graphql(owner, repo, branch, dir_path, token)
+    except Exception as e:
+        logger.debug(
+            "list_remote_directory failed for %s/%s path=%r: %s",
+            owner,
+            repo,
+            dir_path,
+            e,
+        )
+        return []
+
+
+def _list_remote_directory_graphql(
+    owner: str,
+    repo: str,
+    branch: str,
+    dir_path: str,
+    token: str,
+) -> list[str]:
+    """List blobs in one directory via a single GraphQL query."""
+    if dir_path and dir_path.strip():
+        expression = f"{branch}:{dir_path.rstrip('/')}"
+    else:
+        expression = f"{branch}:"
+    query = """
+    query($owner: String!, $repo: String!, $expression: String!) {
+      repository(owner: $owner, name: $repo) {
+        object(expression: $expression) {
+          ... on Tree {
+            entries {
+              name
+              type
+            }
+          }
+        }
+      }
+    }
+    """
+    payload = {
+        "query": query,
+        "variables": {"owner": owner, "repo": repo, "expression": expression},
+    }
+    session = requests.Session()
+    session.headers.update(
+        {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+    )
+    r = session.post("https://api.github.com/graphql", json=payload, timeout=30)
+    r.raise_for_status()
+    data = r.json()
+    if "errors" in data and data["errors"]:
+        raise RuntimeError(data["errors"][0].get("message", str(data["errors"])))
+    obj = (data.get("data") or {}).get("repository", {}).get("object")
+    if not obj:
+        return []
+    entries = obj.get("entries") or []
+    prefix = dir_path.rstrip("/") if dir_path and dir_path.strip() else ""
+    return [
+        f"{prefix}/{e['name']}" if prefix else e["name"]
+        for e in entries
+        if e.get("type") == "blob"
+    ]
+
+
 def upload_folder_to_github(
     local_folder: str | Path,
     owner: str,
@@ -360,6 +521,7 @@ def upload_folder_to_github(
     commit_message: str = "Upload files",
     branch: str = "main",
     *,
+    delete_paths: Optional[list[str]] = None,
     client: Optional[GitHubAPIClient] = None,
     token: Optional[str] = None,
 ) -> dict:
@@ -372,6 +534,18 @@ def upload_folder_to_github(
     Token resolution: When client is provided, an explicit token argument takes
     precedence over client.token (token = token or client.token). When client
     is None, token defaults to get_github_token(use="write") if not passed.
+
+    Args:
+        local_folder: Local directory to upload.
+        owner: Repository owner.
+        repo: Repository name.
+        commit_message: Commit message.
+        branch: Target branch (default: "main").
+        delete_paths: Optional list of repo-relative file paths to delete in the
+            same commit (e.g. old-titled MD files when a title changes). Each path
+            is added to the Git tree with sha=null to remove it.
+        client: Optional pre-built GitHubAPIClient.
+        token: Optional GitHub token override.
 
     Returns:
         {"success": True, "message": "..."} on success,
@@ -421,10 +595,13 @@ def upload_folder_to_github(
         r.raise_for_status()
         base_tree = r.json()["tree"]["sha"]
 
-        # Collect (repo_path, local_path) for all files (paths only; content read in worker)
+        # Collect (repo_path, local_path) for all files (paths only; content read in worker).
+        # Skip macOS metadata files (._*).
         file_items = []
         for root, _, files in os.walk(local_folder):
             for file in files:
+                if file.startswith(_UPLOAD_IGNORE_PREFIX):
+                    continue
                 local_path = Path(root) / file
                 repo_path = local_path.relative_to(local_folder).as_posix()
                 file_items.append((repo_path, local_path))
@@ -458,6 +635,12 @@ def upload_folder_to_github(
                 f"Blob creation failed for {len(blob_failures)} file(s): {failed_paths}. "
                 f"Created blobs (now orphaned): {created_shas[:5]}{'...' if len(created_shas) > 5 else ''}."
             ) from blob_failures[0][1]
+
+        # Add deletion entries for renamed/removed files (sha=null removes from tree)
+        for path in delete_paths or []:
+            tree_items.append(
+                {"path": path, "mode": "100644", "type": "blob", "sha": None}
+            )
 
         tree_data = {"base_tree": base_tree, "tree": tree_items}
         r = session.post(f"{base}/git/trees", json=tree_data, timeout=30)

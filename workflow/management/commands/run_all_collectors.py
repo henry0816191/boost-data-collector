@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Execution order: data-collection first, then processing (per Workflow.md)
 # Identity/profile (CPPA) -> GitHub repos/commits/issues/PRs -> Boost library (extends repos), etc.
 COLLECTOR_COMMANDS = [
-    "run_boost_library_tracker",
+    "run_boost_github_activity_tracker",
     "run_boost_library_docs_tracker",
     "run_boost_library_usage_dashboard",
     "run_boost_usage_tracker",
