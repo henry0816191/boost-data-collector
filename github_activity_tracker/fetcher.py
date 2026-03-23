@@ -127,7 +127,11 @@ def fetch_commits_from_github(
                     f"/repos/{owner}/{repo}/commits/{commit['sha']}"
                 )
             except requests.exceptions.HTTPError as e:
-                if e.response is not None and e.response.status_code in (502, 503, 504):
+                if e.response is not None and e.response.status_code in (
+                    502,
+                    503,
+                    504,
+                ):
                     logger.warning(
                         "Aborting commit sync at %s for %s/%s after HTTP %s: %s",
                         commit["sha"][:7],
@@ -237,47 +241,72 @@ def fetch_issues_from_github(
     etag_cache: Optional[Any] = None,
 ) -> Iterator[dict]:
     """Fetch issues from GitHub API (paginated). Yields issue dicts with comments.
-    If etag_cache is provided, uses rest_request_conditional for the list GET.
+    Uses GitHub's Link header (rel=\"next\") for pagination per API docs.
+    If etag_cache is provided, uses conditional GET for the first page when using endpoint+params.
     """
     logger.debug(f"Fetching issues for {owner}/{repo} from {start_time} to {end_time}")
-    page = 1
     per_page = 100
     since_iso = start_time.isoformat() if start_time else ""
+    endpoint = f"/repos/{owner}/{repo}/issues"
+    next_url: Optional[str] = None
+    page_num = 1
 
     while True:
-        params = {
-            "state": "all",
-            "per_page": per_page,
-            "page": page,
-            "sort": "updated",
-            "direction": "asc",
-        }
-        if start_time:
-            params["since"] = start_time.isoformat()
-
-        response_etag = None
-        if etag_cache is not None:
-            etag = etag_cache.get("issues", page, since_iso, "")
-            data, response_etag = client.rest_request_conditional(
-                f"/repos/{owner}/{repo}/issues", params=params, etag=etag
-            )
-            if data is None:
-                logger.debug("Issues list page %s: 304 Not Modified, skipping", page)
-                page += 1
-                time.sleep(0.2)
-                continue
-            issues = data
-        else:
-            issues = client.rest_request(f"/repos/{owner}/{repo}/issues", params)
+        # Fresh each page: rest_request_url does not return an ETag; do not reuse
+        # page N-1's tag when caching page N (conditional path sets this below).
+        response_etag: Optional[str] = None
+        try:
+            if next_url is not None:
+                issues, next_url = client.rest_request_url(next_url)
+                page_num += 1
+            else:
+                params = {
+                    "state": "all",
+                    "per_page": per_page,
+                    "page": page_num,
+                    "sort": "updated",
+                    "direction": "asc",
+                }
+                if start_time:
+                    params["since"] = start_time.isoformat()
+                if etag_cache is not None:
+                    etag = etag_cache.get("issues", page_num, since_iso, "")
+                    data, response_etag, next_url = (
+                        client.rest_request_conditional_with_link(
+                            endpoint, params=params, etag=etag
+                        )
+                    )
+                    if data is None:
+                        logger.debug(
+                            "Issues list page %s: 304 Not Modified, skipping",
+                            page_num,
+                        )
+                        page_num += 1
+                        time.sleep(0.2)
+                        continue
+                    issues = data
+                else:
+                    issues, next_url = client.rest_request_with_link(endpoint, params)
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 422:
+                logger.debug(
+                    "Issues list: 422 Unprocessable Entity, stopping pagination"
+                )
+                break
+            raise
 
         if not issues:
-            logger.debug(f"No more issues found at page {page}")
+            logger.debug("No more issues found")
             break
 
         # Filter out PRs (issues endpoint returns both issues and PRs)
         raw_issues = issues
         issues = [i for i in raw_issues if "pull_request" not in i]
-        logger.debug(f"Fetched {len(issues)} issues (excluding PRs) from page {page}")
+        logger.debug(
+            "Fetched %s issues (excluding PRs) from page %s",
+            len(issues),
+            page_num,
+        )
 
         for issue in issues:
             updated_str = issue.get("updated_at") or issue.get("created_at")
@@ -328,14 +357,11 @@ def fetch_issues_from_github(
                 yield {"issue_info": issue, "comments": comments}
 
         if etag_cache is not None and response_etag:
-            etag_cache.set("issues", page, since_iso, "", response_etag)
+            etag_cache.set("issues", page_num, since_iso, "", response_etag)
 
-        if len(raw_issues) < per_page:
-            logger.debug(
-                f"Last page reached (got {len(issues)} issues, expected {per_page})"
-            )
+        if next_url is None:
+            logger.debug('Last page reached (no Link rel="next")')
             break
-        page += 1
         time.sleep(0.2)
 
 

@@ -3,8 +3,11 @@ Custom logging handlers for the Boost Data Collector project.
 
 SafeRotatingFileHandler: RotatingFileHandler that serializes emit() with a lock
 so rollover (close → rename → reopen) is not run while another thread is writing.
-Fixes PermissionError [WinError 32] on Windows when multiple threads log to the
-same file (e.g. Celery worker + ThreadPoolExecutor workers in boost_searcher).
+On Windows, every rollover rename (including .1 → .2, etc.) and removal of
+existing backup targets is retried on PermissionError [WinError 32] because files
+can stay locked briefly after close (or another process may have them open). The
+base RotatingFileHandler only uses custom rotate() for the final move; this
+subclass overrides doRollover() so all renames and deletes share the same safe path.
 
 DiscordHandler / SlackHandler: send ERROR-level log records to Discord/Slack
 webhooks when ENABLE_ERROR_NOTIFICATIONS is True and webhook URLs are set.
@@ -13,6 +16,7 @@ webhooks when ENABLE_ERROR_NOTIFICATIONS is True and webhook URLs are set.
 import json
 import logging
 import logging.handlers
+import os
 import sys
 import threading
 import time
@@ -241,12 +245,19 @@ class SlackHandler(logging.Handler):
             sys.stderr.write(f"Error in SlackHandler: {e}\n")
 
 
+# Retry rollover rename/remove on Windows when file is still locked (PermissionError 32).
+_ROTATE_RETRY_COUNT = 10
+_ROTATE_RETRY_DELAY_SEC = 0.5
+
+
 class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
     """
     Thread-safe RotatingFileHandler. Use this when multiple threads write to
     the same log file (e.g. Celery + thread pools). On Windows, the standard
     RotatingFileHandler can raise PermissionError during rollover because
-    os.rename() fails if the file is still open by another thread.
+    os.rename() / os.remove() can fail if the file is still open. This handler
+    serializes emit() and retries rename and remove on WinError 32 so rollover
+    usually succeeds; otherwise it skips and logging continues.
     """
 
     def __init__(self, *args, **kwargs):
@@ -256,3 +267,78 @@ class SafeRotatingFileHandler(logging.handlers.RotatingFileHandler):
     def emit(self, record):
         with self._emit_lock:
             super().emit(record)
+
+    def _safe_rename(self, source, dest):
+        """Rename source to dest, retrying on Windows PermissionError [WinError 32].
+        If rename still fails after retries (e.g. another process has the file),
+        skip this rename so rollover / logging can continue.
+        """
+        for attempt in range(_ROTATE_RETRY_COUNT):
+            try:
+                os.rename(source, dest)
+                return
+            except OSError as e:
+                # WinError 32: "file is being used by another process"
+                if getattr(e, "winerror", None) != 32:
+                    raise
+                if attempt == _ROTATE_RETRY_COUNT - 1:
+                    try:
+                        sys.stderr.write(
+                            "SafeRotatingFileHandler: rollover skipped "
+                            "(file in use). Logging continues.\n"
+                        )
+                    except Exception:
+                        pass
+                    return
+                time.sleep(_ROTATE_RETRY_DELAY_SEC)
+
+    def _safe_remove(self, path):
+        """Remove path, retrying on Windows PermissionError [WinError 32].
+        If remove still fails after retries, log and return so rollover continues.
+        No-op if path is already absent (including races with other processes).
+        """
+        if not os.path.exists(path):
+            return
+        for attempt in range(_ROTATE_RETRY_COUNT):
+            try:
+                os.remove(path)
+                return
+            except OSError as e:
+                if not os.path.exists(path):
+                    return
+                if getattr(e, "winerror", None) != 32:
+                    raise
+                if attempt == _ROTATE_RETRY_COUNT - 1:
+                    try:
+                        sys.stderr.write(
+                            "SafeRotatingFileHandler: rollover skipped "
+                            "(file in use). Logging continues.\n"
+                        )
+                    except Exception:
+                        pass
+                    return
+                time.sleep(_ROTATE_RETRY_DELAY_SEC)
+
+    def rotate(self, source, dest):
+        """Delegate to _safe_rename (used for the final base → .1 move)."""
+        self._safe_rename(source, dest)
+
+    def doRollover(self):
+        """Like RotatingFileHandler.doRollover but safe renames for all backup steps."""
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+        if self.backupCount > 0:
+            for i in range(self.backupCount - 1, 0, -1):
+                sfn = self.rotation_filename("%s.%d" % (self.baseFilename, i))
+                dfn = self.rotation_filename("%s.%d" % (self.baseFilename, i + 1))
+                if os.path.exists(sfn):
+                    if os.path.exists(dfn):
+                        self._safe_remove(dfn)
+                    self._safe_rename(sfn, dfn)
+            dfn = self.rotation_filename(self.baseFilename + ".1")
+            if os.path.exists(dfn):
+                self._safe_remove(dfn)
+            self.rotate(self.baseFilename, dfn)
+        if not self.delay:
+            self.stream = self._open()

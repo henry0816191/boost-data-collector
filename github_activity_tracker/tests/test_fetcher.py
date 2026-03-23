@@ -275,9 +275,12 @@ def test_fetch_comments_from_github_calls_correct_endpoint():
 def test_fetch_issues_from_github_yields_issue_dicts():
     """fetch_issues_from_github yields nested { issue_info, comments } dicts."""
     client = MagicMock()
-    # List returns one issue; then full issue GET; then comments
-    client.rest_request.side_effect = [
+    # First page via Link-header API (list + next_url); then full issue GET; then comments
+    client.rest_request_with_link.return_value = (
         [{"number": 1, "title": "Issue 1", "updated_at": "2024-06-01T00:00:00Z"}],
+        None,
+    )
+    client.rest_request.side_effect = [
         {"number": 1, "title": "Issue 1", "updated_at": "2024-06-01T00:00:00Z"},
         [],  # comments for issue 1
     ]
@@ -291,11 +294,14 @@ def test_fetch_issues_from_github_yields_issue_dicts():
 def test_fetch_issues_from_github_filters_out_pulls():
     """fetch_issues_from_github filters out items that have pull_request key."""
     client = MagicMock()
-    client.rest_request.side_effect = [
+    client.rest_request_with_link.return_value = (
         [
             {"number": 1, "pull_request": {}},
             {"number": 2, "updated_at": "2024-06-01T00:00:00Z"},
         ],
+        None,
+    )
+    client.rest_request.side_effect = [
         {"number": 2, "updated_at": "2024-06-01T00:00:00Z"},  # full issue for #2
         [],  # comments for issue 2
     ]
@@ -307,9 +313,10 @@ def test_fetch_issues_from_github_filters_out_pulls():
 def test_fetch_issues_from_github_stops_on_empty_page():
     """fetch_issues_from_github stops when API returns empty list."""
     client = MagicMock()
-    client.rest_request.return_value = []
+    client.rest_request_with_link.return_value = ([], None)
     items = list(fetch_issues_from_github(client, "owner", "repo"))
     assert items == []
+    client.rest_request.assert_not_called()
 
 
 # --- fetch_pr_reviews_from_github ---

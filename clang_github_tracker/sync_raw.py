@@ -45,16 +45,21 @@ def _commit_date(commit_data: dict) -> datetime | None:
 
 
 def _issue_date(issue_data: dict) -> datetime | None:
-    """Extract updated_at or created_at from GitHub issue payload."""
-    date_str = issue_data.get("updated_at") or issue_data.get("created_at")
+    """Extract updated_at or created_at from GitHub issue payload.
+    Fetcher yields {issue_info: <detail>, comments: [...]}, so check nested first."""
+    info = issue_data.get("issue_info") or issue_data
+    date_str = info.get("updated_at") or info.get("created_at")
     if not date_str:
         return None
     return clang_state.parse_iso(date_str)
 
 
 def _pr_date(pr_data: dict) -> datetime | None:
-    """Extract updated_at or created_at from GitHub PR payload."""
-    date_str = pr_data.get("updated_at") or pr_data.get("created_at")
+    """Extract updated_at or created_at from GitHub PR payload.
+    Fetcher yields {pr_info: <detail>, comments: [...], reviews: [...]}, so check nested first.
+    """
+    info = pr_data.get("pr_info") or pr_data
+    date_str = info.get("updated_at") or info.get("created_at")
     if not date_str:
         return None
     return clang_state.parse_iso(date_str)

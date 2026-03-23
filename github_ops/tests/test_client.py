@@ -634,3 +634,44 @@ def test_get_submodules_api_404_returns_empty_list():
     client.rest_request = MagicMock(side_effect=err)
     out = client.get_submodules("owner", "repo")
     assert out == []
+
+
+# --- _validate_rest_pagination_url / _rest_get_url ---
+
+
+def test_validate_rest_pagination_url_accepts_api_github():
+    """Pagination URLs on api.github.com are allowed."""
+    client = GitHubAPIClient("token")
+    client._validate_rest_pagination_url(
+        "https://api.github.com/repos/o/r/issues?per_page=1&page=2"
+    )
+
+
+def test_validate_rest_pagination_url_rejects_foreign_host():
+    """Refuse absolute URLs on another host so the token is not sent elsewhere."""
+    client = GitHubAPIClient("token")
+    with pytest.raises(ValueError, match=r"outside api\.github\.com"):
+        client._validate_rest_pagination_url("https://evil.example/api")
+
+
+def test_validate_rest_pagination_url_rejects_http():
+    """Refuse non-https pagination URLs."""
+    client = GitHubAPIClient("token")
+    with pytest.raises(ValueError, match="only https is allowed"):
+        client._validate_rest_pagination_url("http://api.github.com/foo")
+
+
+def test_validate_rest_pagination_url_rejects_relative():
+    """Refuse relative URLs (no netloc)."""
+    client = GitHubAPIClient("token")
+    with pytest.raises(ValueError, match="missing host"):
+        client._validate_rest_pagination_url("/repos/o/r/issues?page=2")
+
+
+def test_rest_get_url_calls_do_request_only_after_validation():
+    """_rest_get_url must not call _do_request when URL fails validation."""
+    client = GitHubAPIClient("token")
+    client._do_request = MagicMock()
+    with pytest.raises(ValueError):
+        client._rest_get_url("https://attacker.example/hook")
+    client._do_request.assert_not_called()
