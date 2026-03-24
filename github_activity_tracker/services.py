@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from .models import (
@@ -377,6 +377,7 @@ def create_or_update_issue(
         issue_obj.issue_created_at = issue_created_at
         issue_obj.issue_updated_at = issue_updated_at
         issue_obj.issue_closed_at = issue_closed_at
+        issue_obj.updated_at = datetime.now(timezone.utc)
         issue_obj.save()
     return issue_obj, created
 
@@ -464,6 +465,7 @@ def create_or_update_pull_request(
         pr_obj.pr_updated_at = pr_updated_at
         pr_obj.pr_merged_at = pr_merged_at
         pr_obj.pr_closed_at = pr_closed_at
+        pr_obj.updated_at = datetime.now(timezone.utc)
         pr_obj.save()
     return pr_obj, created
 

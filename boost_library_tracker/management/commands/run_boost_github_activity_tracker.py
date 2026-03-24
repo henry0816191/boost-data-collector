@@ -9,6 +9,7 @@ Runs several tasks in order:
 """
 
 import logging
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -161,8 +162,11 @@ def _push_markdown_to_github(
     )
     if result.get("success"):
         logger.info("Markdown upload complete")
-        for local_path in all_new_files.values():
-            Path(local_path).unlink(missing_ok=True)
+        for entry in list(md_output_dir.iterdir()):
+            if entry.is_file():
+                entry.unlink(missing_ok=True)
+            else:
+                shutil.rmtree(entry)
     else:
         msg = result.get("message") or "Upload failed"
         logger.error("upload MD failed: %s", msg)
@@ -329,12 +333,12 @@ def task_pinecone_sync(dry_run: bool = False) -> None:
     effective_app_type = app_type or ISSUES_APP_TYPE
     effective_namespace = namespace or ISSUES_NAMESPACE
     _run_pinecone_sync(
-        effective_app_type,
+        f"{effective_app_type}-issues",
         effective_namespace,
         "boost_library_tracker.preprocessors.issue_preprocessor.preprocess_for_pinecone",
     )
     _run_pinecone_sync(
-        effective_app_type,
+        f"{effective_app_type}-prs",
         effective_namespace,
         "boost_library_tracker.preprocessors.pr_preprocessor.preprocess_for_pinecone",
     )

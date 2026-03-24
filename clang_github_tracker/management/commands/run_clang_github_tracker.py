@@ -300,12 +300,12 @@ class Command(BaseCommand):
             pinecone_namespace or settings.CLANG_GITHUB_PINECONE_NAMESPACE
         )
         _run_pinecone_sync(
-            effective_app_type,
+            f"{effective_app_type}-issues",
             effective_namespace,
             "clang_github_tracker.preprocessors.issue_preprocessor.preprocess_for_pinecone",
         )
         _run_pinecone_sync(
-            effective_app_type,
+            f"{effective_app_type}-prs",
             effective_namespace,
             "clang_github_tracker.preprocessors.pr_preprocessor.preprocess_for_pinecone",
         )
