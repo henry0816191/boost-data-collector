@@ -9,6 +9,7 @@ import logging
 import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Iterator, Optional
+from urllib.parse import parse_qs, urlparse
 
 import requests
 
@@ -16,6 +17,24 @@ if TYPE_CHECKING:
     from github_ops.client import GitHubAPIClient
 
 logger = logging.getLogger(__name__)
+
+
+def _make_aware(dt: datetime) -> datetime:
+    """Return dt as UTC-aware; if naive, assume UTC."""
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
+def _in_date_range(
+    dt: datetime,
+    start_time: Optional[datetime],
+    end_time: Optional[datetime],
+) -> bool:
+    """Return True if dt falls within [start_time, end_time] (UTC-aware, both inclusive)."""
+    if start_time and dt < _make_aware(start_time):
+        return False
+    if end_time and dt > _make_aware(end_time):
+        return False
+    return True
 
 
 def fetch_user_from_github(
@@ -42,6 +61,54 @@ def fetch_user_from_github(
     return None
 
 
+def _is_first_page_url(url: str) -> bool:
+    """Return True if the URL's page= query param is 1 or absent (GitHub default)."""
+    try:
+        pages = parse_qs(urlparse(url).query).get("page")
+        return int(pages[0]) == 1 if pages else True
+    except (ValueError, IndexError):
+        return False
+
+
+def _yield_commit_with_stats(
+    client: GitHubAPIClient,
+    owner: str,
+    repo: str,
+    commit: dict,
+    start_time: Optional[datetime],
+    end_time: Optional[datetime],
+) -> Iterator[dict]:
+    """Filter a single commit list entry by date range, fetch full stats, and yield."""
+    commit_date_str = commit.get("commit", {}).get("author", {}).get(
+        "date"
+    ) or commit.get("commit", {}).get("committer", {}).get("date")
+    if commit_date_str:
+        try:
+            commit_dt = datetime.fromisoformat(commit_date_str.replace("Z", "+00:00"))
+            if not _in_date_range(commit_dt, start_time, end_time):
+                return
+        except Exception as e:
+            logger.debug("Failed to parse commit date '%s': %s", commit_date_str, e)
+
+    try:
+        commit_with_stats = client.rest_request(
+            f"/repos/{owner}/{repo}/commits/{commit['sha']}"
+        )
+    except requests.exceptions.HTTPError as e:
+        if e.response is not None and e.response.status_code in (502, 503, 504):
+            logger.warning(
+                "Aborting commit sync at %s for %s/%s after HTTP %s: %s",
+                commit["sha"][:7],
+                owner,
+                repo,
+                e.response.status_code,
+                e,
+            )
+            raise
+        raise
+    yield commit_with_stats
+
+
 def fetch_commits_from_github(
     client: GitHubAPIClient,
     owner: str,
@@ -50,110 +117,97 @@ def fetch_commits_from_github(
     end_time: Optional[datetime] = None,
     etag_cache: Optional[Any] = None,
 ) -> Iterator[dict]:
-    """Fetch commits from GitHub API (paginated). Yields commit dicts with stats.
-    If etag_cache is provided, uses rest_request_conditional for the list GET.
+    """Fetch commits from GitHub API oldest-to-newest using Link header backward traversal.
+
+    Fetches page 1 to discover the last page via the Link header, then walks backward
+    (last → prev → … → page 1), yielding commits in chronological order (oldest first)
+    within each page by reversing the newest-first GitHub default.
+
+    The page-1 list response is cached in memory so when backward traversal returns to
+    page 1 via the "prev" link, no duplicate request is made.
+
+    If etag_cache is provided, a conditional GET is used for page 1; a 304 means no
+    new commits exist in the requested date window and the function returns immediately.
     """
-    logger.debug(f"Fetching commits for {owner}/{repo} from {start_time} to {end_time}")
-    page = 1
+    logger.debug(
+        "Fetching commits for %s/%s from %s to %s", owner, repo, start_time, end_time
+    )
+
     per_page = 100
     since_iso = start_time.isoformat() if start_time else ""
     until_iso = end_time.isoformat() if end_time else ""
+    endpoint = f"/repos/{owner}/{repo}/commits"
 
-    while True:
-        params = {
-            "per_page": per_page,
-            "page": page,
-        }
-        if start_time:
-            params["since"] = start_time.isoformat()
-        if end_time:
-            params["until"] = end_time.isoformat()
+    params: dict = {"per_page": per_page, "page": 1}
+    if start_time:
+        params["since"] = start_time.isoformat()
+    if end_time:
+        params["until"] = end_time.isoformat()
 
-        response_etag = None
-        if etag_cache is not None:
-            etag = etag_cache.get("commits", page, since_iso, until_iso)
-            data, response_etag = client.rest_request_conditional(
-                f"/repos/{owner}/{repo}/commits", params=params, etag=etag
+    # Fetch page 1 to discover total pages via Link header.
+    first_page_etag: Optional[str] = None
+    if etag_cache is not None:
+        etag = etag_cache.get("commits", 1, since_iso, until_iso)
+        first_page_data, first_page_etag, first_page_links = (
+            client.rest_request_conditional_with_all_links(
+                endpoint, params=params, etag=etag
             )
-            if data is None:
-                logger.debug("Commits list page %s: 304 Not Modified, skipping", page)
-                page += 1
-                time.sleep(0.2)
-                continue
-            commits = data
+        )
+        if first_page_data is None:
+            logger.debug("Commits list page 1: 304 Not Modified, nothing to process")
+            return
+    else:
+        first_page_data, first_page_links = client.rest_request_with_all_links(
+            endpoint, params
+        )
+
+    if not first_page_data:
+        logger.debug("No commits found for %s/%s", owner, repo)
+        return
+
+    logger.debug(
+        "Fetched %d commits on page 1 for %s/%s", len(first_page_data), owner, repo
+    )
+
+    last_url = first_page_links.get("last")
+
+    if not last_url or _is_first_page_url(last_url):
+        # Single page: reverse to yield oldest-first, then cache ETag and return.
+        logger.debug("Single page of commits; processing in reverse order")
+        for commit in reversed(first_page_data):
+            yield from _yield_commit_with_stats(
+                client, owner, repo, commit, start_time, end_time
+            )
+        if etag_cache is not None and first_page_etag:
+            etag_cache.set("commits", 1, since_iso, until_iso, first_page_etag)
+        return
+
+    # Multiple pages: walk backward from last page to page 1, yielding oldest-first.
+    current_url: Optional[str] = last_url
+    while current_url is not None:
+        if _is_first_page_url(current_url):
+            # Reuse the already-fetched page-1 data — no extra API request.
+            page_data = first_page_data
+            page_links = first_page_links
+            logger.debug("Backward traversal reached page 1; using cached data")
         else:
-            commits = client.rest_request(f"/repos/{owner}/{repo}/commits", params)
-
-        if not commits:
-            logger.debug(f"No more commits found at page {page}")
-            break
-        logger.debug(f"Fetched {len(commits)} commits from page {page}")
-
-        for commit in reversed(commits):
-            commit_date_str = commit.get("commit", {}).get("author", {}).get(
-                "date"
-            ) or commit.get("commit", {}).get("committer", {}).get("date")
-            if commit_date_str:
-                try:
-                    commit_dt = datetime.fromisoformat(
-                        commit_date_str.replace("Z", "+00:00")
-                    )
-
-                    if start_time:
-                        start_time_aware = (
-                            start_time.replace(tzinfo=timezone.utc)
-                            if start_time.tzinfo is None
-                            else start_time
-                        )
-                        if commit_dt < start_time_aware:
-                            continue
-
-                    if end_time:
-                        end_time_aware = (
-                            end_time.replace(tzinfo=timezone.utc)
-                            if end_time.tzinfo is None
-                            else end_time
-                        )
-                        if commit_dt > end_time_aware:
-                            continue
-                except Exception as e:
-                    logger.debug(
-                        f"Failed to parse commit date '{commit_date_str}': {e}"
-                    )
-
-            # Fetch full commit with stats (abort on 502/503/504 so page is not checkpointed and can be retried)
-            try:
-                commit_with_stats = client.rest_request(
-                    f"/repos/{owner}/{repo}/commits/{commit['sha']}"
-                )
-            except requests.exceptions.HTTPError as e:
-                if e.response is not None and e.response.status_code in (
-                    502,
-                    503,
-                    504,
-                ):
-                    logger.warning(
-                        "Aborting commit sync at %s for %s/%s after HTTP %s: %s",
-                        commit["sha"][:7],
-                        owner,
-                        repo,
-                        e.response.status_code,
-                        e,
-                    )
-                    raise
-                raise
-            yield commit_with_stats
-
-        if etag_cache is not None and response_etag:
-            etag_cache.set("commits", page, since_iso, until_iso, response_etag)
-
-        if len(commits) < per_page:
+            page_data, page_links = client.rest_request_url_with_all_links(current_url)
             logger.debug(
-                f"Last page reached (got {len(commits)} commits, expected {per_page})"
+                "Fetched %d commits (backward traversal) from %s",
+                len(page_data) if page_data else 0,
+                current_url,
             )
-            break
-        page += 1
-        time.sleep(0.2)
+            time.sleep(0.2)
+
+        for commit in reversed(page_data or []):
+            yield from _yield_commit_with_stats(
+                client, owner, repo, commit, start_time, end_time
+            )
+
+        current_url = page_links.get("prev")
+
+    if etag_cache is not None and first_page_etag:
+        etag_cache.set("commits", 1, since_iso, until_iso, first_page_etag)
 
 
 def fetch_comments_from_github(
@@ -200,26 +254,11 @@ def fetch_comments_from_github(
             if created_str:
                 try:
                     c_dt = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
-
-                    if start_time:
-                        start_time_aware = (
-                            start_time.replace(tzinfo=timezone.utc)
-                            if start_time.tzinfo is None
-                            else start_time
-                        )
-                        if c_dt < start_time_aware:
-                            continue
-
-                    if end_time:
-                        end_time_aware = (
-                            end_time.replace(tzinfo=timezone.utc)
-                            if end_time.tzinfo is None
-                            else end_time
-                        )
-                        if c_dt > end_time_aware:
-                            continue
+                    if not _in_date_range(c_dt, start_time, end_time):
+                        continue
                 except Exception as e:
                     logger.debug(f"Failed to parse comment date '{created_str}': {e}")
+                    continue
 
             results.append(comment)
 
@@ -318,22 +357,8 @@ def fetch_issues_from_github(
                 logger.debug(f"Failed to parse issue date '{updated_str}': {e}")
                 continue
 
-            if start_time:
-                start_time_aware = (
-                    start_time.replace(tzinfo=timezone.utc)
-                    if start_time.tzinfo is None
-                    else start_time
-                )
-                if issue_dt < start_time_aware:
-                    continue
-            if end_time:
-                end_time_aware = (
-                    end_time.replace(tzinfo=timezone.utc)
-                    if end_time.tzinfo is None
-                    else end_time
-                )
-                if issue_dt > end_time_aware:
-                    continue
+            if not _in_date_range(issue_dt, start_time, end_time):
+                continue
 
             issue_number = issue.get("number")
             if issue_number is not None:
@@ -402,26 +427,11 @@ def fetch_pr_reviews_from_github(
                     review_dt = datetime.fromisoformat(
                         updated_str.replace("Z", "+00:00")
                     )
-
-                    if start_time:
-                        start_time_aware = (
-                            start_time.replace(tzinfo=timezone.utc)
-                            if start_time.tzinfo is None
-                            else start_time
-                        )
-                        if review_dt < start_time_aware:
-                            continue
-
-                    if end_time:
-                        end_time_aware = (
-                            end_time.replace(tzinfo=timezone.utc)
-                            if end_time.tzinfo is None
-                            else end_time
-                        )
-                        if review_dt > end_time_aware:
-                            continue
+                    if not _in_date_range(review_dt, start_time, end_time):
+                        continue
                 except Exception as e:
                     logger.debug(f"Failed to parse review date '{updated_str}': {e}")
+                    continue
 
             results.append(review)
 
@@ -437,6 +447,148 @@ def fetch_pr_reviews_from_github(
         f"Total reviews fetched for {owner}/{repo} PR #{pr_number}: {len(results)}"
     )
     return results
+
+
+def fetch_issues_and_prs_from_github(
+    client: GitHubAPIClient,
+    owner: str,
+    repo: str,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    etag_cache: Optional[Any] = None,
+) -> Iterator[dict]:
+    """Fetch issues and PRs from GitHub using a single /issues list endpoint.
+
+    GitHub's issues API returns both issues and pull requests; this function routes each
+    item by the presence of the "pull_request" key:
+      - Issues  → yield {"issue_info": <detail>, "comments": [...]}
+      - PRs     → yield {"pr_info": <detail>, "comments": [...], "reviews": [...]}
+
+    Uses Link-header pagination (direction=asc, sort=updated) so items are processed
+    oldest-updated-first. If etag_cache is provided, uses conditional GET for the first
+    page; a 304 means nothing has changed and the function returns immediately.
+    """
+    logger.debug(
+        "Fetching issues+PRs for %s/%s from %s to %s", owner, repo, start_time, end_time
+    )
+    per_page = 100
+    since_iso = start_time.isoformat() if start_time else ""
+    endpoint = f"/repos/{owner}/{repo}/issues"
+    next_url: Optional[str] = None
+    page_num = 1
+
+    while True:
+        response_etag: Optional[str] = None
+        try:
+            if next_url is not None:
+                items, next_url = client.rest_request_url(next_url)
+                page_num += 1
+            else:
+                params: dict = {
+                    "state": "all",
+                    "per_page": per_page,
+                    "page": page_num,
+                    "sort": "updated",
+                    "direction": "asc",
+                }
+                if start_time:
+                    params["since"] = start_time.isoformat()
+                if etag_cache is not None:
+                    etag = etag_cache.get("issues_and_prs", page_num, since_iso, "")
+                    data, response_etag, next_url = (
+                        client.rest_request_conditional_with_link(
+                            endpoint, params=params, etag=etag
+                        )
+                    )
+                    if data is None:
+                        logger.debug(
+                            "Issues+PRs list page %s: 304 Not Modified, skipping",
+                            page_num,
+                        )
+                        page_num += 1
+                        time.sleep(0.2)
+                        continue
+                    items = data
+                else:
+                    items, next_url = client.rest_request_with_link(endpoint, params)
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 422:
+                logger.debug(
+                    "Issues+PRs list: 422 Unprocessable Entity, stopping pagination"
+                )
+                break
+            raise
+
+        if not items:
+            logger.debug("No more issues/PRs found")
+            break
+
+        logger.debug(
+            "Fetched %d items (issues+PRs combined) from page %s", len(items), page_num
+        )
+
+        for item in items:
+            updated_str = item.get("updated_at") or item.get("created_at")
+            if not updated_str:
+                continue
+            try:
+                item_dt = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
+            except (ValueError, TypeError) as e:
+                logger.debug("Failed to parse item date '%s': %s", updated_str, e)
+                continue
+
+            if not _in_date_range(item_dt, start_time, end_time):
+                continue
+
+            number = item.get("number")
+            if number is None:
+                continue
+
+            if "pull_request" in item:
+                # PR: fetch full detail from /pulls endpoint, then comments + reviews.
+                try:
+                    full_pr = client.rest_request(
+                        f"/repos/{owner}/{repo}/pulls/{number}"
+                    )
+                    if full_pr and isinstance(full_pr, dict):
+                        item = full_pr
+                except Exception as e:
+                    logger.debug("Failed to fetch full PR #%s: %s", number, e)
+                logger.debug("Fetching comments for PR #%s", number)
+                comments = fetch_comments_from_github(
+                    client, owner, repo, number, start_time, end_time
+                )
+                time.sleep(0.2)
+                logger.debug("Fetching reviews for PR #%s", number)
+                reviews = fetch_pr_reviews_from_github(
+                    client, owner, repo, number, start_time, end_time
+                )
+                time.sleep(0.2)
+                yield {"pr_info": item, "comments": comments, "reviews": reviews}
+            else:
+                # Issue: fetch full detail from /issues endpoint, then comments.
+                try:
+                    full_issue = client.rest_request(
+                        f"/repos/{owner}/{repo}/issues/{number}"
+                    )
+                    if full_issue and isinstance(full_issue, dict):
+                        item = full_issue
+                except Exception as e:
+                    logger.debug("Failed to fetch full issue #%s: %s", number, e)
+                logger.debug("Fetching comments for issue #%s", number)
+                comments = fetch_comments_from_github(
+                    client, owner, repo, number, start_time, end_time
+                )
+                logger.debug("Found %d comments for issue #%s", len(comments), number)
+                yield {"issue_info": item, "comments": comments}
+
+        if etag_cache is not None and response_etag:
+            etag_cache.set("issues_and_prs", page_num, since_iso, "", response_etag)
+
+        if next_url is None:
+            logger.debug('Last page reached (no Link rel="next")')
+            break
+        time.sleep(0.2)
 
 
 def fetch_pull_requests_from_github(
@@ -489,25 +641,11 @@ def fetch_pull_requests_from_github(
             if updated_str:
                 try:
                     pr_dt = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
-
-                    if start_time:
-                        start_time_aware = (
-                            start_time.replace(tzinfo=timezone.utc)
-                            if start_time.tzinfo is None
-                            else start_time
-                        )
-                        if pr_dt < start_time_aware:
-                            flag = True
-                            break
-
-                    if end_time:
-                        end_time_aware = (
-                            end_time.replace(tzinfo=timezone.utc)
-                            if end_time.tzinfo is None
-                            else end_time
-                        )
-                        if pr_dt > end_time_aware:
-                            continue
+                    if start_time and pr_dt < _make_aware(start_time):
+                        flag = True
+                        break
+                    if end_time and pr_dt > _make_aware(end_time):
+                        continue
                 except Exception as e:
                     logger.debug("Failed to parse PR date '%s': %s", updated_str, e)
                     continue

@@ -97,7 +97,9 @@ def _empty_sync_result() -> dict[str, Any]:
     }
 
 
-def _build_documents_from_raw(raw_documents: list[dict[str, Any]]) -> list[Any]:
+def _build_documents_from_raw(
+    raw_documents: list[dict[str, Any]],
+) -> list[Any]:
     """Convert preprocess output to langchain Documents; skip items missing doc_id/url."""
 
     from langchain_core.documents import Document
@@ -263,22 +265,16 @@ def sync_to_pinecone(
         )
 
     if not raw_documents:
-
         logger.info(
             "sync_to_pinecone: preprocess returned 0 documents for app_type=%s",
             app_type,
         )
-
-        services.update_sync_status(app_type)
 
         return _empty_sync_result()
 
     documents = _build_documents_from_raw(raw_documents)
 
     if not documents:
-
-        services.update_sync_status(app_type)
-
         return _empty_sync_result()
 
     attempted_source_ids = _extract_source_ids_from_documents(documents)

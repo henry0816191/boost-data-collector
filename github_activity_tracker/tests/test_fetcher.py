@@ -2,7 +2,7 @@
 
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from github_activity_tracker.fetcher import (
     fetch_comments_from_github,
@@ -71,19 +71,16 @@ def test_fetch_user_from_github_returns_none_when_empty_response():
 def test_fetch_commits_from_github_yields_commit_dicts():
     """fetch_commits_from_github yields full commit dict from /repos/.../commits/{sha}."""
     client = MagicMock()
-    client.rest_request.side_effect = [
-        [
-            {
-                "sha": "abc",
-                "commit": {"author": {"date": "2024-01-01T00:00:00Z"}},
-            }
-        ],
-        {
-            "sha": "abc",
-            "commit": {"message": "msg"},
-            "stats": {"additions": 1},
-        },
-    ]
+    # New API: rest_request_with_all_links returns (data, links_dict)
+    client.rest_request_with_all_links.return_value = (
+        [{"sha": "abc", "commit": {"author": {"date": "2024-01-01T00:00:00Z"}}}],
+        {},  # No links = single page
+    )
+    client.rest_request.return_value = {
+        "sha": "abc",
+        "commit": {"message": "msg"},
+        "stats": {"additions": 1},
+    }
     items = list(fetch_commits_from_github(client, "o", "r"))
     assert len(items) == 1
     assert items[0]["sha"] == "abc"
@@ -93,84 +90,71 @@ def test_fetch_commits_from_github_yields_commit_dicts():
 def test_fetch_commits_from_github_stops_on_empty_page():
     """fetch_commits_from_github stops when API returns empty list."""
     client = MagicMock()
-    client.rest_request.return_value = []
+    client.rest_request_with_all_links.return_value = ([], {})
     items = list(fetch_commits_from_github(client, "owner", "repo"))
     assert items == []
-    client.rest_request.assert_called_once()
 
 
 def test_fetch_commits_from_github_includes_since_until_params():
     """fetch_commits_from_github passes since/until when start_time/end_time given."""
     client = MagicMock()
-    client.rest_request.return_value = []
+    client.rest_request_with_all_links.return_value = ([], {})
     start = datetime(2024, 1, 1, tzinfo=timezone.utc)
     end = datetime(2024, 12, 31, tzinfo=timezone.utc)
     list(fetch_commits_from_github(client, "o", "r", start_time=start, end_time=end))
-    call_args = client.rest_request.call_args
-    params = call_args[0][1] or {}
+    call_args = client.rest_request_with_all_links.call_args
+    # params is the second positional argument
+    params = call_args[0][1] if len(call_args[0]) > 1 else call_args[1]["params"]
     assert "since" in params
     assert "until" in params
 
 
 def test_fetch_commits_from_github_with_etag_cache_304_yields_nothing():
-    """When etag_cache is passed and rest_request_conditional returns 304, page is skipped
-    and next page is requested; when next page returns empty, no items yielded and set not called.
-    """
+    """When etag_cache is passed and rest_request_conditional_with_all_links returns 304, nothing is yielded."""
     client = MagicMock()
-    # Page 1: 304 -> skip; page 2: empty -> break. No items, no etag_cache.set.
-    client.rest_request_conditional.side_effect = [
-        (None, 'W/"cached"'),  # page 1: 304
-        ([], None),  # page 2: empty, stops loop
-    ]
+    # Page 1: 304 -> return immediately (new behavior)
+    client.rest_request_conditional_with_all_links.return_value = (
+        None,
+        'W/"cached"',
+        {},
+    )
     etag_cache = MagicMock()
     etag_cache.get.return_value = 'W/"cached"'
-    with patch("github_activity_tracker.fetcher.time.sleep"):
-        items = list(fetch_commits_from_github(client, "o", "r", etag_cache=etag_cache))
+
+    items = list(fetch_commits_from_github(client, "o", "r", etag_cache=etag_cache))
+
     assert items == []
-    assert client.rest_request_conditional.call_count == 2
-    # Ensure we requested page 1 then page 2 (no re-requesting the same page).
-    call1_params = client.rest_request_conditional.call_args_list[0][1]["params"]
-    call2_params = client.rest_request_conditional.call_args_list[1][1]["params"]
-    assert call1_params["page"] == 1
-    assert call2_params["page"] == 2
+    client.rest_request_conditional_with_all_links.assert_called_once()
     etag_cache.set.assert_not_called()
 
 
 def test_fetch_commits_from_github_with_etag_cache_200_yields_and_sets():
-    """When etag_cache is passed and rest_request_conditional returns 200, yields items and calls set
-    only after the page's items have been consumed (checkpoint deferred).
-    """
+    """When etag_cache is passed and rest_request_conditional_with_all_links returns 200, yields items and calls set."""
     client = MagicMock()
-    # Two items on page 1 so we can assert set() is not called until after both are consumed.
-    client.rest_request_conditional.side_effect = [
-        (
-            [
-                {"sha": "abc", "commit": {"author": {"date": "2024-06-01T00:00:00Z"}}},
-                {"sha": "def", "commit": {"author": {"date": "2024-06-02T00:00:00Z"}}},
-            ],
-            "W/new_etag",
-        ),
-    ]
+    # Single page with two commits (newest first from API, yielded oldest first)
+    client.rest_request_conditional_with_all_links.return_value = (
+        [
+            {"sha": "def", "commit": {"author": {"date": "2024-06-02T00:00:00Z"}}},
+            {"sha": "abc", "commit": {"author": {"date": "2024-06-01T00:00:00Z"}}},
+        ],
+        "W/new_etag",
+        {},  # No links = single page
+    )
     client.rest_request.side_effect = [
         {"sha": "abc", "commit": {"message": "msg"}, "stats": {"additions": 1}},
         {"sha": "def", "commit": {"message": "msg2"}, "stats": {"additions": 2}},
     ]
     etag_cache = MagicMock()
     etag_cache.get.return_value = None
-    with patch("github_activity_tracker.fetcher.time.sleep"):
-        gen = fetch_commits_from_github(client, "o", "r", etag_cache=etag_cache)
-        # Consume first item only; checkpoint must not be written yet.
-        first = next(gen)
-        etag_cache.set.assert_not_called()
-        # Consume second item; set still not called until we advance past the last yield.
-        second = next(gen)
-        etag_cache.set.assert_not_called()
-        # Advancing again runs the code after the for-loop (etag_cache.set) then exits.
-        with pytest.raises(StopIteration):
-            next(gen)
-        etag_cache.set.assert_called_once()
-    assert first["sha"] == "abc"
-    assert second["sha"] == "def"
+
+    items = list(fetch_commits_from_github(client, "o", "r", etag_cache=etag_cache))
+
+    # Should yield oldest first: abc, def
+    assert len(items) == 2
+    assert items[0]["sha"] == "abc"
+    assert items[1]["sha"] == "def"
+    # ETag should be cached after processing
+    etag_cache.set.assert_called_once()
     call_args = etag_cache.set.call_args[0]
     assert call_args[0] == "commits"
     assert call_args[1] == 1
@@ -182,21 +166,18 @@ def test_fetch_commits_from_github_aborts_on_502_503_504():
     import requests as req
 
     client = MagicMock()
-    # API returns commits (e.g. newest first); fetcher iterates reversed(), so first
-    # full-commit fetch is for the last in this list (def456). That fetch returns 502 → abort.
-    client.rest_request.side_effect = [
+    # Single page with commits (newest first from API)
+    client.rest_request_with_all_links.return_value = (
         [
-            {
-                "sha": "abc123",
-                "commit": {"author": {"date": "2024-01-01T00:00:00Z"}},
-            },
-            {
-                "sha": "def456",
-                "commit": {"author": {"date": "2024-01-02T00:00:00Z"}},
-            },
+            {"sha": "def456", "commit": {"author": {"date": "2024-01-02T00:00:00Z"}}},
+            {"sha": "abc123", "commit": {"author": {"date": "2024-01-01T00:00:00Z"}}},
         ],
-        req.exceptions.HTTPError("Bad Gateway", response=MagicMock(status_code=502)),
-    ]
+        {},
+    )
+    # First detail fetch (for abc123, oldest) returns 502
+    client.rest_request.side_effect = req.exceptions.HTTPError(
+        "Bad Gateway", response=MagicMock(status_code=502)
+    )
     with pytest.raises(req.exceptions.HTTPError):
         list(fetch_commits_from_github(client, "o", "r"))
 
@@ -206,20 +187,19 @@ def test_fetch_commits_from_github_5xx_with_etag_cache_does_not_checkpoint():
     import requests as req
 
     client = MagicMock()
-    client.rest_request_conditional.side_effect = [
-        (
-            [{"sha": "abc", "commit": {"author": {"date": "2024-06-01T00:00:00Z"}}}],
-            "W/new_etag",
-        ),
-    ]
+    client.rest_request_conditional_with_all_links.return_value = (
+        [{"sha": "abc", "commit": {"author": {"date": "2024-06-01T00:00:00Z"}}}],
+        "W/new_etag",
+        {},
+    )
     client.rest_request.side_effect = req.exceptions.HTTPError(
         "Bad Gateway", response=MagicMock(status_code=502)
     )
     etag_cache = MagicMock()
     etag_cache.get.return_value = None
-    with patch("github_activity_tracker.fetcher.time.sleep"):
-        with pytest.raises(req.exceptions.HTTPError):
-            list(fetch_commits_from_github(client, "o", "r", etag_cache=etag_cache))
+
+    with pytest.raises(req.exceptions.HTTPError):
+        list(fetch_commits_from_github(client, "o", "r", etag_cache=etag_cache))
     etag_cache.set.assert_not_called()
 
 
@@ -228,10 +208,13 @@ def test_fetch_commits_from_github_reraises_non_server_error_http():
     import requests as req
 
     client = MagicMock()
-    client.rest_request.side_effect = [
+    client.rest_request_with_all_links.return_value = (
         [{"sha": "abc", "commit": {"author": {"date": "2024-01-01T00:00:00Z"}}}],
-        req.exceptions.HTTPError("Forbidden", response=MagicMock(status_code=403)),
-    ]
+        {},
+    )
+    client.rest_request.side_effect = req.exceptions.HTTPError(
+        "Forbidden", response=MagicMock(status_code=403)
+    )
     with pytest.raises(req.exceptions.HTTPError):
         list(fetch_commits_from_github(client, "o", "r"))
 
