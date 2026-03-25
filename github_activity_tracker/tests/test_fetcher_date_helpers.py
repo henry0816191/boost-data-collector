@@ -25,12 +25,12 @@ def test_make_aware_preserves_aware_datetime():
 def test_make_aware_preserves_non_utc_aware_datetime():
     """_make_aware returns non-UTC aware datetime as-is (does not convert to UTC)."""
     from datetime import timedelta
-    
+
     # Create a datetime in UTC+5
     utc_plus_5 = timezone(timedelta(hours=5))
     dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo=utc_plus_5)
     result = _make_aware(dt)
-    
+
     # _make_aware returns aware datetimes as-is; it doesn't convert to UTC
     assert result is dt
     assert result.tzinfo == utc_plus_5
@@ -41,7 +41,7 @@ def test_in_date_range_returns_true_when_in_range():
     dt = datetime(2024, 1, 5, tzinfo=timezone.utc)
     start = datetime(2024, 1, 1, tzinfo=timezone.utc)
     end = datetime(2024, 1, 10, tzinfo=timezone.utc)
-    
+
     assert _in_date_range(dt, start, end) is True
 
 
@@ -50,7 +50,7 @@ def test_in_date_range_returns_false_when_before_start():
     dt = datetime(2024, 1, 1, tzinfo=timezone.utc)
     start = datetime(2024, 1, 5, tzinfo=timezone.utc)
     end = datetime(2024, 1, 10, tzinfo=timezone.utc)
-    
+
     assert _in_date_range(dt, start, end) is False
 
 
@@ -59,7 +59,7 @@ def test_in_date_range_returns_false_when_after_end():
     dt = datetime(2024, 1, 15, tzinfo=timezone.utc)
     start = datetime(2024, 1, 1, tzinfo=timezone.utc)
     end = datetime(2024, 1, 10, tzinfo=timezone.utc)
-    
+
     assert _in_date_range(dt, start, end) is False
 
 
@@ -67,7 +67,7 @@ def test_in_date_range_returns_true_when_no_start_time():
     """_in_date_range returns True when start_time is None (no lower bound)."""
     dt = datetime(2024, 1, 1, tzinfo=timezone.utc)
     end = datetime(2024, 1, 10, tzinfo=timezone.utc)
-    
+
     assert _in_date_range(dt, None, end) is True
 
 
@@ -75,14 +75,14 @@ def test_in_date_range_returns_true_when_no_end_time():
     """_in_date_range returns True when end_time is None (no upper bound)."""
     dt = datetime(2024, 1, 15, tzinfo=timezone.utc)
     start = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    
+
     assert _in_date_range(dt, start, None) is True
 
 
 def test_in_date_range_returns_true_when_no_bounds():
     """_in_date_range returns True when both start_time and end_time are None."""
     dt = datetime(2024, 1, 1, tzinfo=timezone.utc)
-    
+
     assert _in_date_range(dt, None, None) is True
 
 
@@ -91,7 +91,7 @@ def test_in_date_range_handles_naive_start_and_end():
     dt = datetime(2024, 1, 5, tzinfo=timezone.utc)
     start = datetime(2024, 1, 1)  # Naive
     end = datetime(2024, 1, 10)  # Naive
-    
+
     assert _in_date_range(dt, start, end) is True
 
 
@@ -99,7 +99,7 @@ def test_in_date_range_inclusive_boundaries():
     """_in_date_range is inclusive on both boundaries."""
     start = datetime(2024, 1, 1, tzinfo=timezone.utc)
     end = datetime(2024, 1, 10, tzinfo=timezone.utc)
-    
+
     # Exactly at start
     assert _in_date_range(start, start, end) is True
     # Exactly at end

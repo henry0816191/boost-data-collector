@@ -1,8 +1,7 @@
 """Tests for fetch_issues_and_prs_from_github unified fetcher."""
 
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 
 from github_activity_tracker.fetcher import fetch_issues_and_prs_from_github
 
@@ -126,7 +125,11 @@ def test_fetch_issues_and_prs_filters_by_date_range():
 
     start = datetime(2024, 1, 2, tzinfo=timezone.utc)
     end = datetime(2024, 1, 8, tzinfo=timezone.utc)
-    items = list(fetch_issues_and_prs_from_github(client, "o", "r", start_time=start, end_time=end))
+    items = list(
+        fetch_issues_and_prs_from_github(
+            client, "o", "r", start_time=start, end_time=end
+        )
+    )
 
     assert len(items) == 1
     assert items[0]["issue_info"]["number"] == 2
@@ -161,14 +164,16 @@ def test_fetch_issues_and_prs_handles_304_not_modified():
     client = MagicMock()
     etag_cache = MagicMock()
     etag_cache.get.return_value = "etag123"
-    
+
     # First page: 304, second page: empty (end of pagination)
     client.rest_request_conditional_with_link.side_effect = [
         (None, "etag123", None),  # Page 1: 304
-        ([], "new_etag", None),   # Page 2: empty list (stops pagination)
+        ([], "new_etag", None),  # Page 2: empty list (stops pagination)
     ]
 
-    items = list(fetch_issues_and_prs_from_github(client, "o", "r", etag_cache=etag_cache))
+    items = list(
+        fetch_issues_and_prs_from_github(client, "o", "r", etag_cache=etag_cache)
+    )
 
     assert items == []
     # Should have tried page 1 (304) and page 2 (empty)

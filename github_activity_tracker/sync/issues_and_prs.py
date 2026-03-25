@@ -17,7 +17,10 @@ from typing import TYPE_CHECKING, Optional
 from cppa_user_tracker.services import get_or_create_github_account
 from github_activity_tracker import fetcher, services
 from github_activity_tracker.sync.etag_cache import RedisListETagCache
-from github_activity_tracker.sync.raw_source import save_issue_raw_source, save_pr_raw_source
+from github_activity_tracker.sync.raw_source import (
+    save_issue_raw_source,
+    save_pr_raw_source,
+)
 from github_activity_tracker.sync.utils import (
     normalize_issue_json,
     normalize_pr_json,
@@ -300,8 +303,14 @@ def sync_issues_and_prs(
             last_issue = repo.issues.order_by("-issue_updated_at").first()
             last_pr = repo.pull_requests.order_by("-pr_updated_at").first()
 
-            issue_date = (last_issue.issue_updated_at + timedelta(seconds=1)) if last_issue else None
-            pr_date = (last_pr.pr_updated_at + timedelta(seconds=1)) if last_pr else None
+            issue_date = (
+                (last_issue.issue_updated_at + timedelta(seconds=1))
+                if last_issue
+                else None
+            )
+            pr_date = (
+                (last_pr.pr_updated_at + timedelta(seconds=1)) if last_pr else None
+            )
 
             if issue_date and pr_date:
                 start_date = min(issue_date, pr_date)
