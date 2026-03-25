@@ -78,8 +78,15 @@ def sync_raw_only(
 
     Args:
         start_commit: Start date for commits (None = from beginning).
-        start_issue: Start date for issues (None = from beginning).
-        start_pr: Start date for PRs (None = from beginning).
+        start_issue: Issue watermark for the unified issues+PRs fetch (one ``/issues``
+            list with both item kinds). ``None`` only means “no issue cursor” when
+            deriving the shared start: if ``start_pr`` is also ``None``, the unified
+            fetch runs from the beginning; if ``start_pr`` is set, that timestamp is
+            used as the single lower bound for the whole list (issues are filtered
+            by the same window). When both ``start_issue`` and ``start_pr`` are set,
+            the shared lower bound is the **later** of the two (``max``), so one
+            GitHub query covers both types from that time forward.
+        start_pr: PR watermark; same shared-bound semantics as ``start_issue``.
         end_date: End date for all (default: now).
 
     Returns:
@@ -106,7 +113,8 @@ def sync_raw_only(
     latest_issue: datetime | None = None
     latest_pr: datetime | None = None
 
-    # Derive a single start date for the unified issue+PR fetch: earliest of the two.
+    # Single lower bound for the unified /issues fetch: later of the two when both
+    # watermarks exist; otherwise whichever side is initialized (or None if both).
     if start_issue and start_pr:
         start_item = max(start_issue, start_pr)
     else:

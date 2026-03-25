@@ -107,10 +107,18 @@ def _process_issue_data(repo: GitHubRepository, issue_data: dict) -> None:
             )
             services.add_issue_assignee(issue_obj, assignee_account)
 
-    for label_data in issue_data.get("labels", []):
-        label_name = label_data.get("name", "")
-        if label_name:
-            services.add_issue_label(issue_obj, label_name)
+    incoming_label_names = {
+        (label_data.get("name") or "")
+        for label_data in issue_data.get("labels", [])
+        if (label_data.get("name") or "")
+    }
+    existing_label_names = {
+        il.label_name for il in issue_obj.labels.all() if il.label_name
+    }
+    for label_name in existing_label_names - incoming_label_names:
+        services.remove_issue_label(issue_obj, label_name)
+    for label_name in incoming_label_names - existing_label_names:
+        services.add_issue_label(issue_obj, label_name)
 
     logger.debug("Issue #%s: saved to DB", issue_data.get("number"))
 
@@ -211,8 +219,12 @@ def _process_pr_data(repo: GitHubRepository, pr_data: dict) -> None:
                 pr_review_updated_at=parse_datetime(review_data.get("updated_at")),
             )
 
-    for assignee_data in pr_data.get("assignees", []):
-        assignee_info = parse_github_user(assignee_data)
+    assignee_infos = [parse_github_user(a) for a in pr_data.get("assignees", [])]
+    current_assignee_ids = {i["account_id"] for i in assignee_infos if i["account_id"]}
+    for assignee_account in pr_obj.assignees.all():
+        if assignee_account.github_account_id not in current_assignee_ids:
+            services.remove_pr_assignee(pr_obj, assignee_account)
+    for assignee_info in assignee_infos:
         if assignee_info["account_id"]:
             assignee_account, _ = get_or_create_github_account(
                 github_account_id=assignee_info["account_id"],
@@ -222,10 +234,18 @@ def _process_pr_data(repo: GitHubRepository, pr_data: dict) -> None:
             )
             services.add_pr_assignee(pr_obj, assignee_account)
 
-    for label_data in pr_data.get("labels", []):
-        label_name = label_data.get("name", "")
-        if label_name:
-            services.add_pull_request_label(pr_obj, label_name)
+    incoming_pr_label_names = {
+        (label_data.get("name") or "")
+        for label_data in pr_data.get("labels", [])
+        if (label_data.get("name") or "")
+    }
+    existing_pr_label_names = {
+        pl.label_name for pl in pr_obj.labels.all() if pl.label_name
+    }
+    for label_name in existing_pr_label_names - incoming_pr_label_names:
+        services.remove_pull_request_label(pr_obj, label_name)
+    for label_name in incoming_pr_label_names - existing_pr_label_names:
+        services.add_pull_request_label(pr_obj, label_name)
 
     logger.debug("PR #%s: saved to DB", pr_data.get("number"))
 
