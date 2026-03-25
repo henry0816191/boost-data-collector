@@ -46,8 +46,9 @@ def preprocess_for_pinecone(
 
     Returns (documents, is_chunked=False, metas_to_update).
     """
-    upsert_records = _select_upsert_records(failed_ids)
-    meta_records = _select_metadata_update_records(failed_ids, final_sync_at)
+    int_failed_ids = _parse_int_ids(failed_ids)
+    upsert_records = _select_upsert_records(int_failed_ids)
+    meta_records = _select_metadata_update_records(int_failed_ids, final_sync_at)
 
     if not upsert_records and not meta_records:
         return [], False, []
@@ -62,11 +63,10 @@ def preprocess_for_pinecone(
 # ---------------------------------------------------------------------------
 
 
-def _select_upsert_records(failed_ids: list[str]) -> list[BoostDocContent]:
+def _select_upsert_records(int_failed_ids: list[int]) -> list[BoostDocContent]:
     """Rows to vector-upsert: not yet upserted or explicitly failed (retry)."""
     from django.db.models import Q
 
-    int_failed_ids = _parse_int_ids(failed_ids)
     query = Q(is_upserted=False)
     if int_failed_ids:
         query |= Q(pk__in=int_failed_ids)
@@ -80,14 +80,13 @@ def _select_upsert_records(failed_ids: list[str]) -> list[BoostDocContent]:
 
 
 def _select_metadata_update_records(
-    failed_ids: list[str],
+    int_failed_ids: list[int],
     final_sync_at: datetime | None,
 ) -> list[BoostDocContent]:
     """Rows needing Pinecone metadata refresh only (already upserted, scraped since sync)."""
     if final_sync_at is None:
         return []
 
-    int_failed_ids = _parse_int_ids(failed_ids)
     qs = (
         BoostDocContent.objects.filter(
             is_upserted=True,
