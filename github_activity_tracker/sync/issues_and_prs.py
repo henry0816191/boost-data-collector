@@ -123,7 +123,9 @@ def _process_issue_data(repo: GitHubRepository, issue_data: dict) -> None:
     logger.debug("Issue #%s: saved to DB", issue_data.get("number"))
 
 
-def _process_existing_issue_jsons(repo: GitHubRepository) -> tuple[int, list[int]]:
+def _process_existing_issue_jsons(
+    repo: GitHubRepository,
+) -> tuple[int, list[int]]:
     """Load each issues/*.json in workspace for this repo, save to DB, remove file.
 
     Returns:
@@ -250,7 +252,9 @@ def _process_pr_data(repo: GitHubRepository, pr_data: dict) -> None:
     logger.debug("PR #%s: saved to DB", pr_data.get("number"))
 
 
-def _process_existing_pr_jsons(repo: GitHubRepository) -> tuple[int, list[int]]:
+def _process_existing_pr_jsons(
+    repo: GitHubRepository,
+) -> tuple[int, list[int]]:
     """Load each prs/*.json in workspace for this repo, save to DB, remove file.
 
     Returns:
@@ -283,7 +287,7 @@ def sync_issues_and_prs(
     """Sync issues and PRs for a repo using a single GitHub /issues list call.
 
     1. Process any existing issue/PR JSON files left from a previous interrupted run.
-    2. Determine the start date as the earliest of the last-seen issue and PR update times.
+    2. Determine the start date as the later (max) of the last-seen issue and PR update times.
     3. Fetch items via fetch_issues_and_prs_from_github; each item is routed by key:
        - "issue_info" → persisted as an issue
        - "pr_info"    → persisted as a pull request
@@ -297,7 +301,9 @@ def sync_issues_and_prs(
         {"issues": [<numbers>], "pull_requests": [<numbers>]}
     """
     logger.info(
-        "sync_issues_and_prs: starting for repo id=%s (%s)", repo.pk, repo.repo_name
+        "sync_issues_and_prs: starting for repo id=%s (%s)",
+        repo.pk,
+        repo.repo_name,
     )
 
     owner = repo.owner_account.username
@@ -318,22 +324,24 @@ def sync_issues_and_prs(
                 n_prs,
             )
 
-        # Phase 2: determine start date from the earliest of last issue / last PR update.
+        # Phase 2: determine start date as max(last issue, last PR) +1s — shared /issues timeline.
         if start_date is None:
             last_issue = repo.issues.order_by("-issue_updated_at").first()
             last_pr = repo.pull_requests.order_by("-pr_updated_at").first()
 
             issue_date = (
                 (last_issue.issue_updated_at + timedelta(seconds=1))
-                if last_issue
+                if last_issue and last_issue.issue_updated_at is not None
                 else None
             )
             pr_date = (
-                (last_pr.pr_updated_at + timedelta(seconds=1)) if last_pr else None
+                (last_pr.pr_updated_at + timedelta(seconds=1))
+                if last_pr and last_pr.pr_updated_at is not None
+                else None
             )
 
             if issue_date and pr_date:
-                start_date = min(issue_date, pr_date)
+                start_date = max(issue_date, pr_date)
             else:
                 start_date = issue_date or pr_date
 
@@ -344,7 +352,12 @@ def sync_issues_and_prs(
         count_prs = 0
 
         for item in fetcher.fetch_issues_and_prs_from_github(
-            client, owner, repo_name, start_date, end_date, etag_cache=etag_cache
+            client,
+            owner,
+            repo_name,
+            start_date,
+            end_date,
+            etag_cache=etag_cache,
         ):
             if "pr_info" in item:
                 pr_number = (item["pr_info"] or {}).get("number")
@@ -392,7 +405,9 @@ def sync_issues_and_prs(
         raise
     except Exception as e:
         logger.exception(
-            "sync_issues_and_prs: unexpected error for repo id=%s: %s", repo.pk, e
+            "sync_issues_and_prs: unexpected error for repo id=%s: %s",
+            repo.pk,
+            e,
         )
         raise
 

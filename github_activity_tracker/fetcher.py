@@ -117,11 +117,12 @@ def fetch_commits_from_github(
     end_time: Optional[datetime] = None,
     etag_cache: Optional[Any] = None,
 ) -> Iterator[dict]:
-    """Fetch commits from GitHub API oldest-to-newest using Link header backward traversal.
+    """Fetch commits from GitHub API oldest-to-newest using Link header pagination.
 
-    Fetches page 1 to discover the last page via the Link header, then walks backward
-    (last → prev → … → page 1), yielding commits in chronological order (oldest first)
-    within each page by reversing the newest-first GitHub default.
+    When GitHub includes rel="last", walks backward (last → prev → … → page 1) so
+    commits are yielded oldest-first. When rel="last" is omitted but rel="next"
+    is present (e.g. some since/until responses), follows "next" to fetch all
+    pages, then yields oldest-first. True single-page responses have neither link.
 
     The page-1 list response is cached in memory so when backward traversal returns to
     page 1 via the "prev" link, no duplicate request is made.
@@ -170,42 +171,71 @@ def fetch_commits_from_github(
     )
 
     last_url = first_page_links.get("last")
+    next_url = first_page_links.get("next")
 
-    if not last_url or _is_first_page_url(last_url):
-        # Single page: reverse to yield oldest-first, then cache ETag and return.
-        logger.debug("Single page of commits; processing in reverse order")
-        for commit in reversed(first_page_data):
-            yield from _yield_commit_with_stats(
-                client, owner, repo, commit, start_time, end_time
-            )
+    if last_url and not _is_first_page_url(last_url):
+        # Multiple pages: walk backward from last page to page 1, yielding oldest-first.
+        current_url: Optional[str] = last_url
+        while current_url is not None:
+            if _is_first_page_url(current_url):
+                # Reuse the already-fetched page-1 data — no extra API request.
+                page_data = first_page_data
+                page_links = first_page_links
+                logger.debug("Backward traversal reached page 1; using cached data")
+            else:
+                page_data, page_links = client.rest_request_url_with_all_links(
+                    current_url
+                )
+                logger.debug(
+                    "Fetched %d commits (backward traversal) from %s",
+                    len(page_data) if page_data else 0,
+                    current_url,
+                )
+                time.sleep(0.2)
+
+            for commit in reversed(page_data or []):
+                yield from _yield_commit_with_stats(
+                    client, owner, repo, commit, start_time, end_time
+                )
+
+            current_url = page_links.get("prev")
+
         if etag_cache is not None and first_page_etag:
             etag_cache.set("commits", 1, since_iso, until_iso, first_page_etag)
         return
 
-    # Multiple pages: walk backward from last page to page 1, yielding oldest-first.
-    current_url: Optional[str] = last_url
-    while current_url is not None:
-        if _is_first_page_url(current_url):
-            # Reuse the already-fetched page-1 data — no extra API request.
-            page_data = first_page_data
-            page_links = first_page_links
-            logger.debug("Backward traversal reached page 1; using cached data")
-        else:
-            page_data, page_links = client.rest_request_url_with_all_links(current_url)
+    if next_url:
+        # rel="last" omitted but rel="next" is present: fetch remaining pages, oldest-first.
+        pages: list[list[dict]] = [first_page_data]
+        current_links = first_page_links
+        while current_links.get("next"):
+            forward_url = current_links["next"]
+            page_data, current_links = client.rest_request_url_with_all_links(
+                forward_url
+            )
             logger.debug(
-                "Fetched %d commits (backward traversal) from %s",
+                "Fetched %d commits (forward pagination) from %s",
                 len(page_data) if page_data else 0,
-                current_url,
+                forward_url,
             )
             time.sleep(0.2)
+            pages.append(page_data or [])
 
-        for commit in reversed(page_data or []):
-            yield from _yield_commit_with_stats(
-                client, owner, repo, commit, start_time, end_time
-            )
+        for page_data in reversed(pages):
+            for commit in reversed(page_data):
+                yield from _yield_commit_with_stats(
+                    client, owner, repo, commit, start_time, end_time
+                )
+        if etag_cache is not None and first_page_etag:
+            etag_cache.set("commits", 1, since_iso, until_iso, first_page_etag)
+        return
 
-        current_url = page_links.get("prev")
-
+    # No pagination: neither next nor a multi-page last link.
+    logger.debug("Single page of commits; processing in reverse order")
+    for commit in reversed(first_page_data):
+        yield from _yield_commit_with_stats(
+            client, owner, repo, commit, start_time, end_time
+        )
     if etag_cache is not None and first_page_etag:
         etag_cache.set("commits", 1, since_iso, until_iso, first_page_etag)
 

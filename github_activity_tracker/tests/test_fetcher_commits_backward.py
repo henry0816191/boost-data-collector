@@ -29,6 +29,37 @@ def test_fetch_commits_single_page_yields_oldest_first():
     assert [c["sha"] for c in commits] == ["c1", "c2", "c3"]
 
 
+def test_fetch_commits_next_without_last_forward_pagination():
+    """When rel=last is omitted but rel=next is present, follow next for all pages."""
+    client = MagicMock()
+
+    client.rest_request_with_all_links.return_value = (
+        [{"sha": "c3", "commit": {"author": {"date": "2024-01-03T00:00:00Z"}}}],
+        {"next": "https://api.github.com/repos/o/r/commits?page=2"},
+    )
+
+    client.rest_request_url_with_all_links.side_effect = [
+        (
+            [{"sha": "c2", "commit": {"author": {"date": "2024-01-02T00:00:00Z"}}}],
+            {"next": "https://api.github.com/repos/o/r/commits?page=3"},
+        ),
+        (
+            [{"sha": "c1", "commit": {"author": {"date": "2024-01-01T00:00:00Z"}}}],
+            {},
+        ),
+    ]
+
+    client.rest_request.side_effect = lambda url: {
+        "sha": url.split("/")[-1],
+        "stats": {},
+    }
+
+    commits = list(fetch_commits_from_github(client, "owner", "repo"))
+
+    assert [c["sha"] for c in commits] == ["c1", "c2", "c3"]
+    assert client.rest_request_url_with_all_links.call_count == 2
+
+
 def test_fetch_commits_multiple_pages_backward_traversal():
     """fetch_commits_from_github walks backward from last page to first."""
     client = MagicMock()

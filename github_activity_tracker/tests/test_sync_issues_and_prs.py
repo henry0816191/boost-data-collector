@@ -62,10 +62,10 @@ def test_sync_issues_and_prs_processes_both_types(
 @patch("github_activity_tracker.sync.issues_and_prs.fetcher")
 @patch("github_activity_tracker.sync.issues_and_prs._process_existing_issue_jsons")
 @patch("github_activity_tracker.sync.issues_and_prs._process_existing_pr_jsons")
-def test_sync_issues_and_prs_uses_min_start_date(
+def test_sync_issues_and_prs_uses_max_start_date(
     mock_existing_prs, mock_existing_issues, mock_fetcher, mock_get_client
 ):
-    """sync_issues_and_prs uses earliest of last_issue and last_pr updated_at as start_date."""
+    """sync_issues_and_prs uses the later of last_issue and last_pr (+1s) as start_date."""
     mock_repo = MagicMock()
     mock_repo.owner_account.username = "owner"
     mock_repo.repo_name = "repo"
@@ -75,7 +75,7 @@ def test_sync_issues_and_prs_uses_min_start_date(
     mock_last_issue.issue_updated_at = datetime(2024, 1, 5, tzinfo=timezone.utc)
     mock_repo.issues.order_by.return_value.first.return_value = mock_last_issue
 
-    # Last PR updated at 2024-01-03 (earlier)
+    # Last PR updated at 2024-01-03 (older than last issue)
     mock_last_pr = MagicMock()
     mock_last_pr.pr_updated_at = datetime(2024, 1, 3, tzinfo=timezone.utc)
     mock_repo.pull_requests.order_by.return_value.first.return_value = mock_last_pr
@@ -89,10 +89,10 @@ def test_sync_issues_and_prs_uses_min_start_date(
 
     sync_issues_and_prs(mock_repo)
 
-    # Should use 2024-01-03 + 1s (earliest)
+    # Should use max(issue_date, pr_date) → 2024-01-05 + 1s
     call_args = mock_fetcher.fetch_issues_and_prs_from_github.call_args
     start_date = call_args[0][3]  # Fourth positional arg
-    assert start_date == datetime(2024, 1, 3, 0, 0, 1, tzinfo=timezone.utc)
+    assert start_date == datetime(2024, 1, 5, 0, 0, 1, tzinfo=timezone.utc)
 
 
 @patch("github_activity_tracker.sync.issues_and_prs.get_github_client")
