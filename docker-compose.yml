@@ -33,7 +33,7 @@ services:
     platform: linux/amd64
     shm_size: "2g"
     ports:
-      - "4444:4444"
+      - "127.0.0.1:4444:4444"
     healthcheck:
       test:
         [
@@ -48,18 +48,22 @@ services:
   web:
     build: .
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file: .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-boost}:${POSTGRES_PASSWORD:-boost}@db:5432/${POSTGRES_DB:-boost_dashboard}
+      # If DATABASE_URL is set in .env, it is used; else default targets a Compose service named db.
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-boost}:${POSTGRES_PASSWORD:-boost}@db:5432/${POSTGRES_DB:-boost_dashboard}}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
-      ALLOWED_HOSTS: localhost,127.0.0.1,web,0.0.0.0
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,web,0.0.0.0}
       SELENIUM_HUB_URL: http://selenium:4444/wd/hub
     volumes:
       - workspace_data:/app/workspace
       - logs_data:/app/logs
+      - ./staticfiles:/app/staticfiles
     depends_on:
       # db: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -67,9 +71,11 @@ services:
   celery_worker:
     build: .
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file: .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-boost}:${POSTGRES_PASSWORD:-boost}@db:5432/${POSTGRES_DB:-boost_dashboard}
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-boost}:${POSTGRES_PASSWORD:-boost}@db:5432/${POSTGRES_DB:-boost_dashboard}}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       SELENIUM_HUB_URL: http://selenium:4444/wd/hub
@@ -84,9 +90,11 @@ services:
   celery_beat:
     build: .
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file: .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-boost}:${POSTGRES_PASSWORD:-boost}@db:5432/${POSTGRES_DB:-boost_dashboard}
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-boost}:${POSTGRES_PASSWORD:-boost}@db:5432/${POSTGRES_DB:-boost_dashboard}}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     volumes:
