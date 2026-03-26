@@ -121,7 +121,7 @@ This matches a common production/staging layout for this repo:
 - **On the host:** PostgreSQL (package install), **nginx** (TLS + reverse proxy).
 - **In Docker Compose:** `web` (Gunicorn), `celery_worker`, `celery_beat`, `redis`, `selenium`. The bundled **`db` service is commented out** in `docker-compose.yml`; the app uses **`DATABASE_URL`** to reach PostgreSQL on the host.
 
-Compose already sets `extra_hosts: host.docker.internal:host-gateway` on app containers so `DATABASE_URL` can use host `host.docker.internal` (see `.env.example`).
+Compose already sets `extra_hosts: host.docker.internal:host-gateway` on app containers so `DATABASE_URL` can use host `host.docker.internal` (see `.env.example`). **`DATABASE_URL` is required** in `.env` for `docker compose` (there is no default to a bundled `db` service while that service stays commented out).
 
 ### Google Cloud Storage (optional seed and backups)
 
@@ -177,7 +177,7 @@ sudo -u postgres psql
 In the `psql` session:
 
 ```sql
-CREATE ROLE bdc WITH LOGIN PASSWORD 'REPLACE_WITH_STRONG_PASSWORD' CREATEDB;
+CREATE ROLE bdc WITH LOGIN PASSWORD 'REPLACE_WITH_STRONG_PASSWORD';
 DROP DATABASE IF EXISTS boost_dashboard;
 CREATE DATABASE boost_dashboard OWNER bdc;
 GRANT ALL PRIVILEGES ON DATABASE boost_dashboard TO bdc;
@@ -186,6 +186,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO bdc;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO bdc;
 CREATE ROLE app_readonly NOLOGIN;
 ```
+
+Run these statements as a superuser (e.g. `postgres`). The app role does not need `CREATEDB`; the database is created explicitly above. If you need a separate migration-only user with broader rights, create that role separately.
 
 If your dump replays `GRANT … TO app_readonly`, the `app_readonly` role must exist before restore (as above).
 
@@ -221,6 +223,7 @@ Also set production-safe values for:
 - **`ALLOWED_HOSTS`** — your public hostname(s).
 - **`CSRF_TRUSTED_ORIGINS`** — `https://your.hostname` entries for HTTPS sites.
 - **`USE_X_FORWARDED_HOST=True`** and **`USE_TLS_PROXY_HEADERS=True`** when Django sits behind nginx terminating TLS (see comments in `config/settings.py`).
+- **`STATIC_URL`** / **`FORCE_SCRIPT_NAME`** — only if you serve the app under a URL prefix; see the optional nginx subsection below.
 
 ### Docker stack
 
@@ -238,7 +241,9 @@ The deploy script runs `make down`, `make build`, `make up`, then polls `make he
 
 `docker-compose.yml` publishes Gunicorn on **`127.0.0.1:8000`** only. Terminate TLS on the host with nginx and proxy to that port.
 
-Example site snippet (adjust `server_name`, certificate paths, and `client_max_body_size` as needed):
+#### At site root (`/`)
+
+The following example assumes the app is served at the **domain root** (`https://collector.example.org/`) and static files at **`/static/`**.
 
 ```nginx
 upstream boost_collector_app {
@@ -268,6 +273,47 @@ server {
 
     location /static/ {
         alias /opt/boost-data-collector/staticfiles/;
+    }
+}
+```
+
+#### Optional: URL prefix (subpath)
+
+If the app must live under a prefix (e.g. `https://example.org/boost-data-collector/`), set in `.env`:
+
+- `FORCE_SCRIPT_NAME=/boost-data-collector` (no trailing slash)
+- `STATIC_URL=/boost-data-collector/static/` (must end with `/`)
+
+Example nginx (adjust the prefix string to match your `FORCE_SCRIPT_NAME`):
+
+```nginx
+upstream boost_collector_app {
+    server 127.0.0.1:8000;
+    keepalive 32;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name example.org;
+
+    ssl_certificate     /etc/letsencrypt/live/example.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.org/privkey.pem;
+
+    client_max_body_size 100M;
+
+    location /boost-data-collector/static/ {
+        alias /opt/boost-data-collector/staticfiles/;
+    }
+
+    location /boost-data-collector/ {
+        proxy_pass         http://boost_collector_app/;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_redirect     off;
+        proxy_read_timeout 300s;
     }
 }
 ```
