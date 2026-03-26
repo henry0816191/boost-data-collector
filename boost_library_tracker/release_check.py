@@ -12,7 +12,8 @@ Uses the repository **tags** API so new tags are visible as soon as they are pus
 """
 
 import logging
-import re
+
+from core.utils.boost_version_operations import parse_stable_boost_release_tag
 
 from boost_library_tracker.models import BoostVersion
 from github_ops.client import GitHubAPIClient
@@ -23,27 +24,7 @@ logger = logging.getLogger(__name__)
 MAIN_OWNER = "boostorg"
 MAIN_REPO = "boost"
 
-# Only boost-X.Y.Z (three numeric parts, no suffix like -beta, -rc, etc.)
-BOOST_TAG_PATTERN = re.compile(r"^boost-(\d+)\.(\d+)\.(\d+)$")
 MIN_BOOST_VERSION = (1, 16, 1)
-
-
-def _parse_stable_version(tag_name: str) -> str | None:
-    """
-    If ``tag_name`` is a stable release tag ``boost-X.Y.Z`` with version >= MIN_BOOST_VERSION,
-    return the canonical tag string (e.g. ``boost-1.90.0``).
-
-    Return ``None`` for non-matching names, pre-release-style tags, or versions below the minimum.
-    """
-    if not tag_name:
-        return None
-    m = BOOST_TAG_PATTERN.match(tag_name.strip())
-    if not m:
-        return None
-    major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    if (major, minor, patch) < MIN_BOOST_VERSION:
-        return None
-    return f"boost-{major}.{minor}.{patch}"
 
 
 def all_boost_versions_from_api() -> list[tuple[str, str]] | None:
@@ -76,7 +57,9 @@ def all_boost_versions_from_api() -> list[tuple[str, str]] | None:
         if not page_tags:
             break
         for tag in page_tags:
-            stable_tag = _parse_stable_version(tag.get("name", ""))
+            stable_tag = parse_stable_boost_release_tag(
+                tag.get("name", ""), MIN_BOOST_VERSION
+            )
             if not stable_tag:
                 continue
             tag_commit = tag.get("commit") or {}

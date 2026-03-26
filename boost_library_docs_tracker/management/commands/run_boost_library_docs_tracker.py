@@ -325,7 +325,7 @@ class Command(BaseCommand):
     def _save_pages_to_workspace_and_db(
         self, *, version, lib_name, lib_version_id, boost_version_id, pages
     ):
-        created = changed = unchanged = 0
+        created = unchanged = 0
 
         for url, page_text in pages:
             content_hash = hashlib.sha256(page_text.encode()).hexdigest()
@@ -348,8 +348,6 @@ class Command(BaseCommand):
 
             if change_type == "created":
                 created += 1
-            elif change_type == "content_changed":
-                changed += 1
             else:
                 unchanged += 1
 
@@ -363,9 +361,7 @@ class Command(BaseCommand):
                     exc,
                 )
 
-        self.stdout.write(
-            f"  [{lib_name}] created={created}, changed={changed}, unchanged={unchanged}."
-        )
+        self.stdout.write(f"  [{lib_name}] created={created}, unchanged={unchanged}.")
 
     # ------------------------------------------------------------------
     # Pinecone sync

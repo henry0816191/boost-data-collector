@@ -37,9 +37,10 @@ def get_or_create_doc_content(
       - On update: updates last_version to version_id.
 
     Returns (doc_content, change_type) where change_type is one of:
-      "created"         — content_hash was not in DB; row inserted.
-      "content_changed" — URL exists for this hash but url field differs; url updated.
-      "unchanged"       — content_hash already exists; only scraped_at and last_version updated.
+      "created"    — content_hash was not in DB; row inserted.
+      "unchanged"  — content_hash already existed; row may still be updated
+        (url, scraped_at, last_version / first_version as applicable). The document
+        body identity is the same hash, not a new page.
 
     Raises ValueError if url is empty.
     """
@@ -69,7 +70,6 @@ def get_or_create_doc_content(
     if obj.url != normalized_url:
         obj.url = normalized_url
         update_fields.append("url")
-        change_type = "content_changed"
 
     if version_id is not None:
         obj.last_version_id = version_id

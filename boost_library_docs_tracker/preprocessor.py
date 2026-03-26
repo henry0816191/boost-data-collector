@@ -20,6 +20,8 @@ import logging
 from datetime import datetime
 from typing import Any
 
+from core.utils.boost_version_operations import encode_boost_version_string
+
 from .models import BoostDocContent
 from . import workspace
 
@@ -163,17 +165,23 @@ def _build_documents(
 
         library_name = _get_library_name(doc_content)
 
+        metadata: dict[str, Any] = {
+            "doc_id": doc_content.content_hash,
+            "url": doc_content.url,
+            "library_name": library_name,
+            "ids": str(doc_content.pk),
+        }
+        fk = encode_boost_version_string(first_version_str)
+        if fk is not None:
+            metadata["first_version_key"] = fk
+        lk = encode_boost_version_string(last_version_str)
+        if lk is not None:
+            metadata["last_version_key"] = lk
+
         documents.append(
             {
                 "content": page_content,
-                "metadata": {
-                    "doc_id": doc_content.content_hash,
-                    "url": doc_content.url,
-                    "first_version": first_version_str,
-                    "last_version": last_version_str,
-                    "library_name": library_name,
-                    "ids": str(doc_content.pk),
-                },
+                "metadata": metadata,
             }
         )
         ids_to_mark.append(doc_content.pk)
