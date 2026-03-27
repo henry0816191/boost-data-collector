@@ -1,11 +1,11 @@
-"""Tests for boost_mailing_list_tracker.preprocesser."""
+"""Tests for boost_mailing_list_tracker.preprocessor."""
 
 from datetime import timedelta
 
 import pytest
 from django.utils import timezone
 
-from boost_mailing_list_tracker.preprocesser import (
+from boost_mailing_list_tracker.preprocessor import (
     preprocess_mailing_list_for_pinecone,
 )
 

@@ -61,7 +61,7 @@ def _run_pinecone_sync(app_type: str, namespace: str) -> None:
             "run_cppa_pinecone_sync",
             app_type=app_type,
             namespace=namespace,
-            preprocessor="boost_mailing_list_tracker.preprocesser.preprocess_mailing_list_for_pinecone",
+            preprocessor="boost_mailing_list_tracker.preprocessor.preprocess_mailing_list_for_pinecone",
         )
         logger.info(
             "run_boost_mailing_list_tracker: pinecone sync completed (app_type=%s, namespace=%s)",
