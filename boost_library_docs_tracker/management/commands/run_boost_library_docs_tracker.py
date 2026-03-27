@@ -147,8 +147,6 @@ class Command(BaseCommand):
         mode = "local-zip" if use_local else "HTTP crawl"
         self.stdout.write(f"Scrape mode: {mode}")
 
-        self._sync_pinecone()
-
         for version in versions:
             self._process_version(
                 version=version,
