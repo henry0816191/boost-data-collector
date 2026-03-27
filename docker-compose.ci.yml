@@ -1,4 +1,4 @@
-# CI-only overlay: enables Postgres (base compose references @db but db is commented out).
+# CI-only overlay: adds a db service and health deps; base compose requires DATABASE_URL in .env.
 services:
   db:
     image: postgres:16-alpine

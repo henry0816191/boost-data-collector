@@ -26,6 +26,22 @@ DEBUG = env("DEBUG")
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
+# Reverse proxy (e.g. nginx terminating TLS). Enable USE_TLS_PROXY_HEADERS only behind a trusted proxy.
+USE_X_FORWARDED_HOST = env.bool("USE_X_FORWARDED_HOST", default=False)
+if env.bool("USE_TLS_PROXY_HEADERS", default=False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
+_static_url = (env("STATIC_URL", default="static/") or "static/").strip()
+if _static_url and not _static_url.endswith("/"):
+    _static_url += "/"
+STATIC_URL = _static_url
+
+_force_script_name = (env("FORCE_SCRIPT_NAME", default="") or "").strip()
+if _force_script_name:
+    FORCE_SCRIPT_NAME = _force_script_name
+
 # Application definition
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -123,8 +139,7 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-# Static files
-STATIC_URL = "static/"
+# Static files (STATIC_URL set above from env; STATIC_ROOT is collectstatic output)
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Workspace: one folder for raw/processed files, subfolders per app (see docs/Workspace.md)
