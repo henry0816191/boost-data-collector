@@ -9,6 +9,7 @@
 SHELL := /bin/bash
 COMPOSE   := docker compose
 APP       := web
+BEAT      := celery_beat
 MANAGE    := $(COMPOSE) run --rm $(APP) python manage.py
 
 .DEFAULT_GOAL := help
@@ -32,6 +33,7 @@ help:
 	@echo "  Logs & status"
 	@echo "    ps             Show running containers"
 	@echo "    health         Verify DB, Redis, Selenium, and Celery containers"
+	@echo "    notify         Send Slack/Discord startup notification (celery_beat; optional DEPLOY_BRANCH)"
 	@echo "    logs           Follow logs for all services"
 	@echo "    logs-web       Follow logs for the web service"
 	@echo "    logs-worker    Follow logs for the Celery worker"
@@ -100,6 +102,10 @@ health:
 	$(COMPOSE) exec -T selenium curl -sf http://localhost:4444/status | grep -qE '"ready"[[:space:]]*:[[:space:]]*true'
 	$(COMPOSE) ps --status running celery_worker | grep -q celery_worker
 	$(COMPOSE) ps --status running celery_beat | grep -q celery_beat
+
+.PHONY: notify
+notify:
+	$(COMPOSE) exec -T -e DEPLOY_BRANCH="$(DEPLOY_BRANCH)" $(BEAT) python manage.py send_startup_notification
 
 .PHONY: logs
 logs:

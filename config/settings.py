@@ -454,6 +454,8 @@ _LOG_FILE_PATH = LOG_DIR / LOG_FILE
 ENABLE_ERROR_NOTIFICATIONS = env.bool("ENABLE_ERROR_NOTIFICATIONS", default=False)
 DISCORD_WEBHOOK_URL = env("DISCORD_WEBHOOK_URL", default="")
 SLACK_WEBHOOK_URL = env("SLACK_WEBHOOK_URL", default="")
+# Post to webhooks after deploy (see make notify / send_startup_notification)
+ENABLE_STARTUP_NOTIFICATIONS = env.bool("ENABLE_STARTUP_NOTIFICATIONS", default=True)
 
 LOGGING = {
     "version": 1,
