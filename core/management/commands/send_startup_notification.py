@@ -57,7 +57,12 @@ def describe_celery_schedule(sched) -> str:
         hours = _crontab_field_to_sorted_ints(sched.hour)
         minutes = _crontab_field_to_sorted_ints(sched.minute)
         parts = []
-        if hours is not None and minutes is not None and len(hours) == 1 and len(minutes) == 1:
+        if (
+            hours is not None
+            and minutes is not None
+            and len(hours) == 1
+            and len(minutes) == 1
+        ):
             parts.append(f"{hours[0]:02d}:{minutes[0]:02d} UTC")
         else:
             parts.append(f"crontab hour={sched.hour!r} minute={sched.minute!r}")
@@ -110,7 +115,11 @@ def post_slack(webhook_url: str, title: str, text: str) -> None:
         },
         {"type": "section", "text": {"type": "mrkdwn", "text": f"```{text[:2800]}```"}},
     ]
-    payload = {"username": "Boost Data Collector", "blocks": blocks, "icon_emoji": ":white_check_mark:"}
+    payload = {
+        "username": "Boost Data Collector",
+        "blocks": blocks,
+        "icon_emoji": ":white_check_mark:",
+    }
     data = json.dumps(payload).encode("utf-8")
     req = request.Request(
         webhook_url,
@@ -127,13 +136,17 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if not getattr(settings, "ENABLE_STARTUP_NOTIFICATIONS", True):
-            logger.info("Startup notifications disabled (ENABLE_STARTUP_NOTIFICATIONS).")
+            logger.info(
+                "Startup notifications disabled (ENABLE_STARTUP_NOTIFICATIONS)."
+            )
             return
 
         discord_url = (getattr(settings, "DISCORD_WEBHOOK_URL", None) or "").strip()
         slack_url = (getattr(settings, "SLACK_WEBHOOK_URL", None) or "").strip()
         if not discord_url and not slack_url:
-            logger.info("No DISCORD_WEBHOOK_URL or SLACK_WEBHOOK_URL; skipping notification.")
+            logger.info(
+                "No DISCORD_WEBHOOK_URL or SLACK_WEBHOOK_URL; skipping notification."
+            )
             return
 
         notify_at = datetime.now(timezone.utc)
