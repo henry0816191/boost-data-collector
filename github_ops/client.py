@@ -400,6 +400,21 @@ class GitHubAPIClient:
         next_url = self._parse_link_next(response.headers.get("Link"))
         return (response.json(), response_etag, next_url)
 
+    def rest_request_conditional_with_all_links(
+        self,
+        endpoint: str,
+        params: Optional[dict] = None,
+        etag: Optional[str] = None,
+    ) -> tuple[Optional[Union[list, dict]], Optional[str], dict[str, str]]:
+        """Like rest_request_conditional but returns all Link rels as a dict.
+        Returns (data, response_etag, links_dict). On 304: (None, etag, {}).
+        """
+        response, response_etag = self._rest_get(endpoint, params=params, etag=etag)
+        if response is None:
+            return (None, response_etag, {})
+        links = self._parse_link_rels(response.headers.get("Link"))
+        return (response.json(), response_etag, links)
+
     @staticmethod
     def _parse_link_next(link_header: Optional[str]) -> Optional[str]:
         """Parse GitHub Link response header; return URL for rel=\"next\" or None.
@@ -409,6 +424,42 @@ class GitHubAPIClient:
             return None
         match = re.search(r'<([^>]+)>;\s*rel="next"', link_header)
         return match.group(1) if match else None
+
+    @staticmethod
+    def _parse_link_rels(link_header: Optional[str]) -> dict[str, str]:
+        """Parse GitHub Link response header; return a dict of all rel→url pairs.
+        Example: {"next": "https://...", "last": "https://...", "prev": "https://..."}
+        """
+        if not link_header:
+            return {}
+        return {
+            rel: url
+            for url, rel in re.findall(r'<([^>]+)>;\s*rel="([^"]+)"', link_header)
+        }
+
+    def rest_request_with_all_links(
+        self, endpoint: str, params: Optional[dict] = None
+    ) -> tuple[Union[list, dict], dict[str, str]]:
+        """GET request that returns (data, links_dict) with all Link rels.
+        links_dict keys include "next", "prev", "last", "first" when present.
+        """
+        response, _ = self._rest_get(endpoint, params=params)
+        if response is None:
+            return ({}, {})
+        data = response.json()
+        links = self._parse_link_rels(response.headers.get("Link"))
+        return (data, links)
+
+    def rest_request_url_with_all_links(
+        self, full_url: str
+    ) -> tuple[Union[list, dict], dict[str, str]]:
+        """GET full_url (e.g. from Link header) and return (data, links_dict) with all rels.
+        Uses same session (auth, rate limit). For paginated backward/forward traversal.
+        """
+        response = self._rest_get_url(full_url)
+        data = response.json()
+        links = self._parse_link_rels(response.headers.get("Link"))
+        return (data, links)
 
     def rest_request_with_link(
         self, endpoint: str, params: Optional[dict] = None

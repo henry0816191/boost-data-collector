@@ -46,7 +46,8 @@ def _commit_date(commit_data: dict) -> datetime | None:
 
 def _issue_date(issue_data: dict) -> datetime | None:
     """Extract updated_at or created_at from GitHub issue payload.
-    Fetcher yields {issue_info: <detail>, comments: [...]}, so check nested first."""
+    Fetcher yields {issue_info: <detail>, comments: [...]}, so check nested first.
+    """
     info = issue_data.get("issue_info") or issue_data
     date_str = info.get("updated_at") or info.get("created_at")
     if not date_str:
@@ -77,8 +78,15 @@ def sync_raw_only(
 
     Args:
         start_commit: Start date for commits (None = from beginning).
-        start_issue: Start date for issues (None = from beginning).
-        start_pr: Start date for PRs (None = from beginning).
+        start_issue: Issue watermark for the unified issues+PRs fetch (one ``/issues``
+            list with both item kinds). ``None`` only means “no issue cursor” when
+            deriving the shared start: if ``start_pr`` is also ``None``, the unified
+            fetch runs from the beginning; if ``start_pr`` is set, that timestamp is
+            used as the single lower bound for the whole list (issues are filtered
+            by the same window). When both ``start_issue`` and ``start_pr`` are set,
+            the shared lower bound is the **later** of the two (``max``), so one
+            GitHub query covers both types from that time forward.
+        start_pr: PR watermark; same shared-bound semantics as ``start_issue``.
         end_date: End date for all (default: now).
 
     Returns:
@@ -105,6 +113,13 @@ def sync_raw_only(
     latest_issue: datetime | None = None
     latest_pr: datetime | None = None
 
+    # Single lower bound for the unified /issues fetch: later of the two when both
+    # watermarks exist; otherwise whichever side is initialized (or None if both).
+    if start_issue and start_pr:
+        start_item = max(start_issue, start_pr)
+    else:
+        start_item = start_issue or start_pr
+
     try:
         # Commits
         for commit_data in fetcher.fetch_commits_from_github(
@@ -120,35 +135,31 @@ def sync_raw_only(
         if latest_commit is not None:
             clang_state.save_state(last_commit_date=latest_commit, merge=True)
 
-        # Issues
-        for issue_data in fetcher.fetch_issues_from_github(
-            client, owner, repo, start_issue, end_date
+        # Issues and PRs — fetched together via a single /issues list call.
+        for item in fetcher.fetch_issues_and_prs_from_github(
+            client, owner, repo, start_item, end_date
         ):
-            issue_number = issue_data.get("number") or (
-                issue_data.get("issue_info") or {}
-            ).get("number")
-            if issue_number is not None:
-                save_issue_raw_source(owner, repo, issue_data)
-                issue_numbers.append(issue_number)
-                dt = _issue_date(issue_data)
-                if dt and (latest_issue is None or dt > latest_issue):
-                    latest_issue = dt
+            if "pr_info" in item:
+                pr_number = (item["pr_info"] or {}).get("number")
+                if pr_number is not None:
+                    save_pr_raw_source(owner, repo, item)
+                    pr_numbers.append(pr_number)
+                    dt = _pr_date(item)
+                    if dt and (latest_pr is None or dt > latest_pr):
+                        latest_pr = dt
+            else:
+                issue_number = (item.get("issue_info") or {}).get("number") or item.get(
+                    "number"
+                )
+                if issue_number is not None:
+                    save_issue_raw_source(owner, repo, item)
+                    issue_numbers.append(issue_number)
+                    dt = _issue_date(item)
+                    if dt and (latest_issue is None or dt > latest_issue):
+                        latest_issue = dt
+
         if latest_issue is not None:
             clang_state.save_state(last_issue_date=latest_issue, merge=True)
-
-        # PRs
-        for pr_data in fetcher.fetch_pull_requests_from_github(
-            client, owner, repo, start_pr, end_date
-        ):
-            pr_number = (pr_data.get("pr_info") or {}).get("number") or pr_data.get(
-                "number"
-            )
-            if pr_number is not None:
-                save_pr_raw_source(owner, repo, pr_data)
-                pr_numbers.append(pr_number)
-                dt = _pr_date(pr_data)
-                if dt and (latest_pr is None or dt > latest_pr):
-                    latest_pr = dt
         if latest_pr is not None:
             clang_state.save_state(last_pr_date=latest_pr, merge=True)
 

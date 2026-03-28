@@ -61,8 +61,8 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,web,0.0.0.0}
       SELENIUM_HUB_URL: http://selenium:4444/wd/hub
     volumes:
-      - workspace_data:/app/workspace
-      - logs_data:/app/logs
+      - ./workspace:/app/workspace
+      - ./logs:/app/logs
       - ./staticfiles:/app/staticfiles
     depends_on:
       # db: { condition: service_healthy }
@@ -80,8 +80,8 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       SELENIUM_HUB_URL: http://selenium:4444/wd/hub
     volumes:
-      - workspace_data:/app/workspace
-      - logs_data:/app/logs
+      - ./workspace:/app/workspace
+      - ./logs:/app/logs
     command: celery -A config worker -l info
     depends_on:
       # db: { condition: service_healthy }
@@ -98,8 +98,8 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     volumes:
-      - workspace_data:/app/workspace
-      - logs_data:/app/logs
+      - ./workspace:/app/workspace
+      - ./logs:/app/logs
       - celerybeat_data:/app/celerybeat
     command: celery -A config beat -l info
     depends_on:
@@ -109,6 +109,6 @@ services:
 
 volumes:
   postgres_data:
-  workspace_data:
-  logs_data:
+  # workspace_data:
+  # logs_data:
   celerybeat_data:

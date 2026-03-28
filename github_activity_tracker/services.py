@@ -196,7 +196,6 @@ def create_or_update_commit(
     commit_at: Optional[datetime] = None,
 ) -> tuple[GitCommit, bool]:
     """Create or update a GitCommit by repo + commit_hash. Returns (commit, created)."""
-    from datetime import datetime, timezone
 
     if not commit_at:
         commit_at = datetime.now(timezone.utc)
@@ -377,7 +376,6 @@ def create_or_update_issue(
         issue_obj.issue_created_at = issue_created_at
         issue_obj.issue_updated_at = issue_updated_at
         issue_obj.issue_closed_at = issue_closed_at
-        issue_obj.updated_at = datetime.now(timezone.utc)
         issue_obj.save()
     return issue_obj, created
 
@@ -465,7 +463,6 @@ def create_or_update_pull_request(
         pr_obj.pr_updated_at = pr_updated_at
         pr_obj.pr_merged_at = pr_merged_at
         pr_obj.pr_closed_at = pr_closed_at
-        pr_obj.updated_at = datetime.now(timezone.utc)
         pr_obj.save()
     return pr_obj, created
 
