@@ -85,7 +85,7 @@ def _wait_seconds_for_github_403(r: requests.Response, attempt: int) -> float:
         except (TypeError, ValueError):
             pass
 
-    base = 5.0 * (2.0**attempt)
+    base = 60.0 * (2.0**attempt)
     wait = min(base + random.uniform(0, 2), max_sleep)
     return wait
 

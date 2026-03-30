@@ -554,7 +554,7 @@ def test_create_blob_with_retry_403_exponential_when_no_headers():
                     mock_path,
                 )
     assert out == ("f.txt", "sha_ok")
-    sleep_mock.assert_called_once_with(5.0)
+    sleep_mock.assert_called_once_with(60.0)
 
 
 # --- get_commit_file_changes ---
