@@ -29,9 +29,7 @@ def publish_dashboard(
     ``settings.GIT_AUTHOR_NAME`` / ``settings.GIT_AUTHOR_EMAIL`` for the commit
     identity (via env vars on ``git commit`` only).
     """
-    clone_dir = (
-        Path(settings.RAW_DIR) / "boost_library_usage_dashboard" / owner / repo
-    )
+    clone_dir = Path(settings.RAW_DIR) / "boost_library_usage_dashboard" / owner / repo
     clone_dir = clone_dir.resolve()
     output_dir = output_dir.resolve()
     if (
@@ -82,9 +80,7 @@ def publish_dashboard(
             shutil.copy2(child, dest)
 
     commit_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    commit_message = (
-        f"Update Boost library usage dashboard artifacts ({commit_time})"
-    )
+    commit_message = f"Update Boost library usage dashboard artifacts ({commit_time})"
     push(
         clone_dir,
         remote="origin",
