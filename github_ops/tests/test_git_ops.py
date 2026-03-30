@@ -496,6 +496,67 @@ def test_create_blob_with_retry_returns_sha_on_success():
     mock_session.post.assert_called_once()
 
 
+def test_create_blob_with_retry_403_waits_using_rate_limit_reset():
+    """_create_blob_with_retry sleeps until X-RateLimit-Reset when Remaining is 0."""
+    mock_403 = MagicMock()
+    mock_403.status_code = 403
+    mock_403.headers = {
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": "1007",
+    }
+    mock_ok = MagicMock()
+    mock_ok.status_code = 201
+    mock_ok.json.return_value = {"sha": "sha_after_reset_wait"}
+    mock_ok.raise_for_status = MagicMock()
+
+    mock_session = MagicMock()
+    mock_session.post.side_effect = [mock_403, mock_ok]
+    mock_path = MagicMock()
+    mock_path.read_bytes.return_value = b"x"
+
+    with patch("github_ops.git_ops._get_worker_session", return_value=mock_session):
+        with patch("github_ops.git_ops.time.time", return_value=1000.0):
+            with patch("github_ops.git_ops.random.uniform", return_value=0.0):
+                with patch("github_ops.git_ops.time.sleep") as sleep_mock:
+                    out = _create_blob_with_retry(
+                        "https://api.github.com/repos/o/r",
+                        "token",
+                        "f.txt",
+                        mock_path,
+                    )
+    assert out == ("f.txt", "sha_after_reset_wait")
+    sleep_mock.assert_called_once_with(7.0)
+    assert mock_session.post.call_count == 2
+
+
+def test_create_blob_with_retry_403_exponential_when_no_headers():
+    """_create_blob_with_retry uses exponential backoff on 403 without rate-limit headers."""
+    mock_403 = MagicMock()
+    mock_403.status_code = 403
+    mock_403.headers = {}
+    mock_ok = MagicMock()
+    mock_ok.status_code = 201
+    mock_ok.json.return_value = {"sha": "sha_ok"}
+    mock_ok.raise_for_status = MagicMock()
+
+    mock_session = MagicMock()
+    mock_session.post.side_effect = [mock_403, mock_ok]
+    mock_path = MagicMock()
+    mock_path.read_bytes.return_value = b"x"
+
+    with patch("github_ops.git_ops._get_worker_session", return_value=mock_session):
+        with patch("github_ops.git_ops.random.uniform", return_value=0.0):
+            with patch("github_ops.git_ops.time.sleep") as sleep_mock:
+                out = _create_blob_with_retry(
+                    "https://api.github.com/repos/o/r",
+                    "token",
+                    "f.txt",
+                    mock_path,
+                )
+    assert out == ("f.txt", "sha_ok")
+    sleep_mock.assert_called_once_with(5.0)
+
+
 # --- get_commit_file_changes ---
 
 

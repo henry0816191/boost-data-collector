@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import random
 import re
 import subprocess
 import threading
@@ -26,9 +27,14 @@ from github_ops.tokens import get_github_client, get_github_token
 logger = logging.getLogger(__name__)
 
 # Fewer workers to avoid GitHub secondary rate limit (403 when too many concurrent requests)
-_UPLOAD_FOLDER_MAX_WORKERS = 8
+_UPLOAD_FOLDER_MAX_WORKERS = 4
 _UPLOAD_FOLDER_BLOB_RETRIES = 5
-_UPLOAD_FOLDER_403_WAIT_SEC = 60
+# Cap concurrent blob POSTs across all executor threads (primary + secondary limit relief)
+_UPLOAD_FOLDER_BLOB_MAX_CONCURRENT = 3
+# Max seconds to sleep in one wait after 403 (avoid unbounded sleeps from bad headers)
+_UPLOAD_FOLDER_403_MAX_SLEEP_SEC = 900
+
+_blob_post_semaphore = threading.BoundedSemaphore(_UPLOAD_FOLDER_BLOB_MAX_CONCURRENT)
 _thread_local = threading.local()
 
 
@@ -50,6 +56,40 @@ def _get_worker_session(token: str) -> requests.Session:
     return _thread_local.session
 
 
+def _wait_seconds_for_github_403(r: requests.Response, attempt: int) -> float:
+    """Sleep duration after a 403 from GitHub (primary limit, Retry-After, or fallback)."""
+    max_sleep = float(_UPLOAD_FOLDER_403_MAX_SLEEP_SEC)
+    h = r.headers
+
+    remaining = h.get("X-RateLimit-Remaining")
+    reset_raw = h.get("X-RateLimit-Reset")
+    try:
+        if remaining is not None and int(remaining) == 0 and reset_raw is not None:
+            reset_ts = int(reset_raw)
+            wait = max(0.0, float(reset_ts) - time.time())
+            if wait < 1.0:
+                wait = 1.0
+            wait += random.uniform(0, 2)
+            return min(wait, max_sleep)
+    except (TypeError, ValueError):
+        pass
+
+    ra = h.get("Retry-After")
+    if ra is not None:
+        try:
+            wait = float(ra)
+            if wait < 1.0:
+                wait = 1.0
+            wait += random.uniform(0, 1)
+            return min(wait, max_sleep)
+        except (TypeError, ValueError):
+            pass
+
+    base = 5.0 * (2.0**attempt)
+    wait = min(base + random.uniform(0, 2), max_sleep)
+    return wait
+
+
 def _create_blob_with_retry(
     base: str, token: str, repo_path: str, local_path: Path
 ) -> tuple[str, str]:
@@ -64,18 +104,13 @@ def _create_blob_with_retry(
     last_err = None
     for attempt in range(_UPLOAD_FOLDER_BLOB_RETRIES):
         try:
-            r = session.post(url, json=blob_data, timeout=30)
+            with _blob_post_semaphore:
+                r = session.post(url, json=blob_data, timeout=30)
             if r.status_code == 403:
-                # GitHub secondary rate limit; wait and retry (cap at our constant)
-                wait_sec = _UPLOAD_FOLDER_403_WAIT_SEC
-                try:
-                    from_header = int(r.headers.get("Retry-After", wait_sec))
-                    wait_sec = min(from_header, _UPLOAD_FOLDER_403_WAIT_SEC)
-                except (TypeError, ValueError):
-                    pass
+                wait_sec = _wait_seconds_for_github_403(r, attempt)
                 if attempt < _UPLOAD_FOLDER_BLOB_RETRIES - 1:
                     logger.warning(
-                        "Blob upload 403 (rate limit), waiting %ss before retry (%s)",
+                        "Blob upload 403 (rate limit), waiting %.1fs before retry (%s)",
                         wait_sec,
                         repo_path,
                     )
