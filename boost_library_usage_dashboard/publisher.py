@@ -10,7 +10,7 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import CommandError
 
-from github_ops.git_ops import clone_repo, pull, push
+from github_ops.git_ops import clone_repo, prepare_repo_for_pull, pull, push
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,8 @@ def publish_dashboard(
 ) -> None:
     """
     Publish using a persistent clone at raw/boost_library_usage_dashboard/<owner>/<repo>.
-    Clone if missing, pull, sync ``develop/`` from output_dir, commit, push.
+    Clone if missing, then fetch/clean/reset the clone, pull, sync ``develop/`` from
+    output_dir, commit, push.
 
     Uses ``settings.GITHUB_TOKEN_WRITE`` for clone/pull/push and
     ``settings.GIT_AUTHOR_NAME`` / ``settings.GIT_AUTHOR_EMAIL`` for the commit
@@ -57,6 +58,9 @@ def publish_dashboard(
             shutil.rmtree(clone_dir)
         logger.info("Cloning %s to %s", repo_slug, clone_dir)
         clone_repo(repo_slug, clone_dir, token=token)
+
+    logger.info("Bootstrapping clone before pull: fetch, clean, reset (%s)", clone_dir)
+    prepare_repo_for_pull(clone_dir, remote="origin", token=token)
 
     logger.info("Pulling latest for %s", clone_dir)
     pull(clone_dir, branch=branch, token=token)

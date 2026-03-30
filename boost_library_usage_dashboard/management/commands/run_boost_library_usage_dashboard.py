@@ -1,7 +1,7 @@
 import logging
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from boost_library_usage_dashboard.analyzer import BoostUsageDashboardAnalyzer
 from boost_library_usage_dashboard.publisher import publish_dashboard
@@ -109,6 +109,11 @@ class Command(BaseCommand):
                     "--owner and --repo."
                 )
             else:
+                if not any(output_dir.rglob("*.html")):
+                    raise CommandError(
+                        "Refusing to publish: no HTML artifacts were found in "
+                        f"{output_dir}. Run without --skip-render first."
+                    )
                 publish_dashboard(
                     output_dir=output_dir,
                     owner=owner,

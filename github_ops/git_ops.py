@@ -304,6 +304,68 @@ def pull(
     subprocess.run(cmd, check=True, capture_output=True, text=True)
 
 
+def prepare_repo_for_pull(
+    repo_dir: str | Path,
+    *,
+    remote: str = "origin",
+    token: Optional[str] = None,
+) -> None:
+    """
+    Fetch remote branch refs (prune), remove untracked files, and reset the working tree.
+
+    Use before checkout/pull on a reused clone that may have local changes or lack
+    remote-tracking refs for branches that exist only on the remote.
+    """
+    repo_dir = Path(repo_dir)
+    if token is None:
+        token = get_github_token(use="push")
+    result = subprocess.run(
+        ["git", "-C", str(repo_dir), "remote", "get-url", remote],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    remote_url = result.stdout.strip()
+    auth_url = _url_with_token(remote_url, token or "")
+
+    logger.info("Fetching %s refs (prune) in %s", remote, repo_dir)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo_dir),
+            "fetch",
+            auth_url,
+            f"+refs/heads/*:refs/remotes/{remote}/*",
+            "--prune",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=GIT_CMD_TIMEOUT_SECONDS,
+    )
+    logger.info("Running git clean -fd in %s", repo_dir)
+    subprocess.run(
+        ["git", "-C", str(repo_dir), "clean", "-fd"],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    logger.info("Running git reset --hard in %s", repo_dir)
+    subprocess.run(
+        ["git", "-C", str(repo_dir), "reset", "--hard"],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+
 def fetch_file_content(
     owner: str,
     repo: str,

@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.conf import settings
 from django.core.management import call_command, get_commands
+from django.core.management.base import CommandError
 
 
 @pytest.mark.django_db
@@ -110,6 +111,7 @@ def test_dashboard_command_publish_uses_branch_from_settings_when_set(
     fake_analyzer.run.return_value = {}
     fake_analyzer.report_file = tmp_path / "report.md"
     fake_analyzer.stars_min_threshold = 10
+    (tmp_path / "index.html").write_text("<html/>")
 
     with patch(
         "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.get_workspace_path",
@@ -175,3 +177,40 @@ def test_dashboard_command_publish_no_owner_repo_skips_publish(
         call_command(dashboard_cmd_name)
 
     publish_mock.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_dashboard_command_publish_refuses_without_html_artifacts(
+    dashboard_cmd_name, tmp_path
+):
+    """Publish with owner/repo but no *.html under output_dir raises CommandError."""
+    with patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.get_workspace_path",
+        return_value=tmp_path,
+    ), patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.BoostUsageDashboardAnalyzer",
+    ), patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.write_summary_report"
+    ), patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.render_dashboard_html"
+    ), patch(
+        "boost_library_usage_dashboard.management.commands.run_boost_library_usage_dashboard.publish_dashboard"
+    ) as publish_mock, patch.object(
+        settings,
+        "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER",
+        "org",
+    ), patch.object(
+        settings,
+        "BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO",
+        "repo",
+    ):
+        tmp_path.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "dashboard_data.json").write_text("{}")
+        with pytest.raises(CommandError) as exc_info:
+            call_command(
+                dashboard_cmd_name,
+                "--skip-collect",
+                "--skip-render",
+            )
+        assert "no HTML artifacts" in str(exc_info.value)
+        publish_mock.assert_not_called()
