@@ -289,18 +289,27 @@ BOOST_LIBRARY_TRACKER_REPO_BRANCH = (
     env("BOOST_LIBRARY_TRACKER_REPO_BRANCH", default="master") or "master"
 ).strip()
 
-# Settings for publishing boost_library_usage_dashboard
+# =============================================================================
+# Boost Library Usage Dashboard
+# run_boost_library_usage_dashboard writes artifacts under the workspace, then
+# optionally publishes to the GitHub repo below (unless --skip-publish). Clone,
+# pull, and push use GITHUB_TOKEN_WRITE. If PUBLISH_OWNER / PUBLISH_REPO are
+# unset, publish is skipped (CLI --owner / --repo can override). GIT_AUTHOR_*
+# set commit author for that push only (via git env vars, not git config).
+# =============================================================================
 BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER = (
     env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_OWNER", default="") or ""
 ).strip()
 BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO = (
     env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_REPO", default="") or ""
 ).strip()
-BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_TOKEN = (
-    env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_TOKEN", default="") or ""
-).strip() or GITHUB_TOKEN_WRITE
 BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH = (
     env("BOOST_LIBRARY_USAGE_DASHBOARD_PUBLISH_BRANCH", default="") or ""
+).strip()
+GIT_AUTHOR_NAME = (env("GIT_AUTHOR_NAME", default="unknown") or "unknown").strip()
+GIT_AUTHOR_EMAIL = (
+    env("GIT_AUTHOR_EMAIL", default="unknown@noreply.github.com")
+    or "unknown@noreply.github.com"
 ).strip()
 
 

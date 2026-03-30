@@ -40,8 +40,7 @@ STARS_MIN_THRESHOLD = 10
 
 
 class BoostUsageDashboardAnalyzer:
-    def __init__(self, base_dir: Path, output_dir: Path):
-        self.base_dir = base_dir
+    def __init__(self, output_dir: Path):
         self.output_dir = output_dir
         self.dashboard_data_file = output_dir / "dashboard_data.json"
         self.report_file = output_dir / "Boost_Usage_Report_total.md"

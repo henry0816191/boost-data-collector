@@ -179,12 +179,17 @@ def push(
     commit_message: Optional[str] = None,
     add_paths: Optional[list[str | Path]] = None,
     token: Optional[str] = None,
+    git_user_name: Optional[str] = None,
+    git_user_email: Optional[str] = None,
 ) -> None:
     """
     Push to remote. Uses push token by default.
     Always runs git add, git commit, then push. Uses commit_message if provided,
     otherwise "Auto commit in <YYYY-MM-DD HH:MM:SS UTC>". add_paths: paths to add
     (relative to repo_dir); if None, adds all (git add .).
+
+    git_user_name / git_user_email: if set, passed only to the ``git commit`` subprocess
+    via GIT_AUTHOR_* / GIT_COMMITTER_* env vars (does not modify repo ``git config``).
     """
     repo_dir = Path(repo_dir)
     if token is None:
@@ -203,10 +208,20 @@ def push(
         capture_output=True,
         text=True,
     )
+    commit_env = dict(os.environ)
+    if git_user_name:
+        commit_env["GIT_AUTHOR_NAME"] = git_user_name
+        commit_env["GIT_COMMITTER_NAME"] = git_user_name
+    if git_user_email:
+        commit_env["GIT_AUTHOR_EMAIL"] = git_user_email
+        commit_env["GIT_COMMITTER_EMAIL"] = git_user_email
     commit_result = subprocess.run(
         ["git", "-C", str(repo_dir), "commit", "-m", message],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=commit_env,
     )
     if commit_result.returncode != 0:
         out = (commit_result.stderr or "") + (commit_result.stdout or "")
