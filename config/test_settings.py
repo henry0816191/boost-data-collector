@@ -51,6 +51,7 @@ for _slug in (
     "github_activity_tracker",
     "boost_library_tracker",
     "clang_github_activity",
+    "clang_github_tracker",
     "discord_activity_tracker",
     "shared",
 ):

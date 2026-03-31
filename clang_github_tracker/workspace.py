@@ -1,9 +1,11 @@
 """
-Workspace paths for clang_github_tracker: state file and raw GitHub activity dir.
+Workspace paths for clang_github_tracker: md export, backfill CSV dir, raw GitHub JSON.
 
 Layout:
   workspace/clang_github_activity/
-    - state.json
+    - md_export/  (generated Markdown for private repo push)
+  workspace/clang_github_tracker/
+    - clang_github_tracker_backfill.csv (default CSV backfill path)
   workspace/raw/github_activity_tracker/<owner>/<repo>/
     - commits/, issues/, prs/
 """
@@ -16,9 +18,10 @@ from django.conf import settings
 from config.workspace import get_workspace_path
 
 _APP_SLUG = "clang_github_activity"
+_TRACKER_DATA_SLUG = "clang_github_tracker"
 _RAW_APP_SLUG = "github_activity_tracker"
 
-STATE_FILENAME = "state.json"
+DEFAULT_BACKFILL_CSV_NAME = "clang_github_tracker_backfill.csv"
 
 # Repo we sync (raw only, no DB); from settings (env: CLANG_GITHUB_OWNER, CLANG_GITHUB_REPO)
 OWNER = settings.CLANG_GITHUB_OWNER
@@ -41,9 +44,16 @@ def get_workspace_root() -> Path:
     return get_workspace_path(_APP_SLUG)
 
 
-def get_state_path() -> Path:
-    """Return workspace/clang_github_activity/state.json. Parent dir created on first write."""
-    return get_workspace_root() / STATE_FILENAME
+def get_clang_github_tracker_data_dir() -> Path:
+    """Return workspace/clang_github_tracker/; creates dir if missing."""
+    path = get_workspace_path(_TRACKER_DATA_SLUG)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def default_backfill_csv_path() -> Path:
+    """Default path for CSV backfill: workspace/clang_github_tracker/<DEFAULT_BACKFILL_CSV_NAME>."""
+    return get_clang_github_tracker_data_dir() / DEFAULT_BACKFILL_CSV_NAME
 
 
 def get_raw_root() -> Path:
