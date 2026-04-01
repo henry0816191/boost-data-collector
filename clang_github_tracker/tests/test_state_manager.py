@@ -29,14 +29,12 @@ def test_parse_iso_invalid_or_empty():
 
 @pytest.mark.django_db
 def test_resolve_empty_db_no_since_until():
-    """Empty tables → None starts; end is now (approximately)."""
+    """Empty tables → None starts; end None until caller passes --until."""
     ClangGithubIssueItem.objects.all().delete()
     ClangGithubCommit.objects.all().delete()
     sc, si, end = clang_state.resolve_start_end_dates(None, None)
     assert sc is None and si is None
-    assert end is not None
-    now = timezone.now()
-    assert abs((end - now).total_seconds()) < 5
+    assert end is None
 
 
 @pytest.mark.django_db
@@ -82,7 +80,7 @@ def test_resolve_invalid_range_clears_bounds(caplog):
     with caplog.at_level("WARNING"):
         sc, si, end = clang_state.resolve_start_end_dates(since, until)
     assert any("invalid date range" in r.getMessage() for r in caplog.records)
-    assert end is not None
+    assert end is None
     assert sc is not None and si is not None
 
 

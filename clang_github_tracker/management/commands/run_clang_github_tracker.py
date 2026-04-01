@@ -14,7 +14,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from core.utils.datetime_parsing import parse_iso_datetime
 from clang_github_tracker import state_manager as clang_state
-from clang_github_tracker.sync_raw import sync_raw_only
+from clang_github_tracker.sync_raw import sync_clang_github_activity
 from clang_github_tracker.workspace import OWNER, REPO, get_workspace_root
 
 from github_ops import get_github_token, upload_folder_to_github
@@ -79,7 +79,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--skip-github-sync",
             action="store_true",
-            help="Skip API fetch / sync_raw_only.",
+            help="Skip API fetch / sync_clang_github_activity (raw JSON + DB upserts).",
         )
         parser.add_argument(
             "--skip-markdown-export",
@@ -130,8 +130,8 @@ class Command(BaseCommand):
         except ValueError as e:
             raise CommandError(str(e)) from e
 
-        start_commit, start_item, end_date = clang_state.resolve_start_end_dates(
-            since, until
+        start_commit, start_item, end_date = (
+            clang_state.resolve_start_end_dates(since, until)
         )
         logger.info(
             "Resolved: start_commit=%r start_item=%r end=%r",
@@ -140,29 +140,43 @@ class Command(BaseCommand):
             end_date,
         )
 
+        # Dry run
+
         if dry_run:
             if not skip_github_sync:
-                logger.info("dry-run: would run GitHub sync for llvm/llvm-project")
+                logger.info(
+                    "dry-run: would run GitHub sync for llvm/llvm-project"
+                )
             else:
-                logger.info("dry-run: skipping GitHub sync (--skip-github-sync)")
+                logger.info(
+                    "dry-run: skipping GitHub sync (--skip-github-sync)"
+                )
             if not skip_markdown_export:
-                logger.info("dry-run: would export Markdown for issues/PRs from sync")
+                logger.info(
+                    "dry-run: would export Markdown for issues/PRs from sync"
+                )
             if not skip_remote_push:
                 logger.info("dry-run: would push Markdown to private repo")
             if not skip_pinecone:
-                logger.info("dry-run: would run Pinecone upsert for issues and PRs")
+                logger.info(
+                    "dry-run: would run Pinecone upsert for issues and PRs"
+                )
             logger.info("dry-run finished")
             return
 
         issue_numbers: list[int] = []
         pr_numbers: list[int] = []
 
+        # GitHub sync
+
         if not skip_github_sync:
             try:
-                commits_saved, issue_numbers, pr_numbers = sync_raw_only(
-                    start_commit=start_commit,
-                    start_item=start_item,
-                    end_date=end_date,
+                commits_saved, issue_numbers, pr_numbers = (
+                    sync_clang_github_activity(
+                        start_commit=start_commit,
+                        start_item=start_item,
+                        end_date=end_date,
+                    )
                 )
                 logger.info(
                     "run_clang_github_tracker: sync done; commits=%s issues=%s prs=%s",
@@ -175,6 +189,8 @@ class Command(BaseCommand):
                 raise
         else:
             logger.info("skipping GitHub sync (--skip-github-sync)")
+
+        # Markdown export
 
         md_output_dir = get_workspace_root() / "md_export"
         md_output_dir.mkdir(parents=True, exist_ok=True)
@@ -204,24 +220,21 @@ class Command(BaseCommand):
         else:
             logger.info("skipping Markdown export (--skip-markdown-export)")
 
+        # Remote push
+
         if not skip_remote_push:
-            if not new_files:
-                if skip_markdown_export and not skip_github_sync:
-                    logger.warning(
-                        "nothing new to push (--skip-markdown-export); skipping remote push"
-                    )
-                elif skip_github_sync:
-                    logger.warning("nothing to push from this run (sync was skipped)")
-                elif not issue_numbers and not pr_numbers:
-                    logger.info("no MD files to push (no issues/PRs in sync)")
-            else:
-                self._push_markdown(md_output_dir, new_files)
+            logger.info("push Markdown to configured GitHub repo")
+            self._push_markdown(md_output_dir, new_files)
         else:
             logger.info("skipping remote push (--skip-remote-push)")
 
+        # Pinecone sync
+
         if not skip_pinecone:
             app_type = (settings.CLANG_GITHUB_PINECONE_APP_TYPE or "").strip()
-            namespace = (settings.CLANG_GITHUB_PINECONE_NAMESPACE or "").strip()
+            namespace = (
+                settings.CLANG_GITHUB_PINECONE_NAMESPACE or ""
+            ).strip()
             _run_pinecone_sync(
                 f"{app_type}-issues",
                 namespace,
@@ -237,7 +250,9 @@ class Command(BaseCommand):
 
         logger.info("run_clang_github_tracker finished successfully")
 
-    def _push_markdown(self, md_output_dir: Path, new_files: dict[str, str]) -> None:
+    def _push_markdown(
+        self, md_output_dir: Path, new_files: dict[str, str]
+    ) -> None:
         private_owner = getattr(
             settings, "CLANG_GITHUB_TRACKER_PRIVATE_REPO_OWNER", ""
         ).strip()

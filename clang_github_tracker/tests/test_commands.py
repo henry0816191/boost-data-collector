@@ -15,7 +15,7 @@ CMD_NAME = "run_clang_github_tracker"
 def test_run_clang_github_tracker_dry_run_logs_resolved(caplog):
     """Dry run resolves dates from DB and does not call sync."""
     with patch(
-        "clang_github_tracker.management.commands.run_clang_github_tracker.sync_raw_only"
+        "clang_github_tracker.management.commands.run_clang_github_tracker.sync_clang_github_activity"
     ) as sync_mock:
         with caplog.at_level(logging.INFO):
             call_command(CMD_NAME, "--dry-run", stdout=StringIO(), stderr=StringIO())
@@ -42,7 +42,7 @@ def test_run_clang_github_tracker_dry_run_skip_sync(caplog):
 def test_run_clang_github_tracker_since_until_aliases(caplog):
     """--from-date/--to-date aliases parse like Boost."""
     with patch(
-        "clang_github_tracker.management.commands.run_clang_github_tracker.sync_raw_only"
+        "clang_github_tracker.management.commands.run_clang_github_tracker.sync_clang_github_activity"
     ) as sync_mock:
         with caplog.at_level(logging.INFO):
             call_command(
@@ -58,10 +58,12 @@ def test_run_clang_github_tracker_since_until_aliases(caplog):
 
 
 @pytest.mark.django_db
-def test_run_clang_github_tracker_calls_sync_raw_only_when_not_dry_run(caplog):
-    """Without --dry-run, command calls sync_raw_only with start_item."""
+def test_run_clang_github_tracker_calls_sync_clang_github_activity_when_not_dry_run(
+    caplog,
+):
+    """Without --dry-run, command calls sync_clang_github_activity with start_item."""
     with patch(
-        "clang_github_tracker.management.commands.run_clang_github_tracker.sync_raw_only",
+        "clang_github_tracker.management.commands.run_clang_github_tracker.sync_clang_github_activity",
         return_value=(0, [], []),
     ) as sync_mock:
         with caplog.at_level(logging.INFO):
@@ -85,7 +87,7 @@ def test_run_clang_github_tracker_calls_sync_raw_only_when_not_dry_run(caplog):
 def test_run_clang_github_tracker_skip_pinecone(caplog):
     """--skip-pinecone does not call run_cppa_pinecone_sync."""
     with patch(
-        "clang_github_tracker.management.commands.run_clang_github_tracker.sync_raw_only",
+        "clang_github_tracker.management.commands.run_clang_github_tracker.sync_clang_github_activity",
         return_value=(0, [1], []),
     ):
         with patch(

@@ -38,30 +38,35 @@ def _aware_utc(dt: datetime | None) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
-def _apply_since_floor(cursor_start: datetime | None, since: datetime | None) -> datetime | None:
-    """Lower bound: max(DB cursor, ``since``) when ``since`` is set; else DB cursor."""
-    if since is None:
-        return cursor_start
-    s = _aware_utc(since)
-    if cursor_start is None:
-        return s
-    c = _aware_utc(cursor_start)
-    assert c is not None and s is not None
-    return max(c, s)
-
-
 def resolve_start_end_dates(
     since: datetime | None,
     until: datetime | None,
-) -> tuple[datetime | None, datetime | None, datetime]:
+) -> tuple[datetime | None, datetime | None, datetime | None]:
     """
-    Resolve ``start_commit``, unified ``start_item`` (issues+PRs), and ``end_date``.
+    Build GitHub sync window: ``(start_commit, start_item, end_date)`` in UTC.
 
-    - If both ``since`` and ``until`` are set and ``since <= until``: use ``since`` for
-      both starts and ``until`` as end.
-    - If ``since > until``: log warning and ignore both bounds (fall back to DB + now).
-    - Otherwise: starts from DB max + 1s (or None if empty/null max), with optional
-      ``since`` as a per-stream floor. End is ``until`` or ``timezone.now()``.
+    ``start_item`` is the single lower bound for the unified issues+PRs ``/issues`` fetch;
+    ``start_commit`` is the lower bound for the commits stream. Missing bounds mean
+    “from beginning” for starts. Naive datetimes are treated as UTC.
+
+    **Closed window** — both ``since`` and ``until`` are set:
+
+    - If ``since <= until``: return ``(since, since, until)`` (same lower bound for both
+      streams; explicit end).
+    - If ``since > until``: log a warning, discard both CLI bounds, then use the
+      **DB watermark** path below. ``end_date`` is ``None``.
+
+    **Otherwise** (no ``since``, or only one side after the rules above):
+
+    - ``end_date`` is ``until`` when ``until`` was provided, else ``None``. A ``None``
+      end means “through now” for callers; ``sync_clang_github_activity`` substitutes
+      ``timezone.now()`` before fetching.
+
+    - **Starts:** If ``since`` is set (without a valid closed window): ``start_commit``
+      and ``start_item`` are both ``since``. If ``since`` is not set: both are
+      ``Max(github_* timestamp) + 1 second`` from the DB when a watermark exists, else
+      ``None`` (full history). Watermarks use ``Max(github_committed_at)`` and
+      ``Max(github_updated_at)`` on ``ClangGithubCommit`` / ``ClangGithubIssueItem``.
     """
     since_aware = _aware_utc(since)
     until_aware = _aware_utc(until)
@@ -69,7 +74,8 @@ def resolve_start_end_dates(
     if since_aware is not None and until_aware is not None:
         if since_aware > until_aware:
             logger.warning(
-                "invalid date range: since (%s) is after until (%s); using DB cursors and default end",
+                "invalid date range: since (%s) is after until (%s); "
+                "using DB cursors; end_date None (sync applies now if needed)",
                 since_aware,
                 until_aware,
             )
@@ -77,12 +83,13 @@ def resolve_start_end_dates(
         else:
             return since_aware, since_aware, until_aware
 
-    end_date = until_aware if until_aware is not None else timezone.now()
+    end_date = until_aware
 
-    item_wm = start_after_watermark(get_issue_item_watermark())
-    commit_wm = start_after_watermark(get_commit_watermark())
+    if since_aware is None:
+        item_wm = start_after_watermark(get_issue_item_watermark())
+        commit_wm = start_after_watermark(get_commit_watermark())
+    else:
+        item_wm = since_aware
+        commit_wm = since_aware
 
-    start_item = _apply_since_floor(item_wm, since_aware)
-    start_commit = _apply_since_floor(commit_wm, since_aware)
-
-    return start_commit, start_item, end_date
+    return commit_wm, item_wm, end_date

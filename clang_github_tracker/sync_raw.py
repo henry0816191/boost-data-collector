@@ -50,7 +50,7 @@ def _commit_date(commit_data: dict) -> datetime | None:
     return parse_datetime(date_str) or clang_state.parse_iso(date_str)
 
 
-def sync_raw_only(
+def sync_clang_github_activity(
     start_commit: datetime | None = None,
     start_item: datetime | None = None,
     end_date: Optional[datetime] = None,
@@ -62,17 +62,14 @@ def sync_raw_only(
     Args:
         start_commit: Start date for commits (None = from beginning).
         start_item: Single lower bound for unified issues+PRs ``/issues`` fetch.
-        end_date: End date for all (default: now).
+        end_date: End date for all (default: None = sync through now).
 
     Returns:
         (commits_saved, issue_numbers, pr_numbers).
     """
-    from django.utils import timezone as django_tz
 
     owner = OWNER
     repo = REPO
-    if end_date is None:
-        end_date = django_tz.now()
     end_date = _ensure_utc(end_date)
     start_commit = _ensure_utc(start_commit)
     start_item = _ensure_utc(start_item)
@@ -114,13 +111,17 @@ def sync_raw_only(
                         clang_services.upsert_issue_item(
                             num,
                             is_pull_request=True,
-                            github_created_at=parse_datetime(flat.get("created_at")),
-                            github_updated_at=parse_datetime(flat.get("updated_at")),
+                            github_created_at=parse_datetime(
+                                flat.get("created_at")
+                            ),
+                            github_updated_at=parse_datetime(
+                                flat.get("updated_at")
+                            ),
                         )
             else:
-                issue_number = (item.get("issue_info") or {}).get("number") or item.get(
+                issue_number = (item.get("issue_info") or {}).get(
                     "number"
-                )
+                ) or item.get("number")
                 if issue_number is not None:
                     save_issue_raw_source(owner, repo, item)
                     issue_numbers.append(issue_number)
@@ -130,8 +131,12 @@ def sync_raw_only(
                         clang_services.upsert_issue_item(
                             num,
                             is_pull_request=False,
-                            github_created_at=parse_datetime(flat.get("created_at")),
-                            github_updated_at=parse_datetime(flat.get("updated_at")),
+                            github_created_at=parse_datetime(
+                                flat.get("created_at")
+                            ),
+                            github_updated_at=parse_datetime(
+                                flat.get("updated_at")
+                            ),
                         )
 
     except (ConnectionException, RateLimitException) as e:

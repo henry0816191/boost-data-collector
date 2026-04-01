@@ -51,7 +51,11 @@ def upsert_commit(
         sha=sha_clean,
         defaults={"github_committed_at": github_committed_at},
     )
-    logger.debug("clang commit %s %s", sha_clean[:8], "created" if created else "updated")
+    logger.debug(
+        "clang commit %s %s",
+        sha_clean[:8],
+        "created" if created else "updated",
+    )
     return obj, created
 
 
@@ -68,7 +72,7 @@ def get_commit_watermark() -> Optional[datetime]:
 
 
 def start_after_watermark(max_dt: datetime | None) -> datetime | None:
-    """Return ``max + 1s`` for API fetch lower bound, or ``None`` if no watermark."""
+    """Return ``max + 1ms`` for API fetch lower bound, or ``None`` if no watermark."""
     if max_dt is None:
         return None
-    return max_dt + timedelta(seconds=1)
+    return max_dt + timedelta(milliseconds=1)
