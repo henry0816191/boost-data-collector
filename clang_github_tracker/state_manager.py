@@ -31,6 +31,7 @@ def parse_iso(s: str | None) -> datetime | None:
 
 
 def _aware_utc(dt: datetime | None) -> datetime | None:
+    """Normalize ``dt`` to timezone-aware UTC, or return ``None``."""
     if dt is None:
         return None
     if timezone.is_naive(dt):

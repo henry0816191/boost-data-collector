@@ -26,6 +26,22 @@ def test_backfill_csv(tmp_path):
 
 
 @pytest.mark.django_db
+def test_backfill_csv_skips_non_positive_issue_pr_numbers(tmp_path):
+    csv_path = tmp_path / "bad_nums.csv"
+    csv_path.write_text(
+        "record_type,number,github_created_at,github_updated_at,sha,github_committed_at\n"
+        "issue,0,,,,\n"
+        "issue,-3,,,,\n"
+        "pr,-1,,,,\n"
+        "issue,5,2024-01-01T00:00:00Z,2024-01-02T00:00:00Z,,\n",
+        encoding="utf-8",
+    )
+    call_command("backfill_clang_github_tracker", f"--from-csv={csv_path}")
+    assert ClangGithubIssueItem.objects.filter(number=5, is_pull_request=False).exists()
+    assert ClangGithubIssueItem.objects.count() == 1
+
+
+@pytest.mark.django_db
 def test_backfill_from_raw(tmp_path, monkeypatch):
     root = tmp_path / "raw" / OWNER / REPO
     (root / "issues").mkdir(parents=True)

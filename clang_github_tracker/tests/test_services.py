@@ -50,9 +50,13 @@ def test_upsert_commits_batch_create_and_update():
     t1 = timezone.now()
     ins, upd = clang_services.upsert_commits_batch([(sha_a, t0), (sha_b, t0)])
     assert ins == 2 and upd == 0
+    row = ClangGithubCommit.objects.get(sha=sha_a)
+    first_updated = row.updated_at
     ins2, upd2 = clang_services.upsert_commits_batch([(sha_a, t1)])
     assert ins2 == 0 and upd2 == 1
-    assert ClangGithubCommit.objects.get(sha=sha_a).github_committed_at == t1
+    row.refresh_from_db()
+    assert row.github_committed_at == t1
+    assert row.updated_at > first_updated
 
 
 @pytest.mark.django_db
@@ -63,7 +67,10 @@ def test_upsert_issue_items_batch_create_and_update():
         [(10, False, t0, t0), (11, True, t0, t0)]
     )
     assert ins == 2 and upd == 0
+    row = ClangGithubIssueItem.objects.get(number=10)
+    first_updated = row.updated_at
     ins2, upd2 = clang_services.upsert_issue_items_batch([(10, False, t0, t1)])
     assert ins2 == 0 and upd2 == 1
-    row = ClangGithubIssueItem.objects.get(number=10)
+    row.refresh_from_db()
     assert row.github_updated_at == t1
+    assert row.updated_at > first_updated

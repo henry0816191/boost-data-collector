@@ -154,6 +154,27 @@ def _url_with_token(url: str, token: str) -> str:
     )
 
 
+def sanitize_git_output(text: str) -> str:
+    """Redact credentials from git stderr/stdout snippets before logging.
+
+    Masks GitHub HTTPS PAT forms and other userinfo-in-URL patterns so logs do not
+    leak tokens when clone/push echoes the remote URL.
+    """
+    if not text:
+        return text
+    out = re.sub(
+        r"(?i)(x-access-token:)[^@\s]+(@)",
+        r"\1***\2",
+        text,
+    )
+    out = re.sub(
+        r"(?i)(https?://)[^/\s?#]+@",
+        r"\1<redacted>@",
+        out,
+    )
+    return out
+
+
 def clone_repo(
     url_or_slug: str,
     dest_dir: str | Path,
@@ -205,12 +226,13 @@ def clone_repo(
         raise
     except subprocess.CalledProcessError as e:
         err_tail = ((e.stderr or "") + (e.stdout or ""))[-500:]
+        safe_err_tail = sanitize_git_output(err_tail)
         logger.warning(
             "git clone failed (%s -> %s), returncode=%s, stderr/stdout_tail=%r",
             url_or_slug,
             dest_dir,
             e.returncode,
-            err_tail,
+            safe_err_tail,
         )
         # Never re-raise with the real cmd: it embeds the token in the clone URL.
         safe_cmd: list[str] = ["git", "clone", url_or_slug, str(dest_dir)]

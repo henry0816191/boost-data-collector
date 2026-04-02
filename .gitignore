@@ -52,3 +52,4 @@ discord_activity_tracker/tools/
 config/boost_collector_schedule.yaml
 # temp files
 temp/
+nul

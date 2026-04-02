@@ -26,16 +26,24 @@ def test_run_clang_github_tracker_dry_run_logs_resolved(caplog):
 
 
 @pytest.mark.django_db
-def test_run_clang_github_tracker_dry_run_skip_sync(caplog):
-    """Dry run with --skip-github-sync still logs resolved window."""
-    with caplog.at_level(logging.INFO):
-        call_command(
-            CMD_NAME,
-            "--dry-run",
-            "--skip-github-sync",
-            stdout=StringIO(),
-            stderr=StringIO(),
-        )
+def test_run_clang_github_tracker_skip_sync(caplog):
+    """--skip-github-sync bypasses the GitHub sync step (not only under --dry-run)."""
+    with patch(
+        "clang_github_tracker.management.commands.run_clang_github_tracker.sync_clang_github_activity"
+    ) as sync_mock, patch(
+        "clang_github_tracker.management.commands.run_clang_github_tracker.write_md_files",
+        return_value={},
+    ):
+        with caplog.at_level(logging.INFO):
+            call_command(
+                CMD_NAME,
+                "--skip-github-sync",
+                "--skip-pinecone",
+                "--skip-remote-push",
+                stdout=StringIO(),
+                stderr=StringIO(),
+            )
+    sync_mock.assert_not_called()
     assert any("Resolved:" in r.getMessage() for r in caplog.records)
 
 
@@ -111,6 +119,40 @@ def test_run_clang_github_tracker_skip_pinecone(caplog):
         c for c in cc.call_args_list if c[0] and c[0][0] == "run_cppa_pinecone_sync"
     ]
     assert not pinecone_calls
+
+
+@pytest.mark.django_db
+@override_settings(CLANG_GITHUB_PINECONE_APP_TYPE="")
+def test_run_clang_github_tracker_empty_pinecone_app_type_skips_sync(caplog):
+    """Empty CLANG_GITHUB_PINECONE_APP_TYPE must not call run_cppa_pinecone_sync with -issues/-prs."""
+    with patch(
+        "clang_github_tracker.management.commands.run_clang_github_tracker.sync_clang_github_activity",
+        return_value=(0, [1], []),
+    ):
+        with patch(
+            "clang_github_tracker.management.commands.run_clang_github_tracker.call_command"
+        ) as cc:
+            with patch(
+                "clang_github_tracker.management.commands.run_clang_github_tracker.write_md_files",
+                return_value={},
+            ):
+                with caplog.at_level(logging.WARNING):
+                    call_command(
+                        CMD_NAME,
+                        "--since=2024-01-01",
+                        "--until=2024-01-02",
+                        "--skip-remote-push",
+                        stdout=StringIO(),
+                        stderr=StringIO(),
+                    )
+    pinecone_calls = [
+        c for c in cc.call_args_list if c[0] and c[0][0] == "run_cppa_pinecone_sync"
+    ]
+    assert not pinecone_calls
+    assert any(
+        "CLANG_GITHUB_PINECONE_APP_TYPE is empty" in r.getMessage()
+        for r in caplog.records
+    )
 
 
 @pytest.mark.django_db

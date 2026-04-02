@@ -108,10 +108,12 @@ def publish_clang_markdown(
     # Private CLANG_GITHUB_CONTEXT_* repos need a PAT that can read them (clone/pull)
     # and push; get_github_token("write") uses GITHUB_TOKEN_WRITE or GITHUB_TOKEN.
     token = get_github_token(use="write")
-    git_user_name = (getattr(settings, "GIT_AUTHOR_NAME", None) or "unknown").strip()
+    git_user_name = (
+        getattr(settings, "GIT_AUTHOR_NAME", None) or ""
+    ).strip() or "unknown"
     git_user_email = (
-        getattr(settings, "GIT_AUTHOR_EMAIL", None) or "unknown@noreply.github.com"
-    ).strip()
+        getattr(settings, "GIT_AUTHOR_EMAIL", None) or ""
+    ).strip() or "unknown@noreply.github.com"
 
     repo_slug = f"{owner}/{repo}"
     logger.info("Publishing Clang markdown to %s (%s)...", repo_slug, branch)

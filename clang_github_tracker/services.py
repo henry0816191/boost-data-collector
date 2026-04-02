@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from django.db.models import Max
+from django.utils import timezone
 
 from clang_github_tracker.models import ClangGithubCommit, ClangGithubIssueItem
 
@@ -72,13 +73,17 @@ def _flush_commits_chunk(
     existing = set(
         ClangGithubCommit.objects.filter(sha__in=shas).values_list("sha", flat=True)
     )
-    objs = [ClangGithubCommit(sha=s, github_committed_at=dt) for s, dt in pairs]
+    now = timezone.now()
+    objs = [
+        ClangGithubCommit(sha=s, github_committed_at=dt, updated_at=now)
+        for s, dt in pairs
+    ]
     ClangGithubCommit.objects.bulk_create(
         objs,
         batch_size=len(objs),
         update_conflicts=True,
         unique_fields=["sha"],
-        update_fields=["github_committed_at"],
+        update_fields=["github_committed_at", "updated_at"],
     )
     inserted = sum(1 for s, _ in pairs if s not in existing)
     updated = len(pairs) - inserted
@@ -113,6 +118,7 @@ def upsert_commits_batch(
 def _flush_issue_items_chunk(
     rows: list[tuple[int, bool, datetime | None, datetime | None]],
 ) -> tuple[int, int]:
+    """Bulk upsert one chunk of issue/PR rows; returns (inserted, updated)."""
     if not rows:
         return 0, 0
     nums = [n for n, _, _, _ in rows]
@@ -121,12 +127,14 @@ def _flush_issue_items_chunk(
             "number", flat=True
         )
     )
+    now = timezone.now()
     objs = [
         ClangGithubIssueItem(
             number=n,
             is_pull_request=is_pr,
             github_created_at=gc,
             github_updated_at=gu,
+            updated_at=now,
         )
         for n, is_pr, gc, gu in rows
     ]
@@ -139,6 +147,7 @@ def _flush_issue_items_chunk(
             "is_pull_request",
             "github_created_at",
             "github_updated_at",
+            "updated_at",
         ],
     )
     inserted = sum(1 for n, _, _, _ in rows if n not in existing)

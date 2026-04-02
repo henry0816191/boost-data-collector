@@ -12,6 +12,7 @@ from github_ops.git_ops import (
     pull,
     get_commit_file_changes,
     push,
+    sanitize_git_output,
     upload_folder_to_github,
 )
 
@@ -43,6 +44,28 @@ def test_url_with_token_only_replaces_first_occurrence():
     url = "https://github.com/boostorg/boost.git"
     out = _url_with_token(url, "tok")
     assert out == "https://x-access-token:tok@github.com/boostorg/boost.git"
+
+
+# --- sanitize_git_output ---
+
+
+def test_sanitize_git_output_masks_x_access_token():
+    raw = "fatal: https://x-access-token:ghp_SUPER_SECRET@github.com/o/r.git not found"
+    out = sanitize_git_output(raw)
+    assert "ghp_SUPER_SECRET" not in out
+    assert "x-access-token:ghp_" not in out
+    assert "https://<redacted>@github.com" in out
+
+
+def test_sanitize_git_output_masks_bare_token_userinfo():
+    raw = "error cloning https://github_pat_XXXX@github.com/foo/bar.git"
+    out = sanitize_git_output(raw)
+    assert "github_pat_XXXX" not in out
+    assert "https://<redacted>@" in out
+
+
+def test_sanitize_git_output_empty():
+    assert sanitize_git_output("") == ""
 
 
 # --- clone_repo ---

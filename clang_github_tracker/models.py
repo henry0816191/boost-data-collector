@@ -25,6 +25,8 @@ class ClangGithubIssueItem(models.Model):
     )
 
     class Meta:
+        """Maps to ``clang_github_tracker_issue_item``."""
+
         db_table = "clang_github_tracker_issue_item"
 
 
@@ -37,4 +39,6 @@ class ClangGithubCommit(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Maps to ``clang_github_tracker_commit``."""
+
         db_table = "clang_github_tracker_commit"

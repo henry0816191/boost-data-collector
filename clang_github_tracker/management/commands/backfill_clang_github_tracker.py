@@ -34,6 +34,7 @@ _RAW_CHUNK_EVERY = 10_000
 
 
 def _commit_date_from_json(data: dict):
+    """Parse commit author/committer date from a GitHub API-style JSON dict."""
     commit = data.get("commit") or {}
     author = commit.get("author") or commit.get("committer") or {}
     date_str = author.get("date")
@@ -43,6 +44,8 @@ def _commit_date_from_json(data: dict):
 
 
 class Command(BaseCommand):
+    """Load ``ClangGithubIssueItem`` / ``ClangGithubCommit`` from CSV or raw JSON."""
+
     help = (
         "Backfill clang_github_tracker DB from CSV (--from-csv) or raw JSON dirs (--from-raw). "
         "CSV columns: record_type (issue|pr|commit), number, github_created_at, github_updated_at, "
@@ -50,6 +53,7 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser):
+        """Add mutually exclusive ``--from-csv`` and ``--from-raw`` options."""
         group = parser.add_mutually_exclusive_group(required=True)
         group.add_argument(
             "--from-csv",
@@ -69,6 +73,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """Dispatch to CSV or raw-directory backfill."""
         if options.get("from_raw"):
             self._backfill_from_raw()
             return
@@ -77,6 +82,7 @@ class Command(BaseCommand):
         self._backfill_from_csv(path)
 
     def _backfill_from_csv(self, path: Path) -> None:
+        """Parse CSV at ``path`` and batch-upsert issues, PRs, and commits."""
         if not path.is_file():
             raise CommandError(f"CSV not found: {path}")
         commit_rows: list[tuple[str, datetime | None]] = []
@@ -91,6 +97,10 @@ class Command(BaseCommand):
                 try:
                     if rt == "issue":
                         num = int((row.get("number") or "").strip())
+                        if num <= 0:
+                            logger.warning("skip issue row: invalid number %r", num)
+                            skipped += 1
+                            continue
                         gc = parse_datetime(
                             (row.get("github_created_at") or "").strip()
                         )
@@ -100,6 +110,10 @@ class Command(BaseCommand):
                         issue_rows.append((num, False, gc, gu))
                     elif rt == "pr":
                         num = int((row.get("number") or "").strip())
+                        if num <= 0:
+                            logger.warning("skip pr row: invalid number %r", num)
+                            skipped += 1
+                            continue
                         gc = parse_datetime(
                             (row.get("github_created_at") or "").strip()
                         )
@@ -138,6 +152,7 @@ class Command(BaseCommand):
         )
 
     def _backfill_from_raw(self) -> None:
+        """Scan ``commits`` / ``issues`` / ``prs`` JSON under the raw repo dir and upsert."""
         root = get_raw_repo_dir(OWNER, REPO, create=False)
         if not root.is_dir():
             raise CommandError(f"Raw repo dir missing: {root}")

@@ -68,6 +68,7 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser):
+        """Define dry-run, skip flags, and optional ``--since`` / ``--until`` window."""
         parser.add_argument(
             "--dry-run",
             action="store_true",
@@ -115,6 +116,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """Resolve sync window, then run GitHub fetch, Markdown, push, and Pinecone as configured."""
         dry_run = options["dry_run"]
         skip_github_sync = options["skip_github_sync"]
         skip_markdown_export = options["skip_markdown_export"]
@@ -220,22 +222,28 @@ class Command(BaseCommand):
         if not skip_pinecone:
             app_type = (settings.CLANG_GITHUB_PINECONE_APP_TYPE or "").strip()
             namespace = (settings.CLANG_GITHUB_PINECONE_NAMESPACE or "").strip()
-            _run_pinecone_sync(
-                f"{app_type}-issues",
-                namespace,
-                "clang_github_tracker.preprocessors.issue_preprocessor.preprocess_for_pinecone",
-            )
-            _run_pinecone_sync(
-                f"{app_type}-prs",
-                namespace,
-                "clang_github_tracker.preprocessors.pr_preprocessor.preprocess_for_pinecone",
-            )
+            if not app_type:
+                logger.warning(
+                    "Pinecone sync skipped: CLANG_GITHUB_PINECONE_APP_TYPE is empty (settings/env)."
+                )
+            else:
+                _run_pinecone_sync(
+                    f"{app_type}-issues",
+                    namespace,
+                    "clang_github_tracker.preprocessors.issue_preprocessor.preprocess_for_pinecone",
+                )
+                _run_pinecone_sync(
+                    f"{app_type}-prs",
+                    namespace,
+                    "clang_github_tracker.preprocessors.pr_preprocessor.preprocess_for_pinecone",
+                )
         else:
             logger.info("skipping Pinecone (--skip-pinecone)")
 
         logger.info("run_clang_github_tracker finished successfully")
 
     def _push_markdown(self, md_output_dir: Path, new_files: dict[str, str]) -> None:
+        """Publish ``md_export`` to ``CLANG_GITHUB_CONTEXT_*`` and remove local run artifacts."""
         clang_github_context_repo_owner = getattr(
             settings, "CLANG_GITHUB_CONTEXT_REPO_OWNER", ""
         ).strip()
@@ -243,13 +251,8 @@ class Command(BaseCommand):
             settings, "CLANG_GITHUB_CONTEXT_REPO_NAME", ""
         ).strip()
         clang_github_context_repo_branch = (
-            getattr(
-                settings,
-                "CLANG_GITHUB_CONTEXT_REPO_BRANCH",
-                DEFAULT_CLANG_REPO_BRANCH,
-            )
-            or DEFAULT_CLANG_REPO_BRANCH
-        ).strip()
+            getattr(settings, "CLANG_GITHUB_CONTEXT_REPO_BRANCH", "") or ""
+        ).strip() or DEFAULT_CLANG_REPO_BRANCH
         if not clang_github_context_repo_owner or not clang_github_context_repo_name:
             logger.error(
                 "CLANG_GITHUB_CONTEXT_REPO_OWNER / CLANG_GITHUB_CONTEXT_REPO_NAME "

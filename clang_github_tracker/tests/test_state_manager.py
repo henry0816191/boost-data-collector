@@ -51,7 +51,7 @@ def test_resolve_db_watermark_plus_one_millisecond():
         sha="a" * 40,
         github_committed_at=base,
     )
-    sc, si, end = clang_state.resolve_start_end_dates(None, None)
+    sc, si, _end = clang_state.resolve_start_end_dates(None, None)
     delta = timedelta(milliseconds=1)
     assert sc == base + delta
     assert si == base + delta
@@ -100,6 +100,6 @@ def test_resolve_since_floor_without_until():
         github_updated_at=base,
     )
     since = timezone.now() - timedelta(days=1)
-    sc, si, _end = clang_state.resolve_start_end_dates(since, None)
+    _sc, si, _end = clang_state.resolve_start_end_dates(since, None)
     assert si is not None
     assert si >= since
