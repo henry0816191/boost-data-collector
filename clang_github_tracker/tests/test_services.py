@@ -74,3 +74,43 @@ def test_upsert_issue_items_batch_create_and_update():
     row.refresh_from_db()
     assert row.github_updated_at == t1
     assert row.updated_at > first_updated
+
+
+@pytest.mark.django_db
+def test_upsert_commits_batch_duplicate_sha_keeps_latest_committed_at():
+    sha = "c" * 40
+    t_new = timezone.now()
+    t_old = t_new - timedelta(days=7)
+    clang_services.upsert_commits_batch([(sha, t_new), (sha, t_old)])
+    row = ClangGithubCommit.objects.get(sha=sha)
+    assert row.github_committed_at == t_new
+
+
+@pytest.mark.django_db
+def test_upsert_commits_batch_duplicate_sha_none_does_not_wipe_timestamp():
+    sha = "d" * 40
+    t0 = timezone.now() - timedelta(hours=1)
+    clang_services.upsert_commits_batch([(sha, t0), (sha, None)])
+    assert ClangGithubCommit.objects.get(sha=sha).github_committed_at == t0
+
+
+@pytest.mark.django_db
+def test_upsert_issue_items_batch_duplicate_number_keeps_latest_github_updated_at():
+    t_base = timezone.now() - timedelta(days=5)
+    t_new = timezone.now()
+    t_old = t_new - timedelta(days=1)
+    clang_services.upsert_issue_items_batch(
+        [
+            (7, False, t_base, t_new),
+            (7, False, t_base, t_old),
+        ]
+    )
+    row = ClangGithubIssueItem.objects.get(number=7)
+    assert row.github_updated_at == t_new
+
+
+@pytest.mark.django_db
+def test_upsert_issue_items_batch_duplicate_merges_is_pr_or():
+    t0 = timezone.now() - timedelta(days=1)
+    clang_services.upsert_issue_items_batch([(8, False, t0, t0), (8, True, t0, t0)])
+    assert ClangGithubIssueItem.objects.get(number=8).is_pull_request is True

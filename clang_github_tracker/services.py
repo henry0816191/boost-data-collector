@@ -17,6 +17,15 @@ logger = logging.getLogger(__name__)
 DEFAULT_UPSERT_BATCH_SIZE = 500
 
 
+def _max_dt(current: datetime | None, incoming: datetime | None) -> datetime | None:
+    """Return the later of two datetimes; ``None`` is treated as missing (never wins over a value)."""
+    if current is None:
+        return incoming
+    if incoming is None:
+        return current
+    return max(current, incoming)
+
+
 def upsert_issue_item(
     number: int,
     *,
@@ -105,7 +114,7 @@ def upsert_commits_batch(
         s = (sha or "").strip()
         if len(s) != 40:
             continue
-        merged[s] = dt
+        merged[s] = _max_dt(merged.get(s), dt)
     inserted = updated = 0
     items = list(merged.items())
     for i in range(0, len(items), batch_size):
@@ -160,7 +169,11 @@ def upsert_issue_items_batch(
     *,
     batch_size: int = DEFAULT_UPSERT_BATCH_SIZE,
 ) -> tuple[int, int]:
-    """Batch upsert issue/PR rows by ``number``. Later rows win on duplicate numbers.
+    """Batch upsert issue/PR rows by ``number``.
+
+    Duplicate ``number`` values merge: ``github_updated_at`` uses the latest
+    timestamp; ``github_created_at`` keeps the first non-None; ``is_pull_request``
+    is True if any row marks the number as a PR.
 
     Returns:
         (inserted, updated) counts across all batches.
@@ -169,7 +182,16 @@ def upsert_issue_items_batch(
     for num, is_pr, gc, gu in rows:
         if not isinstance(num, int) or num <= 0:
             continue
-        merged[num] = (is_pr, gc, gu)
+        prev = merged.get(num)
+        if prev is None:
+            merged[num] = (is_pr, gc, gu)
+        else:
+            prev_is_pr, prev_gc, prev_gu = prev
+            merged[num] = (
+                prev_is_pr or is_pr,
+                prev_gc if prev_gc is not None else gc,
+                _max_dt(prev_gu, gu),
+            )
     inserted = updated = 0
     items = [(n, is_pr, gc, gu) for n, (is_pr, gc, gu) in sorted(merged.items())]
     for i in range(0, len(items), batch_size):

@@ -22,7 +22,7 @@
 | -------- | ------ | ----- |
 | `get_issue_item_watermark` | `datetime \| None` | `Max(github_updated_at)` over all issue/PR rows (unified issues+PR stream). |
 | `get_commit_watermark` | `datetime \| None` | `Max(github_committed_at)` over commits. |
-| `start_after_watermark` | `datetime \| None` | `max_dt + timedelta(seconds=1)` or `None` if `max_dt` is `None`. |
+| `start_after_watermark` | `datetime \| None` | `max_dt + timedelta(milliseconds=1)` or `None` if `max_dt` is `None`. |
 
 Used by `clang_github_tracker.state_manager.resolve_start_end_dates` (with optional CLI `--since` / `--until` bounds).
 
