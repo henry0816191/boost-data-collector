@@ -50,9 +50,7 @@ def _reset_hard_to_upstream(clone_dir: Path, remote: str, branch: str) -> None:
         )
     except subprocess.CalledProcessError as e:
         err = ((e.stderr or "") + (e.stdout or "")).strip() or str(e)
-        raise CommandError(
-            f"Could not reset clone to {ref}: {err}"
-        ) from e
+        raise CommandError(f"Could not reset clone to {ref}: {err}") from e
 
 
 def _copy_md_tree(md_output_dir: Path, clone_dir: Path) -> None:
@@ -141,7 +139,9 @@ def publish_clang_markdown(
                 "that repository. GitHub often returns 'not found' when the token "
                 "lacks access."
             )
-            logger.error("clang_github_tracker publish: git clone failed: %s", tail or e)
+            logger.error(
+                "clang_github_tracker publish: git clone failed: %s", tail or e
+            )
             raise CommandError(
                 f"Git clone failed for {repo_slug}: {tail or e.returncode}. {hint}"
             ) from e
