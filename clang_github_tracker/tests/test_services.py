@@ -114,3 +114,73 @@ def test_upsert_issue_items_batch_duplicate_merges_is_pr_or():
     t0 = timezone.now() - timedelta(days=1)
     clang_services.upsert_issue_items_batch([(8, False, t0, t0), (8, True, t0, t0)])
     assert ClangGithubIssueItem.objects.get(number=8).is_pull_request is True
+
+
+@pytest.mark.django_db
+def test_upsert_issue_item_merge_keeps_pr_and_timestamps_when_incoming_partial():
+    t_created = timezone.now() - timedelta(days=10)
+    t_updated = timezone.now() - timedelta(days=3)
+    clang_services.upsert_issue_item(
+        99,
+        is_pull_request=True,
+        github_created_at=t_created,
+        github_updated_at=t_updated,
+    )
+    clang_services.upsert_issue_item(
+        99,
+        is_pull_request=False,
+        github_created_at=None,
+        github_updated_at=None,
+    )
+    row = ClangGithubIssueItem.objects.get(number=99)
+    assert row.is_pull_request is True
+    assert row.github_created_at == t_created
+    assert row.github_updated_at == t_updated
+
+
+@pytest.mark.django_db
+def test_upsert_issue_item_merge_github_updated_at_max():
+    t_old = timezone.now() - timedelta(days=5)
+    t_new = timezone.now() - timedelta(days=1)
+    clang_services.upsert_issue_item(
+        100,
+        is_pull_request=False,
+        github_created_at=t_old,
+        github_updated_at=t_new,
+    )
+    clang_services.upsert_issue_item(
+        100,
+        is_pull_request=False,
+        github_created_at=None,
+        github_updated_at=t_old,
+    )
+    assert ClangGithubIssueItem.objects.get(number=100).github_updated_at == t_new
+
+
+@pytest.mark.django_db
+def test_upsert_commit_merge_preserves_committed_at_when_incoming_none():
+    sha = "e" * 40
+    t0 = timezone.now() - timedelta(hours=2)
+    clang_services.upsert_commit(sha, github_committed_at=t0)
+    clang_services.upsert_commit(sha, github_committed_at=None)
+    assert ClangGithubCommit.objects.get(sha=sha).github_committed_at == t0
+
+
+@pytest.mark.django_db
+def test_upsert_issue_items_batch_merge_with_db_preserves_updated_when_incoming_none():
+    t0 = timezone.now() - timedelta(days=2)
+    t1 = timezone.now() - timedelta(days=1)
+    clang_services.upsert_issue_items_batch([(20, False, t0, t1)])
+    clang_services.upsert_issue_items_batch([(20, False, None, None)])
+    row = ClangGithubIssueItem.objects.get(number=20)
+    assert row.github_created_at == t0
+    assert row.github_updated_at == t1
+    assert row.is_pull_request is False
+
+
+@pytest.mark.django_db
+def test_upsert_issue_items_batch_merge_with_db_keeps_pr_once_true():
+    t0 = timezone.now() - timedelta(days=1)
+    clang_services.upsert_issue_items_batch([(21, True, t0, t0)])
+    clang_services.upsert_issue_items_batch([(21, False, t0, t0)])
+    assert ClangGithubIssueItem.objects.get(number=21).is_pull_request is True

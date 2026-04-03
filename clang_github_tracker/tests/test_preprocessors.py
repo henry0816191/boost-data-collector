@@ -22,6 +22,8 @@ def test_issue_preprocessor_db_and_failed_ids(mock_build, tmp_path, settings):
 
     p10 = tmp_path / "10.json"
     p10.write_text("{}", encoding="utf-8")
+    p99 = tmp_path / "99.json"
+    p99.write_text("{}", encoding="utf-8")
 
     ClangGithubIssueItem.objects.create(
         number=10,
@@ -31,7 +33,7 @@ def test_issue_preprocessor_db_and_failed_ids(mock_build, tmp_path, settings):
     final = timezone.now() - timedelta(hours=1)
 
     def _issue_path(_owner, _repo, n):
-        return p10 if n == 10 else tmp_path / f"missing_{n}.json"
+        return {10: p10, 99: p99}.get(n, tmp_path / f"missing_{n}.json")
 
     with patch(
         "clang_github_tracker.preprocessors.issue_preprocessor.get_raw_source_issue_path",
@@ -41,8 +43,9 @@ def test_issue_preprocessor_db_and_failed_ids(mock_build, tmp_path, settings):
             ["llvm-project:issue:99"], final
         )
     assert chunked is False
-    assert mock_build.call_count == 1
-    assert len(docs) == 1
+    # DB watermark picks #10; failed_ids must parse llvm-project:issue:99 and add #99.
+    assert mock_build.call_count == 2
+    assert len(docs) == 2
 
 
 @pytest.mark.django_db

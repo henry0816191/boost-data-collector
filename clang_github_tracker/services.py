@@ -26,6 +26,26 @@ def _max_dt(current: datetime | None, incoming: datetime | None) -> datetime | N
     return max(current, incoming)
 
 
+def _merge_issue_item_fields(
+    existing: ClangGithubIssueItem | None,
+    is_pull_request: bool,
+    github_created_at: datetime | None,
+    github_updated_at: datetime | None,
+) -> tuple[bool, datetime | None, datetime | None]:
+    """Merge incoming issue/PR fields with a stored row (None / older incoming must not weaken state)."""
+    if existing is None:
+        return (is_pull_request, github_created_at, github_updated_at)
+    return (
+        existing.is_pull_request or is_pull_request,
+        (
+            github_created_at
+            if github_created_at is not None
+            else existing.github_created_at
+        ),
+        _max_dt(existing.github_updated_at, github_updated_at),
+    )
+
+
 def upsert_issue_item(
     number: int,
     *,
@@ -34,12 +54,19 @@ def upsert_issue_item(
     github_updated_at: datetime | None,
 ) -> tuple[ClangGithubIssueItem, bool]:
     """Create or update a ClangGithubIssueItem by ``number``. Returns (instance, created)."""
+    existing = ClangGithubIssueItem.objects.filter(number=number).first()
+    is_pr, gc, gu = _merge_issue_item_fields(
+        existing,
+        is_pull_request,
+        github_created_at,
+        github_updated_at,
+    )
     obj, created = ClangGithubIssueItem.objects.update_or_create(
         number=number,
         defaults={
-            "is_pull_request": is_pull_request,
-            "github_created_at": github_created_at,
-            "github_updated_at": github_updated_at,
+            "is_pull_request": is_pr,
+            "github_created_at": gc,
+            "github_updated_at": gu,
         },
     )
     logger.debug(
@@ -60,9 +87,14 @@ def upsert_commit(
     sha_clean = (sha or "").strip()
     if len(sha_clean) != 40:
         raise ValueError(f"commit sha must be 40 hex chars, got {sha_clean!r}")
+    existing = ClangGithubCommit.objects.filter(sha=sha_clean).first()
+    merged_committed_at = _max_dt(
+        existing.github_committed_at if existing else None,
+        github_committed_at,
+    )
     obj, created = ClangGithubCommit.objects.update_or_create(
         sha=sha_clean,
-        defaults={"github_committed_at": github_committed_at},
+        defaults={"github_committed_at": merged_committed_at},
     )
     logger.debug(
         "clang commit %s %s",
@@ -79,12 +111,20 @@ def _flush_commits_chunk(
     if not pairs:
         return 0, 0
     shas = [s for s, _ in pairs]
-    existing = set(
-        ClangGithubCommit.objects.filter(sha__in=shas).values_list("sha", flat=True)
-    )
+    existing_committed = {
+        row.sha: row.github_committed_at
+        for row in ClangGithubCommit.objects.filter(sha__in=shas).only(
+            "sha", "github_committed_at"
+        )
+    }
+    existing = set(existing_committed.keys())
     now = timezone.now()
     objs = [
-        ClangGithubCommit(sha=s, github_committed_at=dt, updated_at=now)
+        ClangGithubCommit(
+            sha=s,
+            github_committed_at=_max_dt(existing_committed.get(s), dt),
+            updated_at=now,
+        )
         for s, dt in pairs
     ]
     ClangGithubCommit.objects.bulk_create(
@@ -131,22 +171,31 @@ def _flush_issue_items_chunk(
     if not rows:
         return 0, 0
     nums = [n for n, _, _, _ in rows]
-    existing = set(
-        ClangGithubIssueItem.objects.filter(number__in=nums).values_list(
-            "number", flat=True
+    existing_by_num = {
+        obj.number: obj
+        for obj in ClangGithubIssueItem.objects.filter(number__in=nums).only(
+            "number",
+            "is_pull_request",
+            "github_created_at",
+            "github_updated_at",
         )
-    )
+    }
+    existing = set(existing_by_num.keys())
     now = timezone.now()
-    objs = [
-        ClangGithubIssueItem(
-            number=n,
-            is_pull_request=is_pr,
-            github_created_at=gc,
-            github_updated_at=gu,
-            updated_at=now,
+    objs = []
+    for n, is_pr, gc, gu in rows:
+        m_is_pr, m_gc, m_gu = _merge_issue_item_fields(
+            existing_by_num.get(n), is_pr, gc, gu
         )
-        for n, is_pr, gc, gu in rows
-    ]
+        objs.append(
+            ClangGithubIssueItem(
+                number=n,
+                is_pull_request=m_is_pr,
+                github_created_at=m_gc,
+                github_updated_at=m_gu,
+                updated_at=now,
+            )
+        )
     ClangGithubIssueItem.objects.bulk_create(
         objs,
         batch_size=len(objs),
@@ -172,8 +221,9 @@ def upsert_issue_items_batch(
     """Batch upsert issue/PR rows by ``number``.
 
     Duplicate ``number`` values merge: ``github_updated_at`` uses the latest
-    timestamp; ``github_created_at`` keeps the first non-None; ``is_pull_request``
-    is True if any row marks the number as a PR.
+    timestamp; ``github_created_at`` uses a later row’s value when non-None,
+    otherwise keeps the prior value; ``is_pull_request`` is True if any row
+    marks the number as a PR.
 
     Returns:
         (inserted, updated) counts across all batches.
@@ -189,7 +239,7 @@ def upsert_issue_items_batch(
             prev_is_pr, prev_gc, prev_gu = prev
             merged[num] = (
                 prev_is_pr or is_pr,
-                prev_gc if prev_gc is not None else gc,
+                gc if gc is not None else prev_gc,
                 _max_dt(prev_gu, gu),
             )
     inserted = updated = 0

@@ -92,7 +92,7 @@ def test_resolve_invalid_range_clears_bounds(caplog):
 
 @pytest.mark.django_db
 def test_resolve_since_floor_without_until():
-    """Only since: starts are max(DB+1s, since)."""
+    """Only since: both starts equal the explicit since; DB watermarks are ignored."""
     base = timezone.now() - timedelta(days=30)
     ClangGithubIssueItem.objects.create(
         number=2,
@@ -100,6 +100,7 @@ def test_resolve_since_floor_without_until():
         github_updated_at=base,
     )
     since = timezone.now() - timedelta(days=1)
-    _sc, si, _end = clang_state.resolve_start_end_dates(since, None)
-    assert si is not None
-    assert si >= since
+    sc, si, end = clang_state.resolve_start_end_dates(since, None)
+    assert sc == since
+    assert si == since
+    assert end is None

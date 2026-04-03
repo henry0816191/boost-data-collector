@@ -234,12 +234,14 @@ def clone_repo(
             e.returncode,
             safe_err_tail,
         )
-        # Never re-raise with the real cmd: it embeds the token in the clone URL.
+        # Never re-raise with the real cmd or raw output: they may embed the token.
         safe_cmd: list[str] = ["git", "clone", url_or_slug, str(dest_dir)]
         if depth is not None:
             safe_cmd.extend(["--depth", str(depth)])
+        safe_stdout = sanitize_git_output(e.stdout or "")
+        safe_stderr = sanitize_git_output(e.stderr or "")
         raise subprocess.CalledProcessError(
-            e.returncode, safe_cmd, e.stdout, e.stderr
+            e.returncode, safe_cmd, safe_stdout, safe_stderr
         ) from None
 
 
