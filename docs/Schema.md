@@ -361,7 +361,7 @@ Standalone tables for the **llvm/llvm-project** (or `CLANG_GITHUB_OWNER` / `CLAN
 
 | Model | Purpose |
 | ----- | ------- |
-| **ClangGithubIssueItem** | One row per issue or PR **number** (`unique`). `is_pull_request` distinguishes types. `github_created_at` / `github_updated_at` mirror GitHub API times; **`github_updated_at`** (with `Max` + 1s) drives **API fetch** resume. Django **`updated_at`** (`auto_now`) bumps on every upsert and drives **Pinecone** incrementality vs `PineconeSyncStatus.final_sync_at`. |
+| **ClangGithubIssueItem** | One row per issue or PR **number** (`unique`). `is_pull_request` distinguishes types. `github_created_at` / `github_updated_at` mirror GitHub API times; **`github_updated_at`** (with `Max` + 1ms) drives **API fetch** resume. Django **`updated_at`** (`auto_now`) bumps on every upsert and drives **Pinecone** incrementality vs `PineconeSyncStatus.final_sync_at`. |
 | **ClangGithubCommit** | One row per **sha** (`unique`, 40-char hex). `github_committed_at` is the author/committer date used for commit fetch watermarks. |
 
 Raw JSON remains under `workspace/raw/github_activity_tracker/<owner>/<repo>/` (same layout as other raw GitHub activity).

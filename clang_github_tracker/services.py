@@ -221,7 +221,7 @@ def upsert_issue_items_batch(
     """Batch upsert issue/PR rows by ``number``.
 
     Duplicate ``number`` values merge: ``github_updated_at`` uses the latest
-    timestamp; ``github_created_at`` uses a later row’s value when non-None,
+    timestamp; ``github_created_at`` uses a later row's value when non-None,
     otherwise keeps the prior value; ``is_pull_request`` is True if any row
     marks the number as a PR.
 
