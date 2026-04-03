@@ -149,10 +149,33 @@ def publish_clang_markdown(
             ) from e
 
     logger.info("Bootstrapping clone before pull: fetch, clean, reset (%s)", clone_dir)
-    prepare_repo_for_pull(clone_dir, remote="origin", token=token)
+    try:
+        prepare_repo_for_pull(clone_dir, remote="origin", token=token)
+    except subprocess.CalledProcessError as e:
+        err = ((e.stderr or "") + (e.stdout or "")).strip() or str(e)
+        logger.error(
+            "clang_github_tracker publish: prepare clone for pull failed "
+            "(clone_dir=%s, branch=%s): %s",
+            clone_dir,
+            branch,
+            err,
+            exc_info=e,
+        )
+        raise CommandError(f"Failed to prepare clone for pull: {err}") from e
 
     logger.info("Pulling latest for %s", clone_dir)
-    pull(clone_dir, branch=branch, token=token)
+    try:
+        pull(clone_dir, branch=branch, token=token)
+    except subprocess.CalledProcessError as e:
+        err = ((e.stderr or "") + (e.stdout or "")).strip() or str(e)
+        logger.error(
+            "clang_github_tracker publish: git pull failed (clone_dir=%s, branch=%s): %s",
+            clone_dir,
+            branch,
+            err,
+            exc_info=e,
+        )
+        raise CommandError(f"Git pull failed: {err}") from e
 
     logger.info("Resetting clone to origin/%s (discard unpushed commits)", branch)
     _reset_hard_to_upstream(clone_dir, "origin", branch)
