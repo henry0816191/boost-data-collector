@@ -97,6 +97,33 @@ def test_build_documents_from_raw_mixed():
     assert result[1].page_content == "c"
 
 
+def test_build_documents_from_raw_metadata_source_ids():
+    """metadata['source_ids'] is copied to table_ids (preferred over legacy top-level ids)."""
+    raw = [
+        {
+            "content": "hello",
+            "metadata": {"doc_id": "doc-1", "source_ids": "42"},
+        },
+    ]
+    result = _build_documents_from_raw(raw)
+    assert len(result) == 1
+    assert result[0].metadata.get("table_ids") == "42"
+
+
+def test_build_documents_from_raw_source_ids_overrides_top_level_ids():
+    """When both are present, metadata['source_ids'] wins for table_ids."""
+    raw = [
+        {
+            "ids": "legacy",
+            "content": "x",
+            "metadata": {"doc_id": "d", "source_ids": "from-meta"},
+        },
+    ]
+    result = _build_documents_from_raw(raw)
+    assert len(result) == 1
+    assert result[0].metadata.get("table_ids") == "from-meta"
+
+
 # --- _extract_new_failed_ids ---
 
 
@@ -160,8 +187,9 @@ def test_extract_new_failed_ids_skips_empty():
 
 
 @pytest.mark.django_db
-def test_sync_to_pinecone_empty_preprocess_returns_early(app_type):
-    """sync_to_pinecone returns empty result and does not update sync status when preprocess returns no docs."""
+def test_sync_to_pinecone_empty_preprocess_returns_early():
+    """No upsert/metadata work: empty result and PineconeSyncStatus is not touched."""
+    app_type = "test_empty_preprocess_sync"
 
     def preprocess(_failed_ids, _final_sync_at):
         return [], False
@@ -221,6 +249,47 @@ def test_sync_to_pinecone_calls_ingestion_and_updates_db(mock_get_ingestion, app
     assert result["failed_count"] == 0
     assert result["failed_ids"] == []
     assert result["update_errors"] == []
+    assert services.get_final_sync_at(app_type) is not None
+
+
+@pytest.mark.django_db
+@patch("cppa_pinecone_sync.sync._get_ingestion")
+def test_sync_to_pinecone_metadata_only_calls_update(mock_get_ingestion, app_type):
+    """Empty upsert batch but non-empty metas_to_update still runs update_documents."""
+    mock_ingestion = MagicMock()
+    mock_ingestion.update_documents.return_value = {
+        "updated": 3,
+        "total": 3,
+        "errors": [],
+        "failed_documents": [],
+    }
+    mock_get_ingestion.return_value = mock_ingestion
+
+    def preprocess(_failed_ids, _final_sync_at):
+        return (
+            [],
+            False,
+            [
+                {
+                    "ids": "10",
+                    "content": "metadata-only body " * 20,
+                    "metadata": {"doc_id": "h1"},
+                },
+            ],
+        )
+
+    result = sync_to_pinecone(app_type, "meta_ns", preprocess)
+
+    mock_ingestion.upsert_documents.assert_not_called()
+    mock_ingestion.update_documents.assert_called_once()
+    call_kw = mock_ingestion.update_documents.call_args[1]
+    assert call_kw["namespace"] == "meta_ns"
+    assert len(call_kw["documents"]) == 1
+    assert result["upserted"] == 0
+    assert result["total"] == 0
+    assert result["failed_count"] == 0
+    assert result["updated"] == 3
+    assert result["failed_ids"] == []
     assert services.get_final_sync_at(app_type) is not None
 
 

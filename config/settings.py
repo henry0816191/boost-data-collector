@@ -192,6 +192,8 @@ PINECONE_ENVIRONMENT = (
 PINECONE_CLOUD = (env("PINECONE_CLOUD", default="aws") or "aws").strip() or "aws"
 # Chunking and batching
 PINECONE_BATCH_SIZE = env.int("PINECONE_BATCH_SIZE", default=96)
+# Parallel threads for Pinecone metadata-only updates (update_documents); lower if you hit 429s.
+PINECONE_UPDATE_MAX_WORKERS = env.int("PINECONE_UPDATE_MAX_WORKERS", default=8)
 PINECONE_CHUNK_SIZE = env.int("PINECONE_CHUNK_SIZE", default=1000)
 PINECONE_CHUNK_OVERLAP = env.int("PINECONE_CHUNK_OVERLAP", default=200)
 PINECONE_MIN_TEXT_LENGTH = env.int("PINECONE_MIN_TEXT_LENGTH", default=50)
@@ -205,6 +207,13 @@ PINECONE_SPARSE_MODEL = (
     env("PINECONE_SPARSE_MODEL", default="pinecone-sparse-english-v0")
     or "pinecone-sparse-english-v0"
 ).strip() or "pinecone-sparse-english-v0"
+# Slack → Pinecone namespace/app_type prefix (cppa_pinecone_sync / slack pipelines)
+PINECONE_SLACK_NAMESPACE_PREFIX = (
+    env("PINECONE_SLACK_NAMESPACE_PREFIX", default="slack") or "slack"
+).strip() or "slack"
+PINECONE_SLACK_APP_TYPE_PREFIX = (
+    env("PINECONE_SLACK_APP_TYPE_PREFIX", default="slack") or "slack"
+).strip() or "slack"
 
 # Pinecone sync: app_type and namespace per app (used when CLI does not pass --pinecone-app-type/--pinecone-namespace)
 # Boost Mailing List Tracker
@@ -320,44 +329,30 @@ GIT_AUTHOR_EMAIL = (
 SLACK_TEAM_ID = (env("SLACK_TEAM_ID", default="") or "").strip()
 
 
-def _slack_bot_token_from_env():
-    """Build a dict of team_id -> bot token from SLACK_TEAM_IDS and SLACK_BOT_TOKEN_<id> env vars."""
-    out = {}
+def _slack_team_ids_from_env():
+    """Comma-separated SLACK_TEAM_IDS → non-empty team id strings."""
     ids_raw = (env("SLACK_TEAM_IDS", default="") or "").strip()
     if not ids_raw:
-        return out
-    for tid in ids_raw.split(","):
-        tid = tid.strip()
-        if not tid:
-            continue
-        key = f"SLACK_BOT_TOKEN_{tid}"
+        return []
+    return [tid.strip() for tid in ids_raw.split(",") if tid.strip()]
+
+
+def _slack_per_team_tokens_from_env(env_key_prefix: str):
+    """
+    Build team_id -> token from SLACK_TEAM_IDS and ``{prefix}_{team_id}`` env vars
+    (e.g. prefix SLACK_BOT_TOKEN → SLACK_BOT_TOKEN_T123).
+    """
+    out = {}
+    for tid in _slack_team_ids_from_env():
+        key = f"{env_key_prefix}_{tid}"
         token = (env(key, default="") or "").strip()
         if token:
             out[tid] = token
     return out
 
 
-SLACK_BOT_TOKEN = _slack_bot_token_from_env()
-
-
-def _slack_app_token_from_env():
-    """Build a dict of team_id -> app token from SLACK_TEAM_IDS and SLACK_APP_TOKEN_<id> env vars."""
-    out = {}
-    ids_raw = (env("SLACK_TEAM_IDS", default="") or "").strip()
-    if not ids_raw:
-        return out
-    for tid in ids_raw.split(","):
-        tid = tid.strip()
-        if not tid:
-            continue
-        key = f"SLACK_APP_TOKEN_{tid}"
-        token = (env(key, default="") or "").strip()
-        if token:
-            out[tid] = token
-    return out
-
-
-SLACK_APP_TOKEN = _slack_app_token_from_env()
+SLACK_BOT_TOKEN = _slack_per_team_tokens_from_env("SLACK_BOT_TOKEN")
+SLACK_APP_TOKEN = _slack_per_team_tokens_from_env("SLACK_APP_TOKEN")
 
 
 def _slack_team_scope_from_env():
@@ -368,14 +363,8 @@ def _slack_team_scope_from_env():
     If SLACK_TEAM_SCOPE_<id> is missing or empty, that team gets [0, 1] (both).
     """
     out = {}
-    ids_raw = (env("SLACK_TEAM_IDS", default="") or "").strip()
-    if not ids_raw:
-        return out
     valid_scopes = {0, 1}
-    for tid in ids_raw.split(","):
-        tid = tid.strip()
-        if not tid:
-            continue
+    for tid in _slack_team_ids_from_env():
         key = f"SLACK_TEAM_SCOPE_{tid}"
         raw = (env(key, default="") or "").strip()
         if not raw:
@@ -549,39 +538,6 @@ except Exception:
         "Could not load boost collector schedule from YAML.",
     )
     CELERY_BEAT_SCHEDULE = {}
-
-# =============================================================================
-# Pinecone (cppa_pinecone_sync) - vector index for RAG sync
-# =============================================================================
-# Public API key (default). Used when instance=public or unset.
-PINECONE_API_KEY = (env("PINECONE_API_KEY", default="") or "").strip()
-# Private API key. Used when instance=private.
-PINECONE_PRIVATE_API_KEY = (env("PINECONE_PRIVATE_API_KEY", default="") or "").strip()
-# Index name (required for sync). Set in .env to enable Slack/mailing list → Pinecone.
-PINECONE_INDEX_NAME = (env("PINECONE_INDEX_NAME", default="") or "").strip()
-PINECONE_ENVIRONMENT = (
-    env("PINECONE_ENVIRONMENT", default="us-east-1") or "us-east-1"
-).strip()
-PINECONE_CLOUD = (env("PINECONE_CLOUD", default="aws") or "aws").strip()
-PINECONE_BATCH_SIZE = int(env("PINECONE_BATCH_SIZE", default="96") or "96")
-PINECONE_CHUNK_SIZE = int(env("PINECONE_CHUNK_SIZE", default="1000") or "1000")
-PINECONE_CHUNK_OVERLAP = int(env("PINECONE_CHUNK_OVERLAP", default="200") or "200")
-PINECONE_MIN_TEXT_LENGTH = int(env("PINECONE_MIN_TEXT_LENGTH", default="50") or "50")
-PINECONE_MIN_WORDS = int(env("PINECONE_MIN_WORDS", default="5") or "5")
-PINECONE_SLACK_NAMESPACE_PREFIX = (
-    env("PINECONE_SLACK_NAMESPACE_PREFIX", default="slack") or "slack"
-).strip()
-PINECONE_SLACK_APP_TYPE_PREFIX = (
-    env("PINECONE_SLACK_APP_TYPE_PREFIX", default="slack") or "slack"
-).strip()
-PINECONE_DENSE_MODEL = (
-    env("PINECONE_DENSE_MODEL", default="multilingual-e5-large")
-    or "multilingual-e5-large"
-).strip()
-PINECONE_SPARSE_MODEL = (
-    env("PINECONE_SPARSE_MODEL", default="pinecone-sparse-english-v0")
-    or "pinecone-sparse-english-v0"
-).strip()
 
 # GitHub activity tracker: Redis for ETag cache (conditional GET). Use separate DB index.
 # To persist the cache across restarts, enable Redis persistence (RDB or AOF) in redis.conf:

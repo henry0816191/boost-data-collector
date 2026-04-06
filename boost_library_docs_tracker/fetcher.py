@@ -76,9 +76,9 @@ def download_source_zip(version: str, dest_dir: Path) -> Path:
     zip_name = f"boost_{normalized.replace('.', '_')}.zip"
     zip_path = dest_dir / zip_name
 
-    # if zip_path.exists():
-    #     logger.info("Source zip already present, skipping download: %s", zip_path)
-    #     return zip_path
+    if zip_path.exists():
+        logger.info("Source zip already present, skipping download: %s", zip_path)
+        return zip_path
 
     dest_dir.mkdir(parents=True, exist_ok=True)
     session = _get_session()
@@ -320,16 +320,26 @@ def crawl_library_pages(
 
         # Enqueue in-scope links
         soup = BeautifulSoup(resp.text, "lxml")
-        for a in soup.find_all("a", href=True):
-            href: str = a["href"]
-            abs_url = urljoin(final_url, href)
-            # Strip fragment
-            abs_url = abs_url.split("#")[0]
-            if (
-                abs_url not in visited
-                and abs_url.startswith(start_url)
-                and abs_url not in queue
-            ):
+        lib_segment = lib_key.split("/")[-1]
+        if not lib_segment:
+            logger.warning(
+                "Empty library key segment for lib_key=%r; skipping link discovery for %s",
+                lib_key,
+                final_url,
+            )
+        else:
+            for a in soup.find_all("a", href=True):
+                href: str = a["href"]
+                abs_url = urljoin(final_url, href)
+                # Strip fragment
+                abs_url = abs_url.split("#")[0]
+                if not abs_url.startswith(base_url):
+                    continue
+                # Stay within this library's doc subtree (path contains lib segment)
+                if lib_segment not in abs_url:
+                    continue
+                if abs_url in visited or abs_url in queue:
+                    continue
                 queue.append(abs_url)
 
     logger.debug(

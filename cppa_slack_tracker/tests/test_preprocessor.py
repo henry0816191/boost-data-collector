@@ -182,9 +182,9 @@ def test_preprocessor_document_shape_and_metadata_fields(
         assert "timestamp" in target["metadata"]
         assert "team_id" in target["metadata"]
 
-        # Check ids field for retry tracking
-        assert "ids" in target["metadata"]
-        assert isinstance(target["metadata"]["ids"], str)
+        # Check source_ids for retry tracking (Pinecone_preprocess_guideline.md)
+        assert "source_ids" in target["metadata"]
+        assert isinstance(target["metadata"]["source_ids"], str)
 
 
 @pytest.mark.django_db

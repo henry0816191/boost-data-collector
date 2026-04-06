@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from enum import Enum
 from typing import Any, Optional
 
@@ -73,16 +74,22 @@ class PineconeIngestion:
         self.sparse_model: str = getattr(
             settings, "PINECONE_SPARSE_MODEL", "pinecone-sparse-english-v0"
         )
+        # Parallel metadata updates (update_documents); 1 = sequential. Cap with Pinecone rate limits.
+        self.update_max_workers: int = max(
+            1, int(getattr(settings, "PINECONE_UPDATE_MAX_WORKERS", 8))
+        )
 
         self._setup_client()
         self._initialize_text_splitter()
         self._setup_indexes()
 
         logger.info(
-            "PineconeIngestion: dense_model=%s, sparse_model=%s, instance=%s",
+            "PineconeIngestion: dense_model=%s, sparse_model=%s, instance=%s, "
+            "update_max_workers=%d",
             self.dense_model,
             self.sparse_model,
             self.instance.value,
+            self.update_max_workers,
         )
 
     @property
@@ -375,7 +382,7 @@ class PineconeIngestion:
             )
             record: dict[str, Any] = {"id": doc_id, "chunk_text": text}
             record.update(metadata)
-            record.pop("table_ids", None)
+            record.pop("source_ids", None)
             records.append(record)
         return records
 
@@ -406,7 +413,7 @@ class PineconeIngestion:
             meta = doc.metadata or {}
             failed.append(
                 {
-                    "ids": meta.get("table_ids", ""),
+                    "ids": meta.get("source_ids") or meta.get("table_ids", ""),
                     "reason": f"Batch upsert failed: {error}",
                 }
             )
@@ -479,24 +486,51 @@ class PineconeIngestion:
                 continue
 
             batch_failed_count = 0
-            for update in batch_updates:
-                try:
-                    self._update_single_record(update, namespace)
-                    updated_count += 1
-                except Exception as e:
-                    error_msg = (
-                        f"Error updating metadata for batch {batch_num} "
-                        f"record {update['id']}: {e}"
-                    )
-                    logger.error(error_msg)
-                    errors.append(error_msg)
-                    failed_docs.append(
-                        {
-                            "ids": update.get("ids", ""),
-                            "reason": f"Metadata update failed: {e}",
-                        }
-                    )
-                    batch_failed_count += 1
+            if self.update_max_workers <= 1:
+                for update in batch_updates:
+                    try:
+                        self._update_single_record(update, namespace)
+                        updated_count += 1
+                    except Exception as e:
+                        error_msg = (
+                            f"Error updating metadata for batch {batch_num} "
+                            f"record {update['id']}: {e}"
+                        )
+                        logger.error(error_msg)
+                        errors.append(error_msg)
+                        failed_docs.append(
+                            {
+                                "ids": update.get("ids", ""),
+                                "reason": f"Metadata update failed: {e}",
+                            }
+                        )
+                        batch_failed_count += 1
+            else:
+                max_workers = min(self.update_max_workers, len(batch_updates))
+                with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                    future_to_update = {
+                        pool.submit(self._update_single_record, u, namespace): u
+                        for u in batch_updates
+                    }
+                    for fut in as_completed(future_to_update):
+                        update = future_to_update[fut]
+                        try:
+                            fut.result()
+                            updated_count += 1
+                        except Exception as e:
+                            error_msg = (
+                                f"Error updating metadata for batch {batch_num} "
+                                f"record {update['id']}: {e}"
+                            )
+                            logger.error(error_msg)
+                            errors.append(error_msg)
+                            failed_docs.append(
+                                {
+                                    "ids": update.get("ids", ""),
+                                    "reason": f"Metadata update failed: {e}",
+                                }
+                            )
+                            batch_failed_count += 1
 
             logger.info(
                 "Updated metadata for batch %d: %d/%d documents",
@@ -527,9 +561,9 @@ class PineconeIngestion:
                 record_idx=len(updates),
             )
 
-            source_ids = metadata.get("table_ids", "")
-            metadata.pop("table_ids", None)
-            updates.append({"id": doc_id, "set_metadata": metadata, "ids": source_ids})
+            track_ids = metadata.get("source_ids") or metadata.get("table_ids", "")
+            metadata.pop("source_ids", None)
+            updates.append({"id": doc_id, "set_metadata": metadata, "ids": track_ids})
 
         return updates
 

@@ -41,8 +41,8 @@ def test_get_or_create_doc_content_unchanged_when_same_hash():
 
 
 @pytest.mark.django_db
-def test_get_or_create_doc_content_content_changed_when_url_differs():
-    """get_or_create_doc_content returns 'content_changed' when url differs for same hash."""
+def test_get_or_create_doc_content_unchanged_when_url_differs_same_hash():
+    """Same content_hash with a new URL still returns 'unchanged' (hash identity unchanged)."""
     services.get_or_create_doc_content(
         url="https://example.com/old-page",
         content_hash="c" * 64,
@@ -51,7 +51,7 @@ def test_get_or_create_doc_content_content_changed_when_url_differs():
         url="https://example.com/new-page",
         content_hash="c" * 64,
     )
-    assert change_type == "content_changed"
+    assert change_type == "unchanged"
     obj2.refresh_from_db()
     assert obj2.url == "https://example.com/new-page"
 

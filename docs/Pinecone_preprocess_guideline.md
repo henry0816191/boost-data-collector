@@ -71,7 +71,7 @@ Each item in the list must be a dict with at least:
 | `content`                                 | top-level         | Yes          | The text to index (plain string).                                                                                                                                                                               |
 | `metadata`                                | top-level         | Yes          | Dict of metadata attached to the document.                                                                                                                                                                      |
 | `metadata["doc_id"]` or `metadata["url"]` | inside `metadata` | One required | Stable identifier for the document (e.g. primary key, URL). Used for chunk IDs and for skipping invalid docs.                                                                                                   |
-| `metadata["ids"]`                         | inside `metadata` | Recommended  | Comma-separated **source record IDs** (e.g. DB primary keys). Used to record failed IDs when an upsert fails so they can be retried next run. If omitted, failed-document tracking for that item will be empty. |
+| `metadata["source_ids"]`                  | inside `metadata` | Recommended  | Comma-separated **source record IDs** (e.g. DB primary keys). Used to record failed IDs when an upsert fails so they can be retried next run. If omitted, failed-document tracking for that item will be empty. |
 
 Any other keys in `metadata` (e.g. `title`, `author`, `source`) are passed through to Pinecone and can be used for filtering or display.
 
@@ -82,7 +82,7 @@ Any other keys in `metadata` (e.g. `title`, `author`, `source`) are passed throu
     "content": "The actual text to index for this document or chunk.",
     "metadata": {
         "doc_id": "slack-msg-12345",   # or "url": "https://..."
-        "ids": "12345",                 # source ID(s) for retry tracking
+        "source_ids": "12345",                 # source ID(s) for retry tracking
         "title": "Optional title",
     },
 }
@@ -90,12 +90,12 @@ Any other keys in `metadata` (e.g. `title`, `author`, `source`) are passed throu
 
 ### Example with multiple source IDs (e.g. one chunk from multiple rows)
 
-If one logical “document” is built from several source records, pass their IDs in `metadata["ids"]` as a comma-separated string so that if the upsert fails, all of them are recorded for retry:
+If one logical “document” is built from several source records, pass their IDs in `metadata["source_ids"]` as a comma-separated string so that if the upsert fails, all of them are recorded for retry:
 
 ```python
 "metadata": {
     "doc_id": "thread-abc",
-    "ids": "101,102,103",
+    "source_ids": "101,102,103",
 }
 ```
 
@@ -145,10 +145,10 @@ python manage.py run_cppa_pinecone_sync \
     --pinecone-instance private
 ```
 
-| Instance   | Django setting read         | `.env` key                  |
-|------------|-----------------------------|-----------------------------|
-| `public`   | `PINECONE_API_KEY`          | `PINECONE_API_KEY`          |
-| `private`  | `PINECONE_PRIVATE_API_KEY`  | `PINECONE_PRIVATE_API_KEY`  |
+| Instance  | Django setting read        | `.env` key                 |
+| --------- | -------------------------- | -------------------------- |
+| `public`  | `PINECONE_API_KEY`         | `PINECONE_API_KEY`         |
+| `private` | `PINECONE_PRIVATE_API_KEY` | `PINECONE_PRIVATE_API_KEY` |
 
 If no `instance` is specified, **public** is used.
 
@@ -159,7 +159,7 @@ If no `instance` is specified, **public** is used.
 - [ ] Signature: `(failed_ids: list[str], final_sync_at: datetime | None) -> tuple[list[dict], bool]`.
 - [ ] Each dict has top-level `content` (str) and `metadata` (dict).
 - [ ] Each `metadata` has at least one of `doc_id` or `url`.
-- [ ] For retry tracking, set `metadata["ids"]` to the source record ID(s), comma-separated if multiple.
+- [ ] For retry tracking, set `metadata["source_ids"]` to the source record ID(s), comma-separated if multiple.
 - [ ] Use `failed_ids` to re-include previously failed records.
 - [ ] Use `final_sync_at` for incremental sync when applicable.
 - [ ] Return `is_chunked=True` only if you are already emitting final chunks; otherwise `False`.

@@ -23,6 +23,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
+from core.utils.boost_version_operations import (
+    decode_boost_version,
+    normalize_boost_version_string,
+)
+
 from github_ops.client import GitHubAPIClient
 
 logger = logging.getLogger(__name__)
@@ -100,15 +105,6 @@ def extract_boost_includes(content: str) -> list[str]:
     ]
 
 
-def _normalize_version(version_str: str) -> Optional[str]:
-    version = version_str.replace("-", ".").replace("_", ".")
-    if version.startswith("0."):
-        return None
-    if len(version.split(".")) == 2:
-        version = f"{version}.0"
-    return version
-
-
 def extract_boost_version_from_content(
     content: str,
     filename: str,
@@ -122,28 +118,26 @@ def extract_boost_version_from_content(
         match = BOOST_VERSION_HPP_PATTERN.search(content)
         if match:
             ver_int = int(match.group(1))
-            major = ver_int // 100_000
-            minor = (ver_int // 100) % 1_000
-            patch = ver_int % 100
+            major, minor, patch = decode_boost_version(ver_int)
             return f"{major}.{minor}.{patch}"
 
     if lower in ("cmakelists.txt", "cmakelists.cmake"):
         for pat in CMAKE_VERSION_PATTERNS:
             match = pat.search(content)
             if match:
-                return _normalize_version(match.group(1).strip())
+                return normalize_boost_version_string(match.group(1).strip())
 
     if lower in ("conanfile.txt", "conanfile.py"):
         for pat in CONAN_VERSION_PATTERNS:
             match = pat.search(content)
             if match:
-                return _normalize_version(match.group(1).strip())
+                return normalize_boost_version_string(match.group(1).strip())
 
     if lower == "vcpkg.json":
         for pat in VCPKG_VERSION_PATTERNS:
             match = pat.search(content)
             if match:
-                return _normalize_version(match.group(1).strip())
+                return normalize_boost_version_string(match.group(1).strip())
 
     return None
 

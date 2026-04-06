@@ -11,10 +11,11 @@ Procedure:
   3. For each library, fetch docs and save to workspace:
      - Default (--use-local not set): HTTP BFS crawl per library.
      - --use-local: download source zip once per version, extract, walk local HTML.
-       Zip is saved in workspace/raw/boost_library_docs_tracker/ and is not deleted.
+       Zip is saved in workspace/raw/boost_library_docs_tracker/.
        Extract tree is saved in workspace/boost_library_docs_tracker/extracted/.
        Converted page content is saved in workspace/boost_library_docs_tracker/converted/.
-       Pass --cleanup-extract to delete the extract tree after all libraries are done.
+       Pass --cleanup-extract to delete the extract tree and the downloaded zip after
+       all libraries for that version are done.
   4. Fill BoostDocContent and BoostLibraryDocumentation tables (no page_content in DB).
      - New content_hash → create new BoostDocContent row, set first_version and last_version.
      - Same content_hash but different URL → update url and scraped_at, update last_version.
@@ -38,7 +39,6 @@ import hashlib
 import logging
 from pathlib import Path
 
-from django.apps import apps
 from django.core.management.base import BaseCommand, CommandError
 
 from boost_library_docs_tracker import fetcher, services, workspace
@@ -47,8 +47,8 @@ from boost_library_tracker.models import BoostLibraryVersion, BoostVersion
 
 logger = logging.getLogger(__name__)
 
-APP_TYPE = "boost_library_docs"
-PINECONE_NAMESPACE = "boost_library_docs"
+APP_TYPE = "boost-library-documentation"
+PINECONE_NAMESPACE = "boost-library-documentation"
 DEFAULT_MAX_PAGES = 10
 
 
@@ -103,8 +103,8 @@ class Command(BaseCommand):
             "--cleanup-extract",
             action="store_true",
             help=(
-                "Delete the extracted source tree after all libraries for a version are "
-                "processed (only with --use-local)."
+                "Delete the extracted source tree and the raw zip under workspace/raw/ "
+                "after all libraries for a version are processed (only with --use-local)."
             ),
         )
 
@@ -180,9 +180,10 @@ class Command(BaseCommand):
         self.stdout.write(f"[{version}] {len(library_list)} library/libraries.")
 
         source_root: Path | None = None
+        zip_path: Path | None = None
 
         if use_local:
-            source_root = self._prepare_local_source(version=version)
+            source_root, zip_path = self._prepare_local_source(version=version)
 
         # Resolve once per version; used to track first/last_version on BoostDocContent.
         boost_version_id = self._resolve_boost_version_id(version)
@@ -202,20 +203,36 @@ class Command(BaseCommand):
 
         if use_local and cleanup_extract and source_root is not None:
             fetcher.delete_extract_dir(source_root)
+            if zip_path is not None:
+                try:
+                    zip_path.unlink(missing_ok=True)
+                    self.stdout.write(
+                        self.style.NOTICE(
+                            f"[{version}] Removed source zip {zip_path.name}"
+                        )
+                    )
+                except OSError as exc:
+                    logger.warning("Could not remove source zip %s: %s", zip_path, exc)
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"[{version}] Could not remove source zip: {exc}"
+                        )
+                    )
 
         self.stdout.write(f"[{version}] Done — {total_pages} pages total.")
 
-    def _prepare_local_source(self, *, version: str) -> Path:
+    def _prepare_local_source(self, *, version: str) -> tuple[Path, Path]:
         """Download and extract the Boost source zip for a version.
 
-        Returns source_root — the top-level extracted directory.
+        Returns (source_root, zip_path): top-level extracted directory and path to
+        the zip under workspace/raw/boost_library_docs_tracker/.
         """
         zip_dir = workspace.get_zip_dir()
         extract_dir = workspace.get_extract_dir()
 
-        if zip_dir.exists():
-            self.stdout.write(f"[{version}] Source zip already exists at {zip_dir}")
-            return extract_dir
+        # if zip_dir.exists():
+        #     self.stdout.write(f"[{version}] Source zip already exists at {zip_dir}")
+        #     return extract_dir
 
         try:
             zip_path = fetcher.download_source_zip(version, zip_dir)
@@ -232,7 +249,7 @@ class Command(BaseCommand):
             ) from exc
 
         self.stdout.write(f"[{version}] Source ready at {source_root}")
-        return source_root
+        return source_root, zip_path
 
     def _process_library(
         self,
@@ -308,7 +325,7 @@ class Command(BaseCommand):
     def _save_pages_to_workspace_and_db(
         self, *, version, lib_name, lib_version_id, boost_version_id, pages
     ):
-        created = changed = unchanged = 0
+        created = unchanged = 0
 
         for url, page_text in pages:
             content_hash = hashlib.sha256(page_text.encode()).hexdigest()
@@ -331,8 +348,6 @@ class Command(BaseCommand):
 
             if change_type == "created":
                 created += 1
-            elif change_type == "content_changed":
-                changed += 1
             else:
                 unchanged += 1
 
@@ -346,25 +361,14 @@ class Command(BaseCommand):
                     exc,
                 )
 
-        self.stdout.write(
-            f"  [{lib_name}] created={created}, changed={changed}, unchanged={unchanged}."
-        )
+        self.stdout.write(f"  [{lib_name}] created={created}, unchanged={unchanged}.")
 
     # ------------------------------------------------------------------
     # Pinecone sync
     # ------------------------------------------------------------------
 
     def _sync_pinecone(self):
-        if not apps.is_installed("cppa_pinecone_sync"):
-            self.stdout.write(
-                self.style.WARNING(
-                    "Skipping Pinecone sync: 'cppa_pinecone_sync' is not in INSTALLED_APPS."
-                )
-            )
-            self.stdout.write(
-                "Add 'cppa_pinecone_sync' to INSTALLED_APPS or run with --skip-pinecone."
-            )
-            return
+        """Sync to Pinecone"""
 
         try:
             from cppa_pinecone_sync.sync import sync_to_pinecone
@@ -390,7 +394,6 @@ class Command(BaseCommand):
             return
 
         successful_ids = result.get("successful_source_ids", [])
-        failed_ids = result.get("failed_ids", [])
         int_successful_ids: list[int] = []
         for sid in successful_ids:
             try:
@@ -477,27 +480,32 @@ class Command(BaseCommand):
             result.append((start_path, lib_key))
         return result
 
-    def _resolve_library_version_id(self, lib_name: str, version: str) -> int | None:
+    def _resolve_library_version_id(self, lib_key: str, version: str) -> int | None:
         """Resolve BoostLibraryVersion id from DB. Returns None if not found."""
-        try:
-            lv = BoostLibraryVersion.objects.select_related("library", "version").get(
-                library__name=lib_name,
-                version__version=version,
-            )
-            return lv.pk
-        except BoostLibraryVersion.DoesNotExist:
+        lib_key = (lib_key or "").strip()
+        if not lib_key:
             return None
-        except BoostLibraryVersion.MultipleObjectsReturned:
+
+        base_qs = BoostLibraryVersion.objects.select_related(
+            "library", "version"
+        ).filter(version__version=version)
+        # 1) Preferred: key + version
+        qs = base_qs.filter(key=lib_key)
+        lv = qs.first()
+        if lv:
+            return lv.pk
+
+        # 2) Optional compatibility fallback: name + version
+        qs = base_qs.filter(library__name=lib_key)
+        lv = qs.first()
+        if lv:
             logger.warning(
-                "Multiple BoostLibraryVersion rows for lib=%s ver=%s; using first.",
-                lib_name,
+                "Resolved by library name fallback (missing/mismatched key): lib_key=%s, version=%s",
+                lib_key,
                 version,
             )
-            lv = BoostLibraryVersion.objects.filter(
-                library__name=lib_name,
-                version__version=version,
-            ).first()
-            return lv.pk if lv is not None else None
+            return lv.pk
+        return None
 
     def _resolve_boost_version_id(self, version: str) -> int | None:
         """Resolve BoostVersion PK from the version string. Returns None if not found."""

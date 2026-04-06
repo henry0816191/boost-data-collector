@@ -1,16 +1,16 @@
 """
-Text processing utilities for Slack message preprocessing.
+Shared text cleaning and light filtering helpers.
 
-Adapted from workspace/utility.py for Django integration.
-Contains functions for cleaning, filtering, and validating Slack message content.
+Used by ``cppa_slack_tracker`` (and other apps) for normalizing message text and
+optional greeting/noise phrase removal. Default word lists are Slack-oriented
+(``SLACK_*`` constants).
 """
 
+from __future__ import annotations
+
+import html
 import re
-import logging
-from typing import Optional, Iterable, FrozenSet
-
-logger = logging.getLogger(__name__)
-
+from typing import Iterable, FrozenSet, Optional
 
 # Default greeting/unessential words for filter_sentence (Slack message cleaning)
 SLACK_GREETING_WORDS: FrozenSet[str] = frozenset(
@@ -89,12 +89,13 @@ SLACK_UNESSENTIAL_WORDS: FrozenSet[str] = frozenset(
 )
 
 
-def clean_text(text: str, remove_extra_spaces: bool = True) -> str:
+def clean_text(text: str | None, remove_extra_spaces: bool = True) -> str:
     """
     Clean and normalize text content.
 
-    Removes invisible characters, normalizes line breaks, and optionally
-    removes extra whitespace.
+    Removes invisible characters, decodes HTML character references (e.g.
+    ``&amp;``, ``&#39;``, ``&#x2f;``), fixes a few common bare entities without
+    ``;``, normalizes line breaks, and optionally removes extra whitespace.
 
     Args:
         text: Input text to clean
@@ -118,18 +119,22 @@ def clean_text(text: str, remove_extra_spaces: bool = True) -> str:
         .replace("\u200b", "")
         .replace("\u200c", "")
         .replace("\u200d", "")
+        .replace("\xa0", " ")
+        .replace("\u2002", " ")
+        .replace("\u2003", " ")
+        .replace("\u2026", "...")
+        .replace("\u202f", " ")
     )
+
+    text = html.unescape(text)
 
     # Normalize line breaks
     text = re.sub(r"\r\n", "\n", text)  # Windows line breaks
     text = re.sub(r"\r", "\n", text)  # Old Mac line breaks
 
     if remove_extra_spaces:
-        # Remove multiple spaces
         text = re.sub(r" +", " ", text)
-        # Remove multiple newlines (keep max 2)
         text = re.sub(r"\n{3,}", "\n\n", text)
-        # Remove spaces at start/end of lines
         text = "\n".join(line.strip() for line in text.split("\n"))
 
     return text.strip()
@@ -191,7 +196,7 @@ def filter_sentence(
     return sentence_lower.strip()
 
 
-def validate_content_length(content: str, min_length: int = 50) -> bool:
+def validate_content_length(content: str | None, min_length: int = 50) -> bool:
     """
     Validate that content meets minimum length requirement.
 

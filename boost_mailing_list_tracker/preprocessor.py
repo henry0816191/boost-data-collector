@@ -120,8 +120,7 @@ def preprocess_mailing_list_for_pinecone(
             "author": sender_name,
             "timestamp": safe_timestamp,
             "parent_id": message.parent_id or "",
-            # ids should reference DB row identity for sync bookkeeping.
-            "table_ids": message.pk,
+            "source_ids": str(message.pk),
             "list_name": message.list_name or "",
         }
 

@@ -9,13 +9,15 @@ Pipeline
 --------
 1. _preprocess_html   – remove Boost boilerplate from HTML before pandoc sees it
 2. _pandoc_convert    – HTML → GFM via pypandoc (CLI fallback)
-3. _postprocess_markdown – strip residual HTML artefacts and rejoin split lines
+3. _postprocess_markdown – strip residual HTML artefacts, rejoin split lines, then clean_text (unicode/line endings only)
 """
 
 import re
 import subprocess
 
 from bs4 import BeautifulSoup
+
+from core.utils.text_processing import clean_text
 
 try:
     import pypandoc
@@ -299,4 +301,7 @@ def _postprocess_markdown(md: str) -> str:
     # 12. Collapse excessive blank lines to at most two
     md = _RE_EXCESS_BLANK.sub("\n\n", md)
 
-    return md.strip() + "\n"
+    # 13. Unicode / line-ending cleanup (no space collapsing — preserves markdown indent)
+    md = clean_text(md, remove_extra_spaces=False)
+
+    return md.rstrip() + "\n"

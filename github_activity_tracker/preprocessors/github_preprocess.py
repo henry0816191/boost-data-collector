@@ -18,7 +18,7 @@ Document dict shape (per docs/Pinecone_preprocess_guideline.md):
     "content": <markdown string>,
     "metadata": {
       "doc_id": <html_url>,
-      "ids": "<repo>:issue:<number>" or "<repo>:pr:<number>",
+      "source_ids": "<repo>:issue:<number>" or "<repo>:pr:<number>",
       "type": "issue" | "pr",
       "number": <int>,
       "title": <str>,
@@ -39,7 +39,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any, Generator, Literal
 
 from operations.md_ops.issue_to_md import issue_json_to_md
 from operations.md_ops.pr_to_md import pr_json_to_md
@@ -108,6 +108,11 @@ def _iter_json_files(
             yield path, data
 
 
+def get_ids_for_pinecone(repo: str, type: Literal["issue", "pr"], number: int) -> str:
+    """Get the ids for Pinecone from a repo, type, and number."""
+    return f"{repo}:{type}:{number}"
+
+
 # ---------------------------------------------------------------------------
 # Public iterators
 # ---------------------------------------------------------------------------
@@ -171,7 +176,7 @@ def build_issue_document(
         "content": content,
         "metadata": {
             "doc_id": html_url,
-            "ids": f"{repo}:issue:{number}",
+            "source_ids": get_ids_for_pinecone(repo, "issue", number),
             "type": "issue",
             "number": number,
             "title": (info.get("title") or "").strip(),
@@ -216,7 +221,7 @@ def build_pr_document(
         "content": content,
         "metadata": {
             "doc_id": html_url,
-            "ids": f"{repo}:pr:{number}",
+            "source_ids": get_ids_for_pinecone(repo, "pr", number),
             "type": "pr",
             "number": number,
             "title": (info.get("title") or "").strip(),
@@ -264,7 +269,7 @@ def preprocess_issues(
     for path, data in iter_raw_issue_jsons(owner, repo):
         info = data.get("issue_info") or {}
         number = info.get("number") or -1
-        ids_val = f"{repo}:issue:{number}"
+        ids_val = get_ids_for_pinecone(repo, "issue", number)
 
         is_failed = ids_val in failed_set
         updated_at = _parse_updated_at(info)
@@ -322,7 +327,7 @@ def preprocess_prs(
     for path, data in iter_raw_pr_jsons(owner, repo):
         info = data.get("pr_info") or {}
         number = info.get("number") or -1
-        ids_val = f"{repo}:pr:{number}"
+        ids_val = get_ids_for_pinecone(repo, "pr", number)
 
         is_failed = ids_val in failed_set
         updated_at = _parse_updated_at(info)
