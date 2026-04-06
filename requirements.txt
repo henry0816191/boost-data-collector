@@ -24,8 +24,13 @@ slack-bolt>=1.18
 pytz>=2024.1
 selenium>=4.35
 
+# cppa_youtube_script_tracker app (YouTube Data API v3 + VTT transcript download)
+google-api-python-client>=2.100
+yt-dlp==2026.2.4
+
 # slack_event_handler (GitHub PR comments)
 PyGithub>=2.0
+
 # cppa_pinecone_sync app
 pinecone>=3.0
 langchain-core>=0.1

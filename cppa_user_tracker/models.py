@@ -11,6 +11,7 @@ class ProfileType(models.TextChoices):
     MAILING_LIST = "mailing_list", "Mailing list"
     WG21 = "wg21", "WG21"
     DISCORD = "discord", "Discord"
+    YOUTUBE = "youtube", "YouTube"
 
 
 class GitHubAccountType(models.TextChoices):
@@ -181,5 +182,22 @@ class DiscordProfile(BaseProfile):
     display_name = models.CharField(max_length=255, db_index=True, blank=True)
     avatar_url = models.URLField(max_length=512, blank=True)
     is_bot = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class YoutubeSpeaker(BaseProfile):
+    """YouTube speaker profile.
+
+    Uses external_id as canonical identifier (stable across updates). display_name is
+    a human-readable field and is not used as the identity key.
+    """
+
+    def save(self, *args, **kwargs):
+        self.type = ProfileType.YOUTUBE
+        super().save(*args, **kwargs)
+
+    external_id = models.CharField(max_length=255, unique=True)
+    display_name = models.CharField(max_length=255, db_index=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

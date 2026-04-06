@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     "clang_github_tracker",
     "cppa_slack_tracker",
     "discord_activity_tracker",
+    "cppa_youtube_script_tracker",
     "slack_event_handler",
 ]
 
@@ -159,6 +160,7 @@ _WORKSPACE_APP_SLUGS = (
     "cppa_slack_tracker",
     "discord_activity_tracker",
     "boost_mailing_list_tracker",
+    "cppa_youtube_script_tracker",
     "shared",
 )
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
@@ -566,6 +568,14 @@ if ENABLE_ERROR_NOTIFICATIONS:
         }
         LOGGING["root"]["handlers"].append("slack")
 
+# YouTube (cppa_youtube_script_tracker)
+YOUTUBE_API_KEY = (env("YOUTUBE_API_KEY", default="") or "").strip()
+YOUTUBE_PINECONE_NAMESPACE = (
+    env("YOUTUBE_PINECONE_NAMESPACE", default="youtube-scripts") or "youtube-scripts"
+).strip()
+YOUTUBE_DEFAULT_PUBLISHED_AFTER = (
+    env("YOUTUBE_DEFAULT_PUBLISHED_AFTER", default="") or ""
+).strip()
 # You can add your own Django apps here by adding them to the EXTRA_INSTALLED_APPS list in config/local_settings.py.
 try:
     from . import local_settings as _local_settings

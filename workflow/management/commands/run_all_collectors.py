@@ -22,6 +22,7 @@ COLLECTOR_COMMANDS = [
     "run_boost_mailing_list_tracker",
     "run_clang_github_tracker",
     "run_discord_exporter",
+    "run_cppa_youtube_script_tracker",
 ]
 
 

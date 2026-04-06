@@ -26,6 +26,7 @@ from .models import (
     MailingListProfile,
     SlackUser,
     DiscordProfile,
+    YoutubeSpeaker,
 )
 
 
@@ -350,3 +351,29 @@ def get_or_create_discord_profile(
         profile.is_bot = is_bot
         profile.save()
     return profile, created
+
+
+def get_or_create_youtube_speaker(
+    external_id: str,
+    display_name: str = "",
+    identity: Optional[Identity] = None,
+) -> tuple[YoutubeSpeaker, bool]:
+    """Get or create a YoutubeSpeaker by external_id. Returns (speaker, created).
+
+    Looks up by external_id. On creation, sets identity/display_name if provided.
+    If the record already exists and a non-empty display_name is provided, updates
+    display_name when changed.
+    Raises ValueError if external_id is empty.
+    """
+    external_id_val = (external_id or "").strip()
+    display_name_val = (display_name or "").strip()
+    if not external_id_val:
+        raise ValueError("external_id must not be empty.")
+    speaker, created = YoutubeSpeaker.objects.get_or_create(
+        external_id=external_id_val,
+        defaults={"display_name": display_name_val, "identity": identity},
+    )
+    if not created and display_name_val and speaker.display_name != display_name_val:
+        speaker.display_name = display_name_val
+        speaker.save(update_fields=["display_name", "updated_at"])
+    return speaker, created
