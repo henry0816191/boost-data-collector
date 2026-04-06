@@ -60,4 +60,7 @@ until make health >/dev/null 2>&1; do
 done
 log "Stack is healthy."
 
+log "Sending startup notification..."
+DEPLOY_BRANCH="$BRANCH" make notify || log "WARNING: Startup notification failed (non-fatal)."
+
 log "Deploy completed."

@@ -1,5 +1,6 @@
 # Boost Data Collector - Docker Compose
-# Runs: PostgreSQL, Redis, Django (gunicorn), Celery worker, Celery beat
+# Runs: Redis, Django (gunicorn), Celery worker, Celery beat, Selenium.
+# DATABASE_URL must be set in .env (host Postgres, or postgres://...@db:5432/... if you enable db).
 
 services:
   # db:
@@ -33,7 +34,7 @@ services:
     platform: linux/amd64
     shm_size: "2g"
     ports:
-      - "4444:4444"
+      - "127.0.0.1:4444:4444"
     healthcheck:
       test:
         [
@@ -48,18 +49,21 @@ services:
   web:
     build: .
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     env_file: .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-boost}:${POSTGRES_PASSWORD:-boost}@db:5432/${POSTGRES_DB:-boost_dashboard}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env (e.g. host.docker.internal or db:5432 with db service enabled)}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
-      ALLOWED_HOSTS: localhost,127.0.0.1,web,0.0.0.0
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,web,0.0.0.0}
       SELENIUM_HUB_URL: http://selenium:4444/wd/hub
     volumes:
-      - workspace_data:/app/workspace
-      - logs_data:/app/logs
+      - ./workspace:/app/workspace
+      - ./logs:/app/logs
+      - ./staticfiles:/app/staticfiles
     depends_on:
       # db: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -67,15 +71,17 @@ services:
   celery_worker:
     build: .
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file: .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-boost}:${POSTGRES_PASSWORD:-boost}@db:5432/${POSTGRES_DB:-boost_dashboard}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env (e.g. host.docker.internal or db:5432 with db service enabled)}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       SELENIUM_HUB_URL: http://selenium:4444/wd/hub
     volumes:
-      - workspace_data:/app/workspace
-      - logs_data:/app/logs
+      - ./workspace:/app/workspace
+      - ./logs:/app/logs
     command: celery -A config worker -l info
     depends_on:
       # db: { condition: service_healthy }
@@ -84,14 +90,16 @@ services:
   celery_beat:
     build: .
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file: .env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-boost}:${POSTGRES_PASSWORD:-boost}@db:5432/${POSTGRES_DB:-boost_dashboard}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env (e.g. host.docker.internal or db:5432 with db service enabled)}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
     volumes:
-      - workspace_data:/app/workspace
-      - logs_data:/app/logs
+      - ./workspace:/app/workspace
+      - ./logs:/app/logs
       - celerybeat_data:/app/celerybeat
     command: celery -A config beat -l info
     depends_on:
@@ -101,6 +109,6 @@ services:
 
 volumes:
   postgres_data:
-  workspace_data:
-  logs_data:
+  # workspace_data:
+  # logs_data:
   celerybeat_data:

@@ -26,6 +26,22 @@ DEBUG = env("DEBUG")
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
+# Reverse proxy (e.g. nginx terminating TLS). Enable USE_TLS_PROXY_HEADERS only behind a trusted proxy.
+USE_X_FORWARDED_HOST = env.bool("USE_X_FORWARDED_HOST", default=False)
+if env.bool("USE_TLS_PROXY_HEADERS", default=False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
+_static_url = (env("STATIC_URL", default="static/") or "static/").strip()
+if _static_url and not _static_url.endswith("/"):
+    _static_url += "/"
+STATIC_URL = _static_url
+
+_force_script_name = (env("FORCE_SCRIPT_NAME", default="") or "").strip()
+if _force_script_name:
+    FORCE_SCRIPT_NAME = _force_script_name
+
 # Application definition
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -123,8 +139,7 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 
-# Static files
-STATIC_URL = "static/"
+# Static files (STATIC_URL set above from env; STATIC_ROOT is collectstatic output)
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Workspace: one folder for raw/processed files, subfolders per app (see docs/Workspace.md)
@@ -443,6 +458,8 @@ _LOG_FILE_PATH = LOG_DIR / LOG_FILE
 ENABLE_ERROR_NOTIFICATIONS = env.bool("ENABLE_ERROR_NOTIFICATIONS", default=False)
 DISCORD_WEBHOOK_URL = env("DISCORD_WEBHOOK_URL", default="")
 SLACK_WEBHOOK_URL = env("SLACK_WEBHOOK_URL", default="")
+# Post to webhooks after deploy (see make notify / send_startup_notification)
+ENABLE_STARTUP_NOTIFICATIONS = env.bool("ENABLE_STARTUP_NOTIFICATIONS", default=True)
 
 LOGGING = {
     "version": 1,
@@ -539,3 +556,14 @@ if ENABLE_ERROR_NOTIFICATIONS:
             "level": "ERROR",
         }
         LOGGING["root"]["handlers"].append("slack")
+
+# You can add your own Django apps here by adding them to the EXTRA_INSTALLED_APPS list in config/local_settings.py.
+try:
+    from . import local_settings as _local_settings
+
+    _LOCAL_EXTRA_INSTALLED_APPS = tuple(
+        getattr(_local_settings, "EXTRA_INSTALLED_APPS", ())
+    )
+except ImportError:
+    _LOCAL_EXTRA_INSTALLED_APPS = ()
+INSTALLED_APPS = [*INSTALLED_APPS, *_LOCAL_EXTRA_INSTALLED_APPS]

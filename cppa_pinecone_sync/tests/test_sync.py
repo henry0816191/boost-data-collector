@@ -203,7 +203,7 @@ def test_sync_to_pinecone_empty_preprocess_returns_early():
 
 @pytest.mark.django_db
 def test_sync_to_pinecone_all_invalid_docs_returns_early(app_type):
-    """sync_to_pinecone returns empty result when all raw docs lack doc_id/url."""
+    """sync_to_pinecone returns empty result and does not update sync status when all raw docs lack doc_id/url."""
 
     def preprocess(_failed_ids, _final_sync_at):
         return [
@@ -213,6 +213,7 @@ def test_sync_to_pinecone_all_invalid_docs_returns_early(app_type):
     result = sync_to_pinecone(app_type, "ns", preprocess)
     assert result["upserted"] == 0
     assert result["total"] == 0
+    assert services.get_final_sync_at(app_type) is None
 
 
 @pytest.mark.django_db
