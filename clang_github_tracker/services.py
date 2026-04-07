@@ -11,6 +11,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from clang_github_tracker.models import ClangGithubCommit, ClangGithubIssueItem
+from core.utils.datetime_parsing import ensure_aware_utc
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +23,7 @@ def _invalid_issue_number(n: object) -> bool:
     return isinstance(n, bool) or not isinstance(n, int) or n <= 0
 
 
-def _max_dt(
-    current: datetime | None, incoming: datetime | None
-) -> datetime | None:
+def _max_dt(current: datetime | None, incoming: datetime | None) -> datetime | None:
     """Return the later of two datetimes; ``None`` is treated as missing (never wins over a value)."""
     if current is None:
         return incoming
@@ -62,9 +61,9 @@ def upsert_issue_item(
 ) -> tuple[ClangGithubIssueItem, bool]:
     """Create or update a ClangGithubIssueItem by ``number``. Returns (instance, created)."""
     if _invalid_issue_number(number):
-        raise ValueError(
-            f"issue number must be a positive integer, got {number!r}"
-        )
+        raise ValueError(f"issue number must be a positive integer, got {number!r}")
+    github_created_at = ensure_aware_utc(github_created_at)
+    github_updated_at = ensure_aware_utc(github_updated_at)
     existing = ClangGithubIssueItem.objects.filter(number=number).first()
     is_pr, gc, gu = _merge_issue_item_fields(
         existing,
@@ -98,6 +97,7 @@ def upsert_commit(
     sha_clean = (sha or "").strip().lower()
     if len(sha_clean) != 40:
         raise ValueError(f"commit sha must be 40 hex chars, got {sha_clean!r}")
+    github_committed_at = ensure_aware_utc(github_committed_at)
     existing = ClangGithubCommit.objects.filter(sha=sha_clean).first()
     merged_committed_at = _max_dt(
         existing.github_committed_at if existing else None,
@@ -133,7 +133,10 @@ def _flush_commits_chunk(
     objs = [
         ClangGithubCommit(
             sha=s,
-            github_committed_at=_max_dt(existing_committed.get(s), dt),
+            github_committed_at=_max_dt(
+                ensure_aware_utc(existing_committed.get(s)),
+                ensure_aware_utc(dt),
+            ),
             updated_at=now,
         )
         for s, dt in pairs
@@ -176,7 +179,8 @@ def upsert_commits_batch(
         s = (sha or "").strip().lower()
         if len(s) != 40:
             continue
-        merged[s] = _max_dt(merged.get(s), dt)
+        dt_a = ensure_aware_utc(dt)
+        merged[s] = _max_dt(merged.get(s), dt_a)
     inserted = updated = 0
     items = list(merged.items())
     for i in range(0, len(items), batch_size):
@@ -206,6 +210,8 @@ def _flush_issue_items_chunk(
     now = timezone.now()
     objs = []
     for n, is_pr, gc, gu in rows:
+        gc = ensure_aware_utc(gc)
+        gu = ensure_aware_utc(gu)
         m_is_pr, m_gc, m_gu = _merge_issue_item_fields(
             existing_by_num.get(n), is_pr, gc, gu
         )
@@ -254,6 +260,8 @@ def upsert_issue_items_batch(
     for num, is_pr, gc, gu in rows:
         if _invalid_issue_number(num):
             continue
+        gc = ensure_aware_utc(gc)
+        gu = ensure_aware_utc(gu)
         prev = merged.get(num)
         if prev is None:
             merged[num] = (is_pr, gc, gu)
@@ -265,9 +273,7 @@ def upsert_issue_items_batch(
                 _max_dt(prev_gu, gu),
             )
     inserted = updated = 0
-    items = [
-        (n, is_pr, gc, gu) for n, (is_pr, gc, gu) in sorted(merged.items())
-    ]
+    items = [(n, is_pr, gc, gu) for n, (is_pr, gc, gu) in sorted(merged.items())]
     for i in range(0, len(items), batch_size):
         di, du = _flush_issue_items_chunk(items[i : i + batch_size])
         inserted += di

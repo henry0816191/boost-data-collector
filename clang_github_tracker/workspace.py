@@ -2,7 +2,7 @@
 Workspace paths for clang_github_tracker: md export, raw GitHub JSON.
 
 Layout:
-  workspace/clang_github_activity/
+  workspace/github_activity_tracker/
     - md_export/  (generated Markdown for GitHub publish)
   workspace/raw/github_activity_tracker/<owner>/<repo>/
     - commits/, issues/, prs/
@@ -15,7 +15,7 @@ from django.conf import settings
 
 from config.workspace import get_workspace_path
 
-_APP_SLUG = "clang_github_activity"
+_APP_SLUG = "github_activity_tracker"
 _RAW_APP_SLUG = "github_activity_tracker"
 
 # Repo we sync (raw only, no DB); from settings (env: CLANG_GITHUB_OWNER, CLANG_GITHUB_REPO)
@@ -35,7 +35,7 @@ def _sanitize_segment(value: str, label: str) -> str:
 
 
 def get_workspace_root() -> Path:
-    """Return workspace/clang_github_activity/; creates dir if missing."""
+    """Return workspace/clang_github_tracker/; creates dir if missing."""
     return get_workspace_path(_APP_SLUG)
 
 

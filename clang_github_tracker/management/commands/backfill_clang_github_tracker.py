@@ -51,9 +51,7 @@ class Command(BaseCommand):
             commit_rows: list[tuple[str, datetime | None]] = []
             c_skip = 0
             c_ins_total = c_upd_total = 0
-            for c_read_n, p in enumerate(
-                sorted(commits_dir.glob("*.json")), start=1
-            ):
+            for c_read_n, p in enumerate(sorted(commits_dir.glob("*.json")), start=1):
                 try:
                     data = json.loads(p.read_text(encoding="utf-8"))
                     sha = (data.get("sha") or "").strip()
@@ -61,16 +59,12 @@ class Command(BaseCommand):
                         c_skip += 1
                         continue
                     commit_rows.append((sha, commit_date(data)))
-                except (
-                    Exception
-                ) as e:  # pylint: disable=broad-exception-caught
+                except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.warning("skip commit file %s: %s", p, e)
                     c_skip += 1
                 if c_read_n % _RAW_CHUNK_EVERY == 0:
                     if commit_rows:
-                        ins_c, upd_c = clang_services.upsert_commits_batch(
-                            commit_rows
-                        )
+                        ins_c, upd_c = clang_services.upsert_commits_batch(commit_rows)
                         c_ins_total += ins_c
                         c_upd_total += upd_c
                         commit_rows.clear()
@@ -93,18 +87,14 @@ class Command(BaseCommand):
                 c_skip,
             )
 
-        issue_rows: list[
-            tuple[int, bool, datetime | None, datetime | None]
-        ] = []
+        issue_rows: list[tuple[int, bool, datetime | None, datetime | None]] = []
         i_ins_total = i_upd_total = 0
 
         issues_dir = root / "issues"
         if issues_dir.is_dir():
             i_skip = 0
             i_ok = 0
-            for i_read_n, p in enumerate(
-                sorted(issues_dir.glob("*.json")), start=1
-            ):
+            for i_read_n, p in enumerate(sorted(issues_dir.glob("*.json")), start=1):
                 try:
                     data = json.loads(p.read_text(encoding="utf-8"))
                     flat = normalize_issue_json(data)
@@ -121,9 +111,7 @@ class Command(BaseCommand):
                         )
                     )
                     i_ok += 1
-                except (
-                    Exception
-                ) as e:  # pylint: disable=broad-exception-caught
+                except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.warning("skip issue file %s: %s", p, e)
                     i_skip += 1
                 if i_read_n % _RAW_CHUNK_EVERY == 0:
@@ -142,9 +130,7 @@ class Command(BaseCommand):
                         i_upd_total,
                     )
             if issue_rows:
-                ins_i, upd_i = clang_services.upsert_issue_items_batch(
-                    issue_rows
-                )
+                ins_i, upd_i = clang_services.upsert_issue_items_batch(issue_rows)
                 i_ins_total += ins_i
                 i_upd_total += upd_i
                 issue_rows.clear()
@@ -154,9 +140,7 @@ class Command(BaseCommand):
         if prs_dir.is_dir():
             pr_skip = 0
             pr_ok = 0
-            for pr_read_n, p in enumerate(
-                sorted(prs_dir.glob("*.json")), start=1
-            ):
+            for pr_read_n, p in enumerate(sorted(prs_dir.glob("*.json")), start=1):
                 try:
                     data = json.loads(p.read_text(encoding="utf-8"))
                     flat = normalize_pr_json(data)
@@ -173,9 +157,7 @@ class Command(BaseCommand):
                         )
                     )
                     pr_ok += 1
-                except (
-                    Exception
-                ) as e:  # pylint: disable=broad-exception-caught
+                except Exception as e:  # pylint: disable=broad-exception-caught
                     logger.warning("skip pr file %s: %s", p, e)
                     pr_skip += 1
                 if pr_read_n % _RAW_CHUNK_EVERY == 0:
@@ -194,9 +176,7 @@ class Command(BaseCommand):
                         i_upd_total,
                     )
             if issue_rows:
-                ins_i, upd_i = clang_services.upsert_issue_items_batch(
-                    issue_rows
-                )
+                ins_i, upd_i = clang_services.upsert_issue_items_batch(issue_rows)
                 i_ins_total += ins_i
                 i_upd_total += upd_i
                 issue_rows.clear()
