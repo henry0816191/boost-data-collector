@@ -169,10 +169,10 @@ for _slug in _WORKSPACE_APP_SLUGS:
 
 # =============================================================================
 # Clang GitHub Tracker
-# Syncs llvm/llvm-project (issues, PRs, commits) to raw workspace only (no DB).
-# After sync, updated issues/PRs are exported as Markdown and pushed to the
-# private repo below. If OWNER or NAME is not set, upload is skipped and an
-# error is logged.
+# Syncs llvm/llvm-project (issues, PRs, commits) to raw + DB.
+# Markdown export push target: CLANG_GITHUB_CONTEXT_REPO_OWNER / _NAME / _BRANCH
+# (separate from CLANG_GITHUB_OWNER + CLANG_GITHUB_REPO, the upstream llvm source).
+# If context owner or name is unset, push is skipped and an error is logged.
 # Folder structure: issues/YYYY/YYYY-MM/#N - title.md  (no repo prefix)
 # =============================================================================
 # Boost GitHub owner (used by boost_library_tracker preprocessors for Pinecone sync)
@@ -249,15 +249,17 @@ CLANG_GITHUB_OWNER = (
 CLANG_GITHUB_REPO = (
     env("CLANG_GITHUB_REPO", default="llvm-project") or "llvm-project"
 ).strip() or "llvm-project"
-CLANG_GITHUB_TRACKER_PRIVATE_REPO_OWNER = (
-    env("CLANG_GITHUB_TRACKER_PRIVATE_REPO_OWNER", default="") or ""
+CLANG_GITHUB_CONTEXT_REPO_OWNER = (
+    env("CLANG_GITHUB_CONTEXT_REPO_OWNER", default="") or ""
 ).strip()
-CLANG_GITHUB_TRACKER_PRIVATE_REPO_NAME = (
-    env("CLANG_GITHUB_TRACKER_PRIVATE_REPO_NAME", default="") or ""
+CLANG_GITHUB_CONTEXT_REPO_NAME = (
+    env("CLANG_GITHUB_CONTEXT_REPO_NAME", default="") or ""
 ).strip()
-CLANG_GITHUB_TRACKER_PRIVATE_REPO_BRANCH = (
-    env("CLANG_GITHUB_TRACKER_PRIVATE_REPO_BRANCH", default="main") or "main"
+CLANG_GITHUB_CONTEXT_REPO_BRANCH = (
+    env("CLANG_GITHUB_CONTEXT_REPO_BRANCH", default="") or ""
 ).strip()
+# Markdown publish: persistent git clone under RAW_DIR/clang_github_tracker/<owner>/<repo_name>/;
+# clone/pull/push use GITHUB_TOKEN_WRITE (via get_github_token write); GIT_AUTHOR_* for commits.
 
 # GitHub tokens (multiple use cases: scraping, write)
 # - GITHUB_TOKEN: fallback when a specific token is not set

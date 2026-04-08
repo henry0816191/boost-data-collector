@@ -50,7 +50,7 @@ WORKSPACE_DIR.mkdir(exist_ok=True)
 for _slug in (
     "github_activity_tracker",
     "boost_library_tracker",
-    "clang_github_activity",
+    "clang_github_tracker",
     "discord_activity_tracker",
     "shared",
 ):
@@ -65,3 +65,7 @@ GITHUB_TOKEN_WRITE = ""
 # Clang GitHub Tracker (tests use defaults)
 CLANG_GITHUB_OWNER = "llvm"
 CLANG_GITHUB_REPO = "llvm-project"
+# Do not inherit publish target from developer .env (avoids real git / token in tests).
+CLANG_GITHUB_CONTEXT_REPO_OWNER = ""
+CLANG_GITHUB_CONTEXT_REPO_NAME = ""
+CLANG_GITHUB_CONTEXT_REPO_BRANCH = ""

@@ -154,6 +154,18 @@ If no `instance` is specified, **public** is used.
 
 ---
 
+## Clang GitHub Tracker (`clang_github_tracker`)
+
+For **llvm/llvm-project** issues and PRs, `clang_github_tracker.preprocessors.issue_preprocessor` and `pr_preprocessor` **do not** scan all raw JSON files. They:
+
+1. Select candidate **numbers** from the DB: `ClangGithubIssueItem` rows where `updated_at > final_sync_at` (or **all** rows if `final_sync_at` is `None`), filtered by `is_pull_request`.
+2. Union **retry** numbers parsed from `failed_ids` strings (e.g. `…:issue:123`, `…:pr:456`).
+3. For each number, read the corresponding raw file under `workspace/raw/github_activity_tracker/...` and build the document with `github_activity_tracker.preprocessors.github_preprocess.build_issue_document` / `build_pr_document`.
+
+The **`cppa_pinecone_sync`** contract (`preprocess_fn(failed_ids, final_sync_at)`, fail list, sync status) is unchanged; only the clang preprocessors’ **selection** strategy differs from the Boost path.
+
+---
+
 ## Summary checklist
 
 - [ ] Signature: `(failed_ids: list[str], final_sync_at: datetime | None) -> tuple[list[dict], bool]`.

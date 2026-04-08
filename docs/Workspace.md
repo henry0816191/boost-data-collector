@@ -20,8 +20,7 @@ workspace/                                    # WORKSPACE_DIR (configurable via 
 │   │       └── prs/<number>.json
 │   └── boost_mailing_list_tracker/           # Raw API responses (kept, not removed)
 │       └── <list_name>/<msg_id>.json
-├── clang_github_activity/                    # State for clang_github_tracker (last sync dates)
-│   └── state.json
+├── clang_github_tracker/                    # Markdown export for clang_github_tracker (md_export/)
 ├── boost_mailing_list_tracker/               # Mailing list messages (see below)
 │   └── <list_name>/
 │       └── messages/<msg_id>.json            # Formatted cache (processed then removed)

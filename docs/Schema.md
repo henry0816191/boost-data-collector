@@ -355,6 +355,19 @@ erDiagram
 
 ---
 
+### 2b. Clang GitHub Tracker (`clang_github_tracker`)
+
+Standalone tables for the **llvm/llvm-project** (or `CLANG_GITHUB_OWNER` / `CLANG_GITHUB_REPO`) mirror. **No foreign keys** to other apps.
+
+| Model | Purpose |
+| ----- | ------- |
+| **ClangGithubIssueItem** | One row per issue or PR **number** (`unique`). `is_pull_request` distinguishes types. `github_created_at` / `github_updated_at` mirror GitHub API times; **`github_updated_at`** (with `Max` + 1ms) drives **API fetch** resume. Django **`updated_at`** (`auto_now`) bumps on every upsert and drives **Pinecone** incrementality vs `PineconeSyncStatus.final_sync_at`. |
+| **ClangGithubCommit** | One row per **sha** (`unique`, 40-char hex). `github_committed_at` is the author/committer date used for commit fetch watermarks. |
+
+Raw JSON remains under `workspace/raw/github_activity_tracker/<owner>/<repo>/` (same layout as other raw GitHub activity).
+
+---
+
 ### 3. Boost Library Tracker
 
 #### Part 1: Boost Library, Headers, and Dependencies
@@ -859,6 +872,8 @@ erDiagram
 | **PullRequestComment**               | Comment on a PR.                                                                                         | 2       |
 | **PullRequestAssignee**              | PR-assignee link.                                                                                        | 2       |
 | **PullRequestLabel**                 | PR-label name.                                                                                           | 2       |
+| **ClangGithubIssueItem**             | Clang mirror: one row per issue/PR number (no FKs); GitHub timestamps + Django `updated_at` for Pinecone incrementality. | 2b      |
+| **ClangGithubCommit**                | Clang mirror: one row per commit SHA (no FKs); `github_committed_at` for fetch watermark.                | 2b      |
 | **BoostLibraryRepository**           | Extends GitHubRepository; adds created_at, updated_at (Boost repos).                                     | 3       |
 | **BoostLibrary**                     | Library within a Boost repo (name).                                                                      | 3       |
 | **BoostFile**                        | Extends GitHubFile; adds library_id (file in a Boost library).                                           | 3       |

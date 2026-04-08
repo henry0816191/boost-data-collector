@@ -14,6 +14,7 @@ Index of all app service modules. All writes to app models must go through the s
 | [boost_usage_tracker.services](boost_usage_tracker.md)           | boost_usage_tracker     | External repos, Boost usage, missing-header tmp. |
 | [discord_activity_tracker.services](discord_activity_tracker.md) | discord_activity_tracker | Servers, channels, messages, reactions (user profiles in cppa_user_tracker). |
 | [cppa_youtube_script_tracker.services](cppa_youtube_script_tracker.md) | cppa_youtube_script_tracker | YouTube channels, videos, transcript state, and speaker links for C++ conference talks. |
+| [clang_github_tracker.services](clang_github_tracker.md) | clang_github_tracker | Upsert llvm issue/PR/commit rows; DB watermarks for API fetch windows. |
 
 ---
 
@@ -27,5 +28,6 @@ Index of all app service modules. All writes to app models must go through the s
 - **discord_activity_tracker** – Get-or-create DiscordServer, DiscordChannel; create/update DiscordMessage, DiscordReaction. Discord user profiles in cppa_user_tracker.
 - **cppa_youtube_script_tracker** – Get-or-create YouTubeChannel, YouTubeVideo; update transcript state; link speakers to videos. Speaker profiles (`YoutubeSpeaker`) in cppa_user_tracker.
 - **cppa_pinecone_sync** – Get/clear/record failed IDs in PineconeFailList; get/update PineconeSyncStatus.
+- **clang_github_tracker** – Upsert `ClangGithubIssueItem` / `ClangGithubCommit` during sync or backfill; read `Max(github_updated_at)` / `Max(github_committed_at)` for fetch cursors.
 
 See [Contributing.md](../Contributing.md) for the rule that all writes go through the service layer.

@@ -4,6 +4,21 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from django.utils import timezone as django_timezone
+
+
+def ensure_aware_utc(dt: datetime | None) -> datetime | None:
+    """
+    Normalize a datetime for ``DateTimeField`` when ``USE_TZ`` is True.
+
+    Naive values are treated as UTC. Aware values are converted to UTC.
+    """
+    if dt is None:
+        return None
+    if django_timezone.is_naive(dt):
+        return django_timezone.make_aware(dt, django_timezone.utc)
+    return dt.astimezone(django_timezone.utc)
+
 
 def parse_iso_datetime(raw: str | None) -> datetime | None:
     """
